@@ -19,6 +19,7 @@ function parseArgs(argv) {
     requireCamoufoxMcp: false,
     json: false,
     markdown: false,
+    quick: false,
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
@@ -33,6 +34,7 @@ function parseArgs(argv) {
     else if (a === '--require-camoufox-mcp') args.requireCamoufoxMcp = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
+    else if (a === '--quick') args.quick = true;
     else if (a === '--help' || a === '-h') args.help = true;
     else throw new Error(`未知参数：${a}`);
   }
@@ -48,9 +50,11 @@ function usage() {
   node scripts/check_external_tools.js --python python --ruyipage-browser-path <firefox.exe> --ruyitrace-home <RuyiTrace-dir> --json
   node scripts/check_external_tools.js --python python --require-camoufox --camoufox-install-dir <camoufox-cache-dir> --markdown
   node scripts/check_external_tools.js --python python --require-camoufox --require-camoufox-mcp --camoufox-mcp-project-dir <camoufox-reverse-mcp-dir> --json
+  node scripts/check_external_tools.js --quick
 
 说明：检测 ruyiPage Python 包、ruyiPage 定制 Firefox runtime、是否误用系统 Firefox fallback、RuyiTrace 目录结构，以及 Camoufox Python 包、浏览器本体 fetch 状态和 camoufox-reverse-mcp 可导入状态。
-注意：选择 ruyiPage 时，只有“ruyiPage 包可用 + 定制 Firefox runtime 验证通过”才视为可用；普通系统 Firefox fallback 不视为通过。`;
+注意：选择 ruyiPage 时，只有“ruyiPage 包可用 + 定制 Firefox runtime 验证通过”才视为可用；普通系统 Firefox fallback 不视为通过。
+--quick：快速模式，只检测 Node.js 版本、camoufox 和 camoufox-reverse-mcp 是否可 import（一次 spawnSync），不执行 camoufox CLI 子命令、不扫描目录、不检测 ruyipage/ruyitrace；适合 L1 纯算场景。`;
 }
 
 function exists(p) {
@@ -893,12 +897,89 @@ function renderMarkdown(result) {
   return lines.join('\n') + '\n';
 }
 
+function detectQuick(args) {
+  const nodeVersion = process.version;
+  const nodeMajor = parseInt(nodeVersion.replace(/^v/, '').split('.')[0], 10) || 0;
+  const nodeOk = nodeMajor >= 18;
+
+  const code = [
+    'import json',
+    'try:',
+    ' import camoufox',
+    ' camoufox_ok=True',
+    ' camoufox_error=""',
+    'except Exception as e:',
+    ' camoufox_ok=False',
+    ' camoufox_error=str(e)',
+    'try:',
+    ' import camoufox_reverse_mcp',
+    ' mcp_ok=True',
+    ' mcp_error=""',
+    'except Exception as e:',
+    ' mcp_ok=False',
+    ' mcp_error=str(e)',
+    'print(json.dumps({"camoufox_ok": camoufox_ok, "camoufox_error": camoufox_error, "mcp_ok": mcp_ok, "mcp_error": mcp_error}, ensure_ascii=False))',
+  ].join('\n');
+
+  let camoufoxOk = false;
+  let mcpOk = false;
+  let pythonUsed = '';
+  const checked = [];
+  for (const c of pythonCandidates(args.python)) {
+    const ret = run(c.cmd, c.argsPrefix.concat(['-c', code]), 15000);
+    const label = [c.cmd].concat(c.argsPrefix).join(' ');
+    checked.push({ python: label, ok: ret.ok, stderr: ret.stderr || ret.error });
+    if (!ret.ok) continue;
+    let parsed = null;
+    try { parsed = JSON.parse((ret.stdout || '').replace(/^\uFEFF/, '')); } catch { parsed = null; }
+    if (parsed) {
+      camoufoxOk = !!parsed.camoufox_ok;
+      mcpOk = !!parsed.mcp_ok;
+      pythonUsed = label;
+      break;
+    }
+  }
+
+  return {
+    node: { version: nodeVersion, ok: nodeOk },
+    camoufox: { importable: camoufoxOk, python: pythonUsed },
+    camoufoxReverseMcp: { importable: mcpOk },
+    checked,
+  };
+}
+
+function renderQuickMarkdown(result) {
+  const lines = ['# 快速工具检测', ''];
+  lines.push('## Node.js');
+  lines.push(`- 版本: ${result.node.version}`);
+  lines.push(`- 是否满足 ≥ v18: ${result.node.ok ? '是' : '否'}`);
+  lines.push('', '## Camoufox');
+  lines.push(`- Python 包是否可 import: ${result.camoufox.importable ? '是' : '否'}`);
+  lines.push(`- Python: ${result.camoufox.python || '未检测到'}`);
+  lines.push('', '## camoufox-reverse-mcp');
+  lines.push(`- 是否可 import: ${result.camoufoxReverseMcp.importable ? '是' : '否'}`);
+  lines.push('', '## 结论');
+  if (result.camoufox.importable) {
+    lines.push('- camoufox 可用');
+  } else {
+    lines.push('- camoufox 不可用');
+    lines.push('- 下一步: 安装 camoufox 走动态调试 / 纯静态分析降级');
+  }
+  return lines.join('\n') + '\n';
+}
+
 try {
   const args = parseArgs(process.argv);
   if (args.help) { console.log(usage()); process.exit(0); }
-  const result = withNextSteps(detect(args));
-  if (args.json) console.log(JSON.stringify(result, null, 2));
-  if (args.markdown) process.stdout.write(renderMarkdown(result));
+  if (args.quick) {
+    const result = detectQuick(args);
+    if (args.json) console.log(JSON.stringify(result, null, 2));
+    if (args.markdown) process.stdout.write(renderQuickMarkdown(result));
+  } else {
+    const result = withNextSteps(detect(args));
+    if (args.json) console.log(JSON.stringify(result, null, 2));
+    if (args.markdown) process.stdout.write(renderMarkdown(result));
+  }
 } catch (err) {
   console.error(err.message || String(err));
   console.error(usage());

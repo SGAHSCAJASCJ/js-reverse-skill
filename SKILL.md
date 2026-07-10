@@ -34,7 +34,7 @@ js-reverse-skill/
 │   └── fixture-templates/  ← 【L2/L3】fixture 模板（constructor-errors / resource-manifest），复制到 case 后填充
 ├── templates/            ← 交付入口模板（5 类：final.js / Node客户端 / Python客户端 / vm沙箱 / WASM）
 ├── references/           ← 知识参考（10 子域 52 篇，按"触发条件"按需读取）
-├── cases/                ← 经验案例（6 个已验证案例 + 模板，CHECK-2 速查）
+├── cases/                ← 经验案例（7 个已验证案例 + 模板，CHECK-2 速查）
 └── scripts/              ← 工具脚本（26 个 7 类，默认纯 vm 路线）
 ```
 
@@ -49,16 +49,23 @@ js-reverse-skill/
 ```text
 ═══ SKILL 启动 Checklist ═══
 
-[CHECK-1] 环境自检 + 工具检测
-  运行: node scripts/check_external_tools.js --markdown
-  核心工具（L1 降级=仅需 Node.js / L1 极简+L2+L3=必需）:
+[CHECK-1] 环境自检 + 工具检测（分阶段，先快后全）
+  第一步：快速检测（必做，秒级完成）
+    运行: node scripts/check_external_tools.js --quick --markdown
+    仅检测: Node.js 版本 + camoufox 包是否可 import（一次 spawnSync）
+    不检测: camoufox CLI path/version/list、ruyipage runtime、目录扫描
+    输出: node_ok / camoufox_package / camoufox_mcp_package / nextRequiredInput
+
+  第二步：全量检测（仅在用户确认走 L2/L3 或需安装浏览器工具时执行）
+    运行: node scripts/check_external_tools.js --markdown
+    检测: camoufox 浏览器本体 + ruyipage runtime + ruyitrace + camoufox-mcp
+    注: 第一步已确认 camoufox 缺失且用户选择安装时，安装后再执行全量检测
+
+  核心工具判定:
     camoufox = ______ (installed / missing)
     camoufox-mcp = ______
-  按需工具（Phase 0.5 判定 L3 或用户指定时补检，L1/L2 跳过）:
-    ruyipage / ruyitrace = ______ (L3 降级路径)
-  nextRequiredInput: ______ (核心工具缺失时列出安装计划)
-  通过: L1 降级模式 → Node.js ≥ v18 即可 YES；L1 极简 / L2 / L3 → camoufox+mcp 均 installed 才 YES
-  注: 极简模式需 camoufox 抓包
+  通过: Node.js ≥ v18 + camoufox+mcp installed → 可走 L1 极简/L2/L3 标准路径
+        Node.js ≥ v18 + camoufox missing → 需问用户是否安装（见 CHECK-3 门禁）
 
 [CHECK-2] 经验库速查
   目标域名 = ______
@@ -71,6 +78,8 @@ js-reverse-skill/
       → 方案: A 纯算还原 | 流程: L1 10 步 | MCP 自动跟踪 + 纯算还原
     参数排序拼接 + md5 / sign = md5(JSON.stringify(data) + key)
       → 方案: A 纯算还原 | 参考: references/workflow/l1-purecalc.md | case: cases/l1-simple-sign-md5.md
+    SM2/SM4/SM3 国密算法（E-CONTENT-PATH/E-SIGN/businessData 等参数）
+      → 方案: A 纯算还原 | 流程: L1 10 步 | case: cases/l1-sm2-sm4-sm3-guomi-jobonline.md
     obfuscator.io 特征（_0x 大量前缀）AST 反混淆后算法可提取
       → 方案: A 纯算还原 | 流程: L1 10 步 + AST 反混淆前置（assets/ast-patterns/）
 
@@ -97,19 +106,26 @@ js-reverse-skill/
     - 命中 → 读取 case 文件，踩坑记录内化为约束，Phase 1-5 仍正常走
     - 未命中 → 走标准 Phase 0-5，结束时沉淀新 case 到 cases/
 
-[CHECK-3] 最终方案意图声明
+[CHECK-3] 最终方案意图声明 + 用户确认门禁（不可跳过）
   本次目标: ______ (一句话)
   用户输入: URL = ______, 目标参数 = ______ (可为空，自动识别)
   预期方案: 待自动识别 / 纯协议 Node.js / 纯协议 Python / 环境伪装 / 其他
   注: 用户只提供 URL+参数名时标"待自动识别"，Phase 0.5 完成后回填
   合规: 最终方案必须为纯协议脚本（见红线 3-4）
 
-═══ 三项全部通过，开始 Phase 0 ═══
+  ⚠️ 用户确认门禁（仅 camoufox 不可用时触发）:
+  - camoufox 可用 → 直接走 camoufox 动态调试，不需问用户
+  - camoufox 不可用 → 必须用 AskUserQuestion 询问用户：
+    Q: "未检测到 camoufox，如何继续？"
+    选项: 安装 camoufox 走动态调试 / 纯静态分析（下载 JS 用 Grep 定位） / 用户提供 JS 文件
+  用户选择后才进入 Phase 0。AI 不得在 camoufox 不可用时默默走静态分析，必须先告知用户有安装选项。
+
+═══ 三项全部通过 + 用户确认方案，开始 Phase 0 ═══
 ```
 
 - [CHECK-1] 失败 → 停止，向用户确认工具安装
 - [CHECK-2] 命中 → 读 case 文件内化约束；未命中 → 走标准流程，结束时沉淀新 case
-- [CHECK-3] 意图声明明确，防止滑坡到浏览器方案
+- [CHECK-3] 意图声明明确 + 用户确认方案后，才进入 Phase 0。**禁止 AI 自行决定走降级路径**
 
 ---
 
@@ -138,7 +154,7 @@ js-reverse-skill/
 
 ## 第一原则
 
-1. **协议优先 + 梯度降级**：最终交付必须是纯协议脚本（Node.js `final.js` 或 Python `final.py`）。工具失败时按"方案梯度"逐级尝试：纯 crypto 还原 → 最小环境复现 → vm 沙箱执行 JS → TLS 指纹模拟。浏览器自动化不在梯度内（见红线 3）。
+1. **协议优先 + 梯度降级**：最终交付必须是纯协议脚本（Node.js `final.js` 或 Python `final.py`）。工具失败时按"方案梯度"逐级尝试：纯 crypto 还原 → 最小环境复现 → vm 沙箱执行 JS → TLS 指纹模拟。浏览器自动化不在梯度内（见红线 3）。**camoufox 不可用时不默默走静态分析**——必须先告知用户有"安装 camoufox 走动态调试"的选项，由用户选择。
 2. **证据驱动，禁止猜测**：所有关键结论必须有证据（Network 请求记录、运行时变量值、调用栈、Hook 捕获、代码定位、中间值对比）。
 3. **一次执行到底**：默认连续完成全部步骤，仅在登录态缺失、验证码、关键分支需用户决策时中断。
 4. **环境检测验证原则**：看到环境检测代码时，先验证该项是否真正参与服务端校验（Hook 确认是否发送到服务端 + 对比测试），只补真正参与校验的最小环境项。
@@ -160,7 +176,7 @@ js-reverse-skill/
 
 **方案梯度 = 还原方法在 Phase 4 的细分落地**：纯 crypto 还原 → 最小环境复现 → vm 沙箱执行 JS → TLS 指纹模拟。L 级别决定了"走哪条路"，方案梯度是"这条路里的具体工具"。
 
-**L1 零浏览器路径（已实测可行）**：camoufox 不可用时，L1 标准算法签名可完全用 `curl` 下载 JS + Grep 静态定位 + 纯 Node 复现解决（无需用户提供 JS 文件，详见 `references/workflow/l1-purecalc.md` 的"无 camoufox 纯 Node 取证预案"）。这是被验证可用的正式路径，不是无奈 fallback；仅 L2/L3 才真正依赖 camoufox 取证。
+**L1 纯静态分析路径**：camoufox 不可用且用户选择不安装时，L1 标准算法签名可用 `curl` 下载 JS + Grep 静态定位 + 纯 Node 复现解决（详见 `references/workflow/l1-purecalc.md` 的"无 camoufox 纯 Node 取证预案"）。对于参数名明确、JS 结构清晰的 L1 场景，静态分析是合理选择；对于大文件或参数名不明确的场景，camoufox 动态调试效率更高。仅 L2/L3 才真正依赖 camoufox 取证。
 
 ---
 
@@ -316,7 +332,7 @@ node scripts/check_external_tools.js --markdown
 → 输出工具状态 + nextRequiredInput（安装计划）
  AI 向用户提问"是否安装 X？"
  用户确认 → AI 运行对应安装脚本（install_ruyipage_runtime.js / download_ruyi_tool.js，参数见下文"环境配置"段）
- node scripts/precheck_runtime.js（六项纯计算预检）
+node scripts/precheck_runtime.js（六项纯计算预检）
 ```
 
 **0.4 项目目录创建**：参考 `templates/` 下的模板

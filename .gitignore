@@ -1,0 +1,17 @@
+# 工作产物（非 skill 文档）
+.venv/
+api/
+node_modules/
+platforms/
+skills/
+cases_backup/
+cases/*/js/
+cases/*/node_modules/
+
+# 通用
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
