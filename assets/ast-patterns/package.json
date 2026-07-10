@@ -1,0 +1,12 @@
+{
+  "name": "ast-patterns",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AST 反混淆脚本依赖",
+  "dependencies": {
+    "@babel/parser": "^7.0.0",
+    "@babel/traverse": "^7.0.0",
+    "@babel/generator": "^7.0.0",
+    "@babel/types": "^7.0.0"
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "description": "动态资源清单模板。记录所有已保存的目标站点资源（HTML/JS/challenge/Cookie 等），区分分析快照与最终依赖。复制本文件到 case/notes/resource-manifest.json 后按实际填充。详见 references/network/dynamic-resource.md。scripts/check_dynamic_resources.js 依赖本文件结构。",
+  "capturedAt": "2026-07-09T00:00:00.000Z",
+  "browserBaseline": {
+    "name": "firefox",
+    "version": "115.0"
+  },
+  "resources": [
+    {
+      "url": "https://example.com/challenge.js?ts=20260709",
+      "type": "js",
+      "method": "GET",
+      "file": "case/js/snapshots/challenge-001.js",
+      "capturedAt": "2026-07-09T00:00:00.000Z",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/javascript",
+        "set-cookie": "脱敏记录，仅保留字段名和格式"
+      },
+      "sha256": "body hash, 64 位十六进制",
+      "dynamic": true,
+      "use": "analysis-snapshot",
+      "requiredForFinal": true,
+      "runtimeRefresh": true,
+      "refreshEntry": "result/src/resources/fetch-runtime-resources.js",
+      "dependsOn": ["Cookie", "HTML seed", "TLS client"]
+    },
+    {
+      "url": "https://example.com/entry.html",
+      "type": "html",
+      "method": "GET",
+      "file": "case/js/snapshots/entry-001.html",
+      "capturedAt": "2026-07-09T00:00:00.000Z",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache"
+      },
+      "sha256": "body hash",
+      "dynamic": true,
+      "use": "runtime-refresh",
+      "requiredForFinal": true,
+      "runtimeRefresh": true,
+      "refreshEntry": "result/src/resources/fetch-runtime-resources.js",
+      "dependsOn": ["Cookie", "TLS client"]
+    },
+    {
+      "url": "https://cdn.example.com/static/bundle-v1.2.3.js",
+      "type": "js",
+      "method": "GET",
+      "file": "case/js/static/bundle-v1.2.3.js",
+      "capturedAt": "2026-07-09T00:00:00.000Z",
+      "status": 200,
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      },
+      "sha256": "body hash",
+      "dynamic": false,
+      "use": "static-bundle",
+      "requiredForFinal": true,
+      "runtimeRefresh": false,
+      "refreshEntry": null,
+      "dependsOn": []
+    }
+  ],
+  "fieldDefinitions": {
+    "url": "资源原始 URL",
+    "type": "资源类型：js / html / json / wasm / cookie / other",
+    "method": "请求方法",
+    "file": "本地保存路径",
+    "capturedAt": "采样时间 ISO 8601",
+    "status": "HTTP 状态码",
+    "headers": "关键响应头（cache-control / set-cookie / content-type 等），set-cookie 脱敏",
+    "sha256": "响应 body 的 SHA-256",
+    "dynamic": "true=动态资源（每次可能变化），false=静态资源（可长期复用）",
+    "use": "用途：analysis-snapshot=只用于分析 / runtime-refresh=最终运行前刷新 / static-bundle=静态 bundle",
+    "requiredForFinal": "最终生成参数是否需要该资源",
+    "runtimeRefresh": "最终入口运行时是否需要刷新",
+    "refreshEntry": "负责刷新该资源的最终项目模块路径，无则 null",
+    "dependsOn": "该资源依赖的其他因素：Cookie / HTML seed / TLS client / Session 等"
+  },
+  "dynamicMarkers": [
+    "Cache-Control: no-store/no-cache/private/max-age=0 → dynamic=true",
+    "URL 含 t/ts/timestamp/nonce/rand/random/_ 等 query → dynamic=true",
+    "同 URL 多次请求 body hash 不一致 → dynamic=true",
+    "HTML 内联 seed/nonce/config/challenge/token 每次变化 → dynamic=true",
+    "403/challenge 页面返回 JS → dynamic=true",
+    "响应包含 Set-Cookie → dynamic=true",
+    "JS URL 从当前 HTML 动态拼接 → dynamic=true + runtimeRefresh=true"
+  ],
+  "validationRules": [
+    "requiredForFinal=true 且 dynamic=true 时必须提供 refreshEntry",
+    "requiredForFinal=true 且 dynamic=true 时必须 runtimeRefresh=true",
+    "use=analysis-snapshot 的资源不得复制到 result/ 作为 signer 主输入",
+    "runtimeRefresh=true 的资源必须在最终入口运行时刷新，不得硬编码本地快照",
+    "最终入口流程：请求入口页 → 解析动态资源 URL → 请求最新 JS → 验证 hash → 注入补环境链路"
+  ]
+}

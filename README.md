@@ -1,0 +1,143 @@
+# universal-js-reverse-skill
+
+通用网页端 JS 逆向工程技能：覆盖从纯算还原到 JSVMP 补环境的全场景。通过 L1/L2/L3 三级梯度分流，融合黑盒补环境与纯算还原双路径，支持 Node.js / Python 双语言交付。
+
+## 能力边界
+
+**适用**：签名/token/指纹/设备参数生成、JSVMP 黑盒补环境、WASM 加载、混淆还原、TLS 指纹模拟
+**不适用**：App/Android/iOS/小程序/Windows/EXE/DLL/Native/Frida/IDA
+**默认不主动分析 JSVMP 字节码源码**：遇到 JSVMP 只做黑盒补环境
+
+## 目录结构
+
+```
+js-reverse-skill/
+├── SKILL.md              流程骨架 + 规则 + 索引（AI 加载的主文档）
+├── README.md             本文件
+├── assets/               可复用资产（AST 反混淆 + 补环境片段 + fixture 模板，按需加载）
+├── templates/            交付入口模板（5 类：final.js / Node客户端 / Python客户端 / vm沙箱 / WASM）
+├── references/           知识参考（10 子域 52 篇，按"触发条件"按需读取）
+├── cases/                经验案例（6 个已验证案例 + 模板，CHECK-2 速查）
+└── scripts/              工具脚本（26 个 7 类）
+```
+
+**调用关系**：`SKILL.md`（流程）→ `references/`（按需知识）→ `scripts/`（执行检查）→ `assets/`（补环境/反混淆）→ `templates/`（交付入口）→ `cases/`（经验回写）
+
+## 如何使用
+
+把下面的提示词喂给 AI 编程助手（如 TRAE / Cursor / Copilot），让它加载本 Skill 后按流程执行。
+
+> 技术细节（L 级别判定/补环境方案/工具选择/反爬类型识别等）由 skill 自动判断。提示词只提供任务目标，不重复技术细节。额外要求（项目规范/业务扩展/工具偏好等）可追加，覆盖 skill 默认（仅 skill 四条红线不可被覆盖）。
+
+### 核心模板（纯逆向）
+
+```
+# 目标
+- 目标URL：<网页浏览入口>
+- 目标接口：req.txt 路径 / "无，自动抓包"
+- 目标参数：<参数名>（可选，留空自动识别所有动态参数）
+```
+
+skill 默认交付：`final.js`（Node.js 脱离浏览器生成参数并请求接口）+ 中文总结。
+
+### 扩展模板（含业务要求）
+
+```
+# 目标
+- 目标URL：<网页浏览入口>
+- 目标接口：<req.txt 路径 / "无，自动抓包">
+- 目标参数：<参数名>
+
+# 输出（可选）
+- 抽取为 HTTP API：<路径>
+- 报告归档到：<路径>
+
+# 备注（可选）
+- 项目规范引用（如"项目结构见仓库 README"）
+- 工具偏好（如"全程用 ruyipage+ruyitrace"）
+- 取证模式指定（如"指定 L3"）
+- 一次性偏好（如"本次用原生 https，不模拟 TLS 指纹"）
+```
+
+### 字段说明
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| 目标URL | 是 | 网页浏览入口，skill 用于 navigate 抓 SDK 加载链、识别反爬类型 |
+| 目标接口 | 是 | 完整模式：req.txt/res.txt 路径；极简模式：填"无，自动抓包" |
+| 目标参数 | 否 | 留空则 skill 自动识别所有动态参数（签名/指纹/token/时间戳等） |
+| 输出 | 否 | 纯逆向不填；需 API 封装或报告归档时填写 |
+| 备注 | 否 | 任意额外要求，覆盖 skill 默认 |
+
+### 两个 URL 的区别
+
+- **目标URL**：浏览器里打开的网页地址（如 `https://www.xiaohongshu.com/explore`），加载 SDK/JS
+- **目标接口**：XHR 请求地址（在 req.txt 里），带签名参数
+
+skill 需要两者：网页 URL 用于抓 SDK 加载链、采集环境指纹；接口样本用于定位签名参数挂载点。
+
+### 覆盖关系
+
+用户额外要求 > skill 默认（仅四条红线不可被覆盖）：
+
+| 用户要求 | 覆盖 skill 哪个默认 |
+|---------|-------------------|
+| "全程用 ruyipage+ruyitrace" | 跳过 skill 的 L1/L2/L3 自动判定和工具自动选择 |
+| "指定 L3" | 跳过 Phase 0.5 自动识别分流 |
+| "原生 https 不模拟 TLS" | 跳过 skill 的 TLS 指纹梯度降级 |
+| "报告归档到 xxx/" | 覆盖 skill 默认的 cases/ 沉淀路径 |
+| "抽取为 HTTP API" | 在 final.js 基础上追加 API 封装（skill 默认不交付 API） |
+
+**不可覆盖的四条红线**（见 SKILL.md）：
+1. CHECK-1 到 CHECK-3 完整复述
+2. 跳过 cases/ 经验库速查
+3. 最终方案使用浏览器自动化
+4. 关键业务 cookie 从浏览器抓包硬编码
+
+### 示例
+
+纯逆向：
+```
+# 目标
+- 目标URL：http://xhslink.com/o/5vQorNvnSIb
+- 目标接口：项目根目录 req.txt / res.txt
+- 目标参数：x-s-common、x-s（header中）
+```
+
+含业务要求：
+```
+# 目标
+- 目标URL：http://xhslink.com/o/5vQorNvnSIb
+- 目标接口：项目根目录 req.txt / res.txt
+- 目标参数：x-s-common、x-s（header中）
+
+# 输出
+- 抽取为 HTTP API：api/server
+- 报告归档到：platforms/xhs/notes/
+
+# 备注
+- 项目结构见仓库 README
+- 全程用 ruyipage+ruyitrace
+- 原生请求不用 TLS 指纹
+```
+
+## 验证标准
+
+服务端返回业务数据而非风控页 / 验证码。签名通过但服务端不认时，按故障排查梯度（见 SKILL.md）逐级排查。
+
+## 演进里程碑
+
+> 完整版本历史通过 git log 查阅。
+
+| 节点 | 要点 |
+|---|---|
+| v1.0.0 | 首次公开发布。三层级判据（L1 纯算 / L2 vm 沙箱 / L3 补环境）+ 路径 A/B/C/D + 10 核心场景 + 6 案例库 + 52 篇 references + 26 脚本 + 5 模板 + AST 反混淆 + replay trace 对拍 + 字段归属分类法 |
+
+**工具栈策略**：
+- 默认纯 vm，遇 document.all 等原生行为检测升级 sdenv
+- camoufox trace 为默认取证路径，ruyipage+RuyiTrace 为 L3 降级路径
+- ast-deobfuscation 内嵌为 assets/ast-patterns/
+
+## License
+
+MIT

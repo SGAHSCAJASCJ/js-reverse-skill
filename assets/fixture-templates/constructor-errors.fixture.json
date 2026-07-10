@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "description": "构造函数行为采样模板。每个进入补环境范围的构造函数都要记录浏览器真实行为。复制本文件到 case/fixtures/constructor-errors.fixture.json 后按实际采样填充。详见 references/env/env-object-model.md 的构造函数行为采样段。",
+  "browser": {
+    "name": "firefox",
+    "version": "115.0",
+    "userAgent": "Mozilla/5.0 ... Firefox/115.0"
+  },
+  "capturedAt": "2026-07-09T00:00:00.000Z",
+  "constructors": [
+    {
+      "name": "Navigator",
+      "callWithoutNew": {
+        "allowed": false,
+        "throws": true,
+        "error": {
+          "name": "TypeError",
+          "constructorName": "TypeError",
+          "message": "Illegal constructor",
+          "string": "TypeError: Illegal constructor",
+          "stackFirstLine": "TypeError: Illegal constructor"
+        }
+      },
+      "newConstruct": {
+        "allowed": false,
+        "throws": true,
+        "error": {
+          "name": "TypeError",
+          "constructorName": "TypeError",
+          "message": "Illegal constructor",
+          "string": "TypeError: Illegal constructor",
+          "stackFirstLine": "TypeError: Illegal constructor"
+        }
+      },
+      "instanceBehavior": {
+        "objectToString": "[object Navigator]",
+        "constructorName": "Navigator",
+        "instanceofCheck": "navigator instanceof Navigator === true"
+      },
+      "notes": "Firefox 下 Navigator 直接调用和 new 都抛 TypeError"
+    },
+    {
+      "name": "Document",
+      "callWithoutNew": {
+        "allowed": false,
+        "throws": true,
+        "error": {
+          "name": "TypeError",
+          "constructorName": "TypeError",
+          "message": "Illegal constructor",
+          "string": "TypeError: Illegal constructor",
+          "stackFirstLine": "TypeError: Illegal constructor"
+        }
+      },
+      "newConstruct": {
+        "allowed": false,
+        "throws": true,
+        "error": {
+          "name": "TypeError",
+          "constructorName": "TypeError",
+          "message": "Illegal constructor",
+          "string": "TypeError: Illegal constructor",
+          "stackFirstLine": "TypeError: Illegal constructor"
+        }
+      },
+      "instanceBehavior": {
+        "objectToString": "[object HTMLDocument]",
+        "constructorName": "HTMLDocument",
+        "instanceofCheck": "document instanceof Document === true"
+      },
+      "notes": ""
+    },
+    {
+      "name": "Storage",
+      "callWithoutNew": {
+        "allowed": false,
+        "throws": true,
+        "error": {
+          "name": "TypeError",
+          "constructorName": "TypeError",
+          "message": "Illegal constructor",
+          "string": "TypeError: Illegal constructor",
+          "stackFirstLine": "TypeError: Illegal constructor"
+        }
+      },
+      "newConstruct": {
+        "allowed": false,
+        "throws": true,
+        "error": {
+          "name": "TypeError",
+          "constructorName": "TypeError",
+          "message": "Illegal constructor",
+          "string": "TypeError: Illegal constructor",
+          "stackFirstLine": "TypeError: Illegal constructor"
+        }
+      },
+      "instanceBehavior": {
+        "objectToString": "[object Storage]",
+        "constructorName": "Storage",
+        "instanceofCheck": "localStorage instanceof Storage === true"
+      },
+      "notes": ""
+    },
+    {
+      "name": "XMLHttpRequest",
+      "callWithoutNew": {
+        "allowed": true,
+        "throws": false,
+        "error": null
+      },
+      "newConstruct": {
+        "allowed": true,
+        "throws": false,
+        "error": null
+      },
+      "instanceBehavior": {
+        "objectToString": "[object XMLHttpRequest]",
+        "constructorName": "XMLHttpRequest",
+        "instanceofCheck": "new XMLHttpRequest() instanceof XMLHttpRequest === true"
+      },
+      "notes": "XHR 允许直接调用和 new"
+    },
+    {
+      "name": "EventTarget",
+      "callWithoutNew": {
+        "allowed": true,
+        "throws": false,
+        "error": null
+      },
+      "newConstruct": {
+        "allowed": true,
+        "throws": false,
+        "error": null
+      },
+      "instanceBehavior": {
+        "objectToString": "[object EventTarget]",
+        "constructorName": "EventTarget",
+        "instanceofCheck": "new EventTarget() instanceof EventTarget === true"
+      },
+      "notes": "EventTarget 允许构造"
+    }
+  ],
+  "fieldDefinitions": {
+    "callWithoutNew": "Ctor() 是否允许直接调用（无 new）",
+    "newConstruct": "new Ctor() 是否允许构造",
+    "allowed": "true=允许，false=抛错",
+    "throws": "是否抛出异常",
+    "error.name": "错误对象的 name 属性（如 TypeError）",
+    "error.constructorName": "err.constructor.name（与 error.name 通常一致）",
+    "error.message": "错误消息（精确到浏览器版本，不要统一写 Illegal constructor）",
+    "error.string": "String(err) 的输出",
+    "error.stackFirstLine": "err.stack 的首行",
+    "instanceBehavior.objectToString": "Object.prototype.toString.call(instance) 的返回值",
+    "instanceBehavior.constructorName": "instance.constructor.name",
+    "instanceofCheck": "instanceof 检查表达式"
+  },
+  "samplingRules": [
+    "所有 error.message 必须来自真实浏览器采样，不得统一写 Illegal constructor",
+    "不同浏览器版本下同一构造函数的错误消息可能不同",
+    "Chrome 中'需要 new 调用'和'非法构造'通常不是同一条 message",
+    "采样时记录浏览器版本和调用方式"
+  ]
+}
