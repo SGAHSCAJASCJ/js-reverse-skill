@@ -127,7 +127,20 @@ node scripts/check_external_tools.js --python python --ruyipage-browser-path <ve
 
 ## 未安装时的安装流程
 
-只有当用户明确说未安装，并确认允许下载 / 安装时，才进入本节。
+检测到缺失组件时，优先使用一键安装脚本：
+
+```bash
+node scripts/install_all.js --markdown          # 输出安装计划
+node scripts/install_all.js --yes --markdown    # 用户确认后自动安装
+```
+
+默认安装到 `<项目根>/tools/`：
+- ruyiPage 定制 Firefox runtime：`tools/ruyipage-browsers/`
+- RuyiTrace 定制 trace 内核：`tools/RuyiTrace/`（自动下载 zip 并解压）
+
+install_all.js 内部按需执行：`pip install ruyiPage requests` → `python -m ruyipage install` → 下载 RuyiTrace.zip 并自动解压 → 重新检测验证。
+
+如需单独安装或自定义目录，使用下方分项流程。
 
 ### ruyiPage
 

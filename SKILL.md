@@ -115,7 +115,7 @@ js-reverse-skill/
 ═══ 三项全部通过 + 用户确认方案，开始 Phase 0 ═══
 ```
 
-- [CHECK-1] 失败 → 停止，向用户确认工具安装
+- [CHECK-1] 失败 → 运行 `node scripts/install_all.js --markdown` 输出安装计划，用户确认后 `--yes` 自动安装缺失组件到 `<项目根>/tools/`
 - [CHECK-2] 命中 → 读 case 文件内化约束；未命中 → 走标准流程，结束时沉淀新 case
 - [CHECK-3] 意图声明明确 + 用户确认方案后，才进入 Phase 0
 
@@ -224,14 +224,18 @@ js-reverse-skill/
 - **可选确认**：取证模式（默认 ruyipage+RuyiTrace）、TLS 客户端、登录态
 - 详细字段见 `references/quality/intake-template.md`
 
-**0.3 环境检测**（nextRequiredInput 计划-确认模式）：
+**0.3 环境检测**（自动安装模式）：
 ```
 node scripts/check_external_tools.js --markdown
-→ 输出工具状态 + nextRequiredInput（安装计划）
- AI 向用户提问"是否安装 X？"
- 用户确认 → AI 运行对应安装脚本（install_ruyipage_runtime.js / download_ruyi_tool.js，参数见下文"环境配置"段）
+→ 输出五项检测结果 + nextRequiredInput
+ 未通过 → node scripts/install_all.js --markdown（输出安装计划）
+ 用户确认 → node scripts/install_all.js --yes --markdown（自动安装到 <项目根>/tools/）
+ 安装后重新检测确认五项全部通过
 node scripts/precheck_runtime.js（六项纯计算预检）
 ```
+默认安装目录：
+- ruyiPage 定制 Firefox runtime：`<项目根>/tools/ruyipage-browsers/`
+- RuyiTrace 定制 trace 内核：`<项目根>/tools/RuyiTrace/`
 
 **0.4 项目目录创建**：参考 `templates/` 下的模板
 

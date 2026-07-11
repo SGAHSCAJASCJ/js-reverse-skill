@@ -23,16 +23,20 @@
 - 未确认目标参数：skill 列出可疑参数后用户未确认，不得只盯单一参数进入补环境
 - 极简模式遇到登录/交互/验证码：暂停要求用户补充请求包（退化为完整模式）
 
-### 0.3 环境检测（nextRequiredInput 计划-确认模式）
+### 0.3 环境检测（自动安装模式）
 ```
 node scripts/check_external_tools.js --markdown
- 输出工具状态 + nextRequiredInput（安装计划）
- AI 向用户提问"是否安装 X？"
- 用户确认 → 运行对应安装脚本:
-   - ruyipage: node scripts/install_ruyipage_runtime.js --python python --install-dir <dir> --install
-   - ruyitrace: node scripts/download_ruyi_tool.js --tool ruyitrace --dest <dir> --markdown
- node scripts/precheck_runtime.js（六项纯计算预检）
+ 输出五项检测结果 + nextRequiredInput
+ 未通过 → node scripts/install_all.js --markdown（输出安装计划）
+ 用户确认 → node scripts/install_all.js --yes --markdown（自动安装到 <项目根>/tools/）
+ 安装后重新检测确认五项全部通过
+node scripts/precheck_runtime.js（六项纯计算预检）
 ```
+默认安装目录：
+- ruyiPage 定制 Firefox runtime：`<项目根>/tools/ruyipage-browsers/`
+- RuyiTrace 定制 trace 内核：`<项目根>/tools/RuyiTrace/`
+
+install_all.js 内部流程：检测缺失组件 → pip install ruyiPage requests → python -m ruyipage install → 下载 RuyiTrace.zip 并自动解压 → 重新检测验证。
 
 ### 0.4 项目目录创建
 ```

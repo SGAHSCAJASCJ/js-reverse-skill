@@ -29,7 +29,7 @@ js-reverse-skill/
 ├── templates/            交付入口模板（5 类：final.js / Node客户端 / Python客户端 / vm沙箱 / WASM）
 ├── references/           知识参考（10 子域 48 篇，按"触发条件"按需读取）
 ├── cases/                经验案例（11 个已验证案例 + 模板，CHECK-2 速查）
-└── scripts/              工具脚本（26 个 7 类）
+└── scripts/              工具脚本（27 个 7 类）
 ```
 
 **调用关系**：`SKILL.md`（流程）→ `references/`（按需知识）→ `scripts/`（执行检查）→ `assets/`（补环境/反混淆）→ `templates/`（交付入口）→ `cases/`（经验回写）

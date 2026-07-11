@@ -1,6 +1,6 @@
 # 脚本索引
 
-本目录包含 26 个脚本，按功能分为 7 类。SKILL.md 和 references/ 通过文件名引用，无需记忆路径。
+本目录包含 27 个脚本，按功能分为 7 类。SKILL.md 和 references/ 通过文件名引用，无需记忆路径。
 
 ## 环境检测（5 个）
 
@@ -46,12 +46,13 @@
 | `run_with_trace.js` | 探测模式运行：vm 上下文内定义浏览器桩，阻断宿主泄露 | `node run_with_trace.js --target case/js/original/app.js --entry window.makeSign --fixture case/fixtures/sample.fixture.json` |
 | `capture_ruyitrace_log.js` | 自动捕获 RuyiTrace NDJSON 日志（trace Firefox + MOZ_DOM_TRACE） | `node capture_ruyitrace_log.js --url <url> --case-dir case --ruyitrace-home <RuyiTrace-dir> --markdown` |
 
-## 安装工具（2 个）
+## 安装工具（3 个）
 
 | 脚本 | 功能 | 典型用法 |
 |------|------|---------|
-| `install_ruyipage_runtime.js` | ruyiPage runtime 安装（dry-run + `--install` 双阶段） | `node install_ruyipage_runtime.js --python python --install-dir <dir> --install` |
-| `download_ruyi_tool.js` | 下载 RuyiTrace 工具（需用户确认） | `node download_ruyi_tool.js --tool ruyitrace --dest <dir>` |
+| `install_all.js` | 一键检测并安装缺失组件到 `<项目根>/tools/` | `node install_all.js --yes --markdown` |
+| `install_ruyipage_runtime.js` | ruyiPage runtime 安装（dry-run + `--install` 双阶段，自定义目录） | `node install_ruyipage_runtime.js --python python --install-dir <dir> --install` |
+| `download_ruyi_tool.js` | 下载 RuyiTrace / ruyipage-firefox（`--extract` 自动解压 zip） | `node download_ruyi_tool.js --tool ruyitrace --dest <dir> --extract` |
 
 ## 工具脚本（5 个）
 

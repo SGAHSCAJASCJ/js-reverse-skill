@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { spawnSync } = require('child_process');
 
 const REPOS = {
   ruyitrace: { owner: 'LoseNine', repo: 'Firefox-FingerPrint-Analyzer', asset: /RuyiTrace\.zip$/i },
@@ -11,11 +12,12 @@ const REPOS = {
 };
 
 function parseArgs(argv) {
-  const args = { tool: '', dest: '', dryRun: false, json: false, markdown: false };
+  const args = { tool: '', dest: '', extract: false, dryRun: false, json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--tool') args.tool = argv[++i] || '';
     else if (a === '--dest') args.dest = argv[++i] || '';
+    else if (a === '--extract') args.extract = true;
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
@@ -30,9 +32,24 @@ function usage() {
   return `用法：
   node scripts/download_ruyi_tool.js --tool ruyitrace --dest <download-dir> --dry-run --markdown
   node scripts/download_ruyi_tool.js --tool ruyitrace --dest <download-dir> --markdown
+  node scripts/download_ruyi_tool.js --tool ruyitrace --dest <download-dir> --extract --markdown
   node scripts/download_ruyi_tool.js --tool ruyipage-firefox --dest <download-dir> --dry-run --markdown
 
-说明：仅在用户确认后下载。下载后仍需要用户解压 / 安装或确认可执行文件路径。`;
+说明：仅在用户确认后下载。--extract 自动解压 zip 到 dest 目录（Windows 用 Expand-Archive）。`;
+}
+
+function extractZip(zipFile, destDir) {
+  fs.mkdirSync(destDir, { recursive: true });
+  const ret = spawnSync('powershell', [
+    '-NoProfile', '-NonInteractive', '-Command',
+    `Expand-Archive -Path '${zipFile}' -DestinationPath '${destDir}' -Force`,
+  ], { encoding: 'utf8', timeout: 120000, windowsHide: true });
+  return {
+    ok: ret.status === 0,
+    stdout: (ret.stdout || '').trim(),
+    stderr: (ret.stderr || '').trim(),
+    error: ret.error ? ret.error.message : '',
+  };
 }
 
 function getJson(url) {
@@ -104,6 +121,8 @@ async function plan(args) {
   if (!asset) throw new Error(`未找到适合当前工具 / 平台的 release asset：${args.tool}`);
   const destDir = path.resolve(args.dest);
   const file = path.join(destDir, asset.name);
+  const isZip = /\.zip$/i.test(asset.name);
+  const extractDir = isZip ? path.join(destDir, asset.name.replace(/\.zip$/i, '')) : '';
   const result = {
     tool: args.tool,
     repo: `${repo.owner}/${repo.repo}`,
@@ -114,20 +133,33 @@ async function plan(args) {
     assetSize: asset.size,
     downloadUrl: asset.browser_download_url,
     destFile: file,
+    extractDir,
     dryRun: args.dryRun,
     downloaded: false,
+    extracted: false,
   };
   if (!args.dryRun) {
     await downloadFile(asset.browser_download_url, file);
     result.downloaded = true;
+    if (args.extract && isZip) {
+      const ex = extractZip(file, extractDir);
+      result.extracted = ex.ok;
+      result.extractError = ex.ok ? '' : (ex.stderr || ex.error || '解压失败');
+    }
   }
   return result;
 }
 
 function renderMarkdown(result) {
   const lines = ['# Ruyi 工具下载结果', '', `- 工具：${result.tool}`, `- 仓库：${result.repo}`, `- Release：${result.releaseName || result.tagName}`, `- Release URL：${result.releaseUrl}`, `- 资产：${result.assetName}`, `- 大小：${result.assetSize}`, `- 目标文件：${result.destFile}`, `- dry-run：${result.dryRun ? '是' : '否'}`, `- 是否已下载：${result.downloaded ? '是' : '否'}`];
+  if (result.extractDir) {
+    lines.push(`- 解压目录：${result.extractDir}`);
+    lines.push(`- 是否已解压：${result.extracted ? '是' : '否'}`);
+    if (result.extractError) lines.push(`- 解压错误：${result.extractError}`);
+  }
   lines.push('', '## 下一步');
   if (result.dryRun) lines.push('- 当前只是下载计划；只有用户确认后再去掉 `--dry-run` 下载。');
+  else if (result.extracted) lines.push('- 下载并解压完成。请重新运行检测脚本验证。');
   else lines.push('- 下载完成。请用户解压 / 安装后，提供工具目录并重新运行检测脚本。');
   return lines.join('\n') + '\n';
 }
