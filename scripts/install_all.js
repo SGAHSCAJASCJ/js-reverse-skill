@@ -64,8 +64,8 @@ function exists(p) {
 }
 
 const MIRROR_CANDIDATES = [
-  'https://ghproxy.net',
   'https://gh-proxy.com',
+  'https://ghproxy.net',
 ];
 
 function detectBestMirror() {

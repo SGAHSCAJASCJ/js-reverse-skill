@@ -44,11 +44,29 @@ function extractZip(zipFile, destDir) {
     '-NoProfile', '-NonInteractive', '-Command',
     `Expand-Archive -Path '${zipFile}' -DestinationPath '${destDir}' -Force`,
   ], { encoding: 'utf8', timeout: 120000, windowsHide: true });
+  if (ret.status !== 0) {
+    return {
+      ok: false,
+      stdout: (ret.stdout || '').trim(),
+      stderr: (ret.stderr || '').trim(),
+      error: ret.error ? ret.error.message : '',
+    };
+  }
+  // 修复嵌套目录：zip 内部可能有一个与 destDir 同名的根目录（如 RuyiTrace.zip → RuyiTrace/）
+  const entries = fs.readdirSync(destDir);
+  const dirName = path.basename(destDir);
+  if (entries.length === 1 && entries[0] === dirName) {
+    const nestedDir = path.join(destDir, entries[0]);
+    for (const entry of fs.readdirSync(nestedDir)) {
+      fs.renameSync(path.join(nestedDir, entry), path.join(destDir, entry));
+    }
+    fs.rmdirSync(nestedDir);
+  }
   return {
-    ok: ret.status === 0,
+    ok: true,
     stdout: (ret.stdout || '').trim(),
     stderr: (ret.stderr || '').trim(),
-    error: ret.error ? ret.error.message : '',
+    error: '',
   };
 }
 
