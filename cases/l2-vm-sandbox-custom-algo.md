@@ -3,7 +3,7 @@
 > 难度：★★★（骨架模板）
 > 还原方案：B vm 沙箱执行
 > 实现语言：Node.js
-> 最后验证日期：2026-07-09
+> 最后验证日期：2026-07-11
 > 平台类型：通用骨架（自定义 MD5 / 混淆算法 / 算法不可静态提取但 JS 可 vm 执行）
 
 > **骨架案例**。本文是**方法论模板**，适用于：自定义 MD5/SHA 实现、混淆后算法不可静态还原、算法可提取但依赖少量环境属性（非 JSVMP）等 L2 场景。
@@ -78,6 +78,10 @@ L2 vm 沙箱执行：提取算法 JS 代码 → 在 Node.js `vm` 模块中执行
 
 ### Phase 3：vm 沙箱搭建
 
+#### 3.1 基础 sandbox（算法自包含，无浏览器环境依赖）
+
+适用于：算法 JS 只依赖 Date/Math/parseInt 等标准全局变量。
+
 ```javascript
 const vm = require('vm');
 
@@ -109,6 +113,66 @@ function generateSign(params) {
 }
 ```
 
+#### 3.2 中等量 sandbox（算法 patch 原型方法，需 DOM stub）
+
+适用于：目标 JS 会 patch `Element.prototype` / `XMLHttpRequest.prototype` 等原型方法，需要提供对应构造函数 stub。
+
+触发信号：
+- 目标 JS 含 `Element.prototype.addEventListener = ...` 或类似原型 patch
+- 目标 JS 含 `XMLHttpRequest.prototype.open = ...` 拦截器逻辑
+- 目标 JS 含 `document.cookie` 读写（签名值通过 cookie 传递）
+
+```javascript
+const vm = require('vm');
+const fs = require('fs');
+
+// 中等量 sandbox：基础全局 + 浏览器 DOM stub
+const sandbox = {
+    // 基础全局（同 3.1）
+    Date, Math, parseInt, parseFloat, String, Array, Object, Number, Boolean,
+    JSON, Error, TypeError, RegExp, Promise, Map, Set, Symbol, Reflect, Proxy,
+    encodeURIComponent, decodeURIComponent, encodeURI, decodeURI,
+    setTimeout, setInterval, clearTimeout, clearInterval,
+    isNaN, isFinite, undefined, NaN, Infinity, console,
+    btoa: (s) => Buffer.from(s, 'binary').toString('base64'),
+    atob: (s) => Buffer.from(s, 'base64').toString('binary'),
+
+    // 浏览器 DOM stub（按目标 JS 实际访问补齐）
+    document: { /* cookie getter/setter + createElement + ... */ },
+    navigator: { /* userAgent + platform + plugins + ... */ },
+    location: { /* href + origin + pathname + ... */ },
+    screen: { /* width + height + ... */ },
+    XMLHttpRequest: function() { /* 构造函数 + prototype */ },
+    Element: function() { /* 构造函数 + prototype（若目标 JS patch Element.prototype） */ },
+    fetch: () => Promise.resolve({ /* stub */ }),
+    Headers: class { /* stub */ },
+    localStorage: { /* getItem/setItem/... */ },
+
+    innerWidth: 1920, innerHeight: 1080,
+    devicePixelRatio: 1,
+    getComputedStyle: () => ({}),
+    matchMedia: () => ({ matches: false, addListener(){}, removeListener(){} }),
+    addEventListener: () => {}, removeEventListener: () => {},
+};
+sandbox.window = sandbox;
+sandbox.self = sandbox;
+sandbox.top = sandbox;
+sandbox.parent = sandbox;
+sandbox.frames = sandbox;
+sandbox.global = sandbox;
+
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync('./target.js', 'utf8'), sandbox, { timeout: 5000 });
+
+// 读取签名输出（cookie / 全局变量 / 返回值）
+const sign = sandbox.document.cookie;  // 或 sandbox.someGlobalVar
+```
+
+**关键要点**：
+- `Element` / `Document` 只需构造函数 + prototype stub，**不需要完整原型链**（EventTarget → Node → Element → ...），这是 L2 与 L3 的边界
+- `document.cookie` 必须用 `Object.defineProperty` 实现 getter/setter，目标 JS 通过 setCookie 写入签名值
+- 不需要 NativeProtect（L2 目标 JS 通常不做 toString 检测；若做则升级 L3）
+
 ### Phase 4：验证
 
 ```
@@ -117,6 +181,15 @@ function generateSign(params) {
 3. 不一致 → 检查 sandbox 缺失的依赖（hook_function trace 确认）
 4. 一致 → ≥5 次请求验证稳定性
 ```
+
+### Phase 4 补充：常见陷阱
+
+| 陷阱 | 现象 | 解决 |
+|------|------|------|
+| **try-catch 静默吞错** | vm.runInContext 运行成功但签名未生成 | Grep 目标 JS 的 `try{...}catch(...){return ...}`，字符串替换透明化后重新运行（详见 common-pitfalls.md 反模式 8） |
+| **setInterval 阻止退出** | 签名生成后进程挂起 | 测试入口添加 `process.exit(0)` |
+| **Element 缺失** | `ReferenceError: Element is not defined` | sandbox 添加 Element 构造函数 + prototype stub |
+| **navigator 属性不全** | `TypeError: navigator[r(...)] is not a function` | 用 Proxy 拦截 navigator 所有属性访问，精确发现缺失项 |
 
 ## 踩坑记录
 
@@ -127,6 +200,9 @@ function generateSign(params) {
 | 3 | 算法依赖 Date.now() | 每次签名不同，无法对比 | 调试时用固定时间戳，验证通过后改回 Date.now() |
 | 4 | CryptoJS 版本差异 | vm 中 CryptoJS 输出与浏览器不一致 | 确认浏览器用的 CryptoJS 版本（3.1.2 / 4.0.0），npm 安装对应版本 |
 | 5 | 算法含 setTimeout 异步 | vm 同步执行拿不到结果 | 改用 Promise + vm 微任务，或重构为同步 |
+| 6 | try-catch 静默吞错 | 运行成功但输出未生成 | 透明化目标 JS 内部 try-catch，暴露真实错误（详见 common-pitfalls.md 反模式 8） |
+| 7 | setInterval 阻止退出 | 签名生成后进程挂起 | 测试入口 `process.exit(0)` |
+| 8 | Element/Document 缺失 | `ReferenceError: Element is not defined` | sandbox 添加构造函数 + prototype stub（目标 JS patch 原型方法时需要） |
 
 ## 与 L1/L3 的边界判断
 
@@ -143,6 +219,17 @@ function generateSign(params) {
           ├─ 是 → L3 路径 D
           └─ 否 → L2 路径 B
 ```
+
+### L2 内部的 sandbox 量级判断
+
+L2 不是只有"最小 sandbox"一种形态。按目标 JS 对浏览器环境的依赖程度分两档：
+
+| 量级 | 触发信号 | sandbox 内容 | 与 L3 边界 |
+|------|---------|-------------|-----------|
+| **基础** | 目标 JS 只依赖 Date/Math/navigator.userAgent | 基础全局变量 | 远离 L3 |
+| **中等** | 目标 JS patch Element.prototype / XMLHttpRequest.prototype / 读写 document.cookie | + DOM 构造函数 stub + cookie getter/setter | 接近 L3 但不需要完整原型链和 NativeProtect |
+
+**升级 L3 信号**：目标 JS 做 `Function.prototype.toString` 检测 / `document.all` 检测 / 完整原型链 instanceof 检测 → 需要 NativeProtect 和完整原型链 → 升级 L3。
 
 ## 可验证事实清单（经验资产）
 
@@ -161,4 +248,7 @@ function generateSign(params) {
 | `references/workflow/decision-tree.md` | L1/L2/L3 题型判定边界 |
 | `references/workflow/l1-purecalc.md` | L1 降级判断（能否纯算复现） |
 | `references/env/runtime-frameworks.md` | L2→L3 升级判断（何时需 jsdom/sdenv） |
+| `references/env/env-debug-loop.md` | 静默吞错诊断 + setInterval 退出陷阱 |
+| `references/workflow/common-pitfalls.md` | 反模式 8（try-catch 静默吞错） |
+| `cases/l2-vm-sandbox-chameleon-iwencai.md` | L2 中等量 sandbox 实战案例（同花顺 chameleon.js） |
 | `templates/vm-sandbox/` | vm 沙箱交付模板 |

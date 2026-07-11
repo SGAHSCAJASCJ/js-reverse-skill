@@ -266,7 +266,7 @@ Cannot read properties of undefined (reading 'userAgent')
 
 ### 输出不一致
 
-如果不再报错但签名不一致，且已选择 ruyiPage + RuyiTrace，先回看目标请求前后的 NDJSON 调用，再检查：
+如果不再报错但签名不一致，且已选择 ruyiPage + RuyiTrace，先回看目标请求前前的 NDJSON 调用，再检查：
 
 - 请求 URL、Query、Body 是否完全一致。
 - `Date.now`、`performance.now`。
@@ -281,6 +281,52 @@ Cannot read properties of undefined (reading 'userAgent')
 - 实例对象的 `Object.prototype.toString.call(...)`、`constructor.name`、`instanceof` 是否一致。
 
 如果 NDJSON 中没有覆盖目标参数生成时间段，明确标记"RuyiTrace 未覆盖"，再使用 Node trace / Hook / 断点补充。
+
+### 静默吞错：运行成功但无输出
+
+**现象**：vm.runInContext 运行成功（无错误抛出），但目标输出（cookie / 全局变量 / 返回值）未生成。
+
+**根因**：目标 JS **自身**在初始化逻辑中用 `try{init()}catch(e){return e}` 或 `try{...}catch(...){}` 包裹，所有初始化错误被 JS 自己的 try-catch 吞掉，不会传播到 vm.runInContext 的外层 try-catch。这是混淆 JS 常见的反调试手段。
+
+**诊断步骤**：
+1. **Grep 静默吞错模式**：搜索目标 JS 中的 `try{...}catch(...){return ...}` 和 `try{...}catch(...){}`，特别关注末尾 IIFE 中的初始化包裹
+2. **try-catch 透明化**：字符串替换把目标 JS 内部的 `try{fn()}catch(e){return e}` 改为 `fn()`，让真实错误抛出到外层
+3. **重新运行**：透明化后通常会暴露 `ReferenceError: XXX is not defined` 或 `TypeError: xxx is not a function`
+4. **修复缺失环境**：按真实错误补齐 sandbox
+5. **验证**：目标输出成功生成后，可保留透明化版本或恢复原样
+
+**示例**（同花顺 chameleon.js）：
+```text
+// 透明化前（静默吞错）：
+window[r(791)]||(function(){var n=t;try{w[n(722)](e)}catch(n){return n}}(),window[r(791)]=!0)
+
+// 透明化后（错误暴露）：
+window[r(791)]||(function(){var n=t;w[n(722)](e);window[r(791)]=!0}())
+// → ReferenceError: Element is not defined
+```
+
+详见 `references/workflow/common-pitfalls.md` 反模式 8。
+
+### setInterval 阻止进程退出
+
+**现象**：vm 沙箱执行目标 JS 后，Node.js 进程挂起不退出。
+
+**根因**：目标 JS 设置了 `setInterval(callback, delay)` 做定时刷新（如签名刷新、状态同步），Node.js 的事件循环保持活跃。
+
+**解决方法**：
+- **测试入口**：生成签名后立即 `process.exit(0)` 强制退出
+- **生产代码**：signer 单例常驻模式不需要退出（复用 vm context）；一次性调用模式在签名生成后 `process.exit(0)`
+- **避免 unref**：`setInterval(...).unref()` 会让定时器不阻止退出，但可能导致刷新逻辑失效（若需常驻刷新则不能用）
+
+**示例**：
+```javascript
+// 测试入口
+if (require.main === module) {
+  const sign = generateSign(params);
+  console.log(sign);
+  process.exit(0);  // chameleon.js 的 setInterval 会阻止退出
+}
+```
 
 ## trace 输出
 

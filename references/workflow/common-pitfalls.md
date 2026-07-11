@@ -108,9 +108,36 @@
 
 **判定测试**：连续 100 次并发调用 signer，签名值是否稳定？签名输入是否串扰？
 
+## 反模式 8：vm 沙箱执行成功但无输出，忽视 try-catch 静默吞错
+
+**实战案例**：同花顺问财 iwencai hexin-v
+
+**AI 的操作**：vm.runInContext 执行 chameleon.js，用 try-catch 包裹捕获错误，运行返回"成功"但 cookie "v" 未生成
+
+**AI 的辩护**："vm.runInContext 没抛错说明运行成功，可能是算法逻辑没走到生成 cookie 的分支"
+
+**为什么不成立**：
+- 目标 JS **自身**在末尾 IIFE 中用 `try{init()}catch(e){return e}` 包裹初始化函数，所有初始化错误被静默吞掉
+- vm.runInContext 的 try-catch 只能捕获 JS 顶层抛出的错误，**目标 JS 内部的 try-catch 吞掉的错误不会传播到外层**
+- 表面"运行成功"实际是"错误被目标 JS 自己吞了"，不是真的没报错
+- 这是混淆 JS 常见的反调试手段，不是算法逻辑问题
+
+**正确做法**：
+1. **识别静默吞错模式**：Grep 目标 JS 中的 `try{...}catch(...){return ...}` 模式，特别是末尾 IIFE 中的初始化包裹
+2. **try-catch 透明化**：字符串替换把目标 JS 内部的 `try{fn()}catch(e){return e}` 改为 `fn()`，让真实错误抛出到 vm.runInContext 的外层 try-catch
+3. **定位真实错误**：透明化后通常会暴露 `ReferenceError: XXX is not defined`（如 Element 缺失）或 `TypeError: xxx is not a function`
+4. **修复后恢复原样**：补齐缺失环境后，可保留透明化版本（外层 try-catch 已能捕获）或恢复原样
+
+**诊断信号**：
+- vm.runInContext 运行成功但目标输出（cookie/全局变量/返回值）未生成
+- 目标 JS 末尾有 IIFE 包裹的初始化调用
+- 目标 JS 内部有 `try{...}catch(...){return ...}` 或 `try{...}catch(...){}` 模式
+
+**判定测试**：vm.runInContext 运行后目标输出是否生成？未生成 → 检查目标 JS 是否有内部 try-catch 吞错，透明化后重新运行看真实错误。
+
 ## 如何使用本文档
 
-1. **AI 激活 skill 后**：在 Checklist [CHECK-2] 步骤简单扫视（至少看反模式 1-7 的标题）
+1. **AI 激活 skill 后**：在 Checklist [CHECK-2] 步骤简单扫视（至少看反模式 1-8 的标题）
 2. **AI 在做决策时卡住**：回到本文档，看自己正在考虑的方向是不是反模式之一
 3. **AI 写代码写到一半意识到在滑向反模式**：立即停，走降级梯度
 4. **用户发现 AI 违反**：直接引用反模式编号质问 AI

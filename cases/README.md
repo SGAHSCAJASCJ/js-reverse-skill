@@ -12,6 +12,7 @@
 | [universal-vmp-source-instrumentation.md](universal-vmp-source-instrumentation.md) | 通用 VMP 骨架(RS/Akamai/webmssdk) | ★★★★ | 源码级插桩 + hot_keys 学习 | 混合 |
 | [l1-simple-sign-md5.md](l1-simple-sign-md5.md) | 标准 md5 排序参数签名 + 盐 + 时间戳；缺/错 sign → 403 | ★ | 纯 Node 复现(md5)，零浏览器路径 | 无(标准签名) |
 | [l2-vm-sandbox-custom-algo.md](l2-vm-sandbox-custom-algo.md) | 自定义 MD5/混淆算法，vm 沙箱执行（骨架模板） | ★★★ | vm.createContext + 最小 sandbox | 无/轻检测 |
+| [l2-vm-sandbox-chameleon-iwencai.md](l2-vm-sandbox-chameleon-iwencai.md) | chameleon.js 混淆 + cookie"v"=hexin-v + try-catch 静默吞错 + 中等量环境 stub | ★★★ | vm.createContext + 中等量浏览器环境 stub(Element/Document/XHR) | 无/轻检测 |
 | [l1-sm2-sm4-sm3-guomi-jobonline.md](l1-sm2-sm4-sm3-guomi-jobonline.md) | SM2/SM4/SM3 国密三参数签名 + 随机密钥下发 | ★★ | 纯 Node 复现(sm-crypto) | 无(标准国密) |
 
 ## 使用方式
@@ -35,6 +36,7 @@ CHECK-2 速查:
 | `sign` 32 位 hex + 伴随 `t` 时间戳 + 缺/错返回 403 `invalid sign` | l1-simple-sign-md5 | 高(标准签名 L1) |
 | `E-CONTENT-PATH` / `E-SIGN` / `businessData` + SM2/SM4/SM3 | l1-sm2-sm4-sm3-guomi-jobonline | 高(国密L1) |
 | 自定义 MD5(非标准输出) / 混淆算法不可静态还原 / eval 包裹算法 | l2-vm-sandbox-custom-algo | 中(自定义算法 L2) |
+| `chameleon` / `hexin-v` / `TOKEN_SERVER_TIME` + try-catch 静默吞错 | l2-vm-sandbox-chameleon-iwencai | 高(同花顺 L2) |
 
 ## 新增案例
 
