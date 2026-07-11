@@ -50,14 +50,15 @@ js-reverse-skill/
 [CHECK-1] 环境自检 + 工具检测
   运行: node scripts/check_external_tools.js --markdown
   检测: Node.js 版本 + ruyipage Python 包 + ruyipage 定制 Firefox runtime + RuyiTrace + RuyiTrace 定制 trace Firefox
-  输出: node_ok / ruyipage_package / ruyipage_runtime / ruyitrace / nextRequiredInput
+  输出: node.ok / ruyiPage.packageInstalled / ruyiPage.managedRuntimeVerified / ruyiTrace.installed / ruyiTrace.kernelVerified / nextRequiredInput
 
   核心工具判定:
-    ruyipage = ______ (installed / missing)        ← 必备，Firefox 自动化取证
-    ruyipage-runtime = ______ (verified / missing) ← 必备，定制 Firefox（非系统 fallback）
-    ruyitrace = ______ (installed / missing)       ← 必备，NDJSON 日志采集
-    ruyitrace-kernel = ______ (verified / missing) ← 必备，trace 定制 Firefox
-  通过: 五项全部 installed/verified → 进入 CHECK-2
+    node = ______ (ok / fail)                        ← 必备，≥ v18
+    ruyipage = ______ (installed / missing)          ← 必备，Firefox 自动化取证
+    ruyipage-runtime = ______ (verified / missing)   ← 必备，定制 Firefox（非系统 fallback）
+    ruyitrace = ______ (installed / missing)         ← 必备，NDJSON 日志采集
+    ruyitrace-kernel = ______ (verified / missing)   ← 必备，trace 定制 Firefox
+  通过: 五项全部 ok/installed/verified → 进入 CHECK-2
   未通过: 按 nextRequiredInput 计划安装（见"环境配置"段），用户确认后才继续
 
 [CHECK-2] 经验库速查

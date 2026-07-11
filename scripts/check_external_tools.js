@@ -465,27 +465,41 @@ function detectRuyiTrace(args) {
   const home = normalizeTraceHome(args);
   if (!home) return {
     installed: false,
+    kernelVerified: false,
     reason: '未检测到 RuyiTrace；如已安装，请提供 --ruyitrace-home 或设置 RUYI_TRACE_HOME',
   };
   const exeName = process.platform === 'win32' ? 'RuyiTrace.exe' : 'RuyiTrace';
   const exe = args.ruyitraceExe ? path.resolve(args.ruyitraceExe) : path.join(home, exeName);
   const firefoxExe = process.platform === 'win32' ? path.join(home, 'firefox', 'firefox.exe') : path.join(home, 'firefox', 'firefox');
   const marker = path.join(home, 'firefox', 'RUYI_DOMTRACE.txt');
+  const exeExists = exists(exe);
+  const firefoxExists = exists(firefoxExe);
+  const markerExists = exists(marker);
+  const kernelVerified = firefoxExists && markerExists;
   return {
-    installed: exists(exe) && exists(marker),
+    installed: exeExists && kernelVerified,
+    kernelVerified,
     home,
     exe,
-    exeExists: exists(exe),
+    exeExists,
     firefoxExe,
-    firefoxExists: exists(firefoxExe),
+    firefoxExists,
     marker,
-    markerExists: exists(marker),
-    reason: exists(exe) && exists(marker) ? '' : 'RuyiTrace 目录不完整：需要 RuyiTrace 可执行文件以及 firefox/RUYI_DOMTRACE.txt',
+    markerExists,
+    reason: exeExists && kernelVerified ? '' : 'RuyiTrace 目录不完整：需要 RuyiTrace 可执行文件、firefox/firefox(.exe) 以及 firefox/RUYI_DOMTRACE.txt',
   };
+}
+
+function detectNode() {
+  const nodeVersion = process.version;
+  const nodeMajor = parseInt(nodeVersion.replace(/^v/, '').split('.')[0], 10) || 0;
+  const nodeOk = nodeMajor >= 18;
+  return { version: nodeVersion, ok: nodeOk, major: nodeMajor };
 }
 
 function detect(args) {
   return {
+    node: detectNode(),
     ruyiPage: detectRuyiPage(args),
     ruyiTrace: detectRuyiTrace(args),
     nextRequiredInput: [],
@@ -494,6 +508,9 @@ function detect(args) {
 
 function withNextSteps(result) {
   const next = [];
+  if (!result.node.ok) {
+    next.push('Node.js 版本不满足要求（需 ≥ v18），请先升级 Node.js 再继续。');
+  }
   const rp = result.ruyiPage;
   if (!rp.packageInstalled) {
     next.push('如果选择 ruyiPage，请先确认当前 Python 环境是否应安装 ruyiPage；未安装时需用户确认后执行 python -m pip install ruyiPage requests --upgrade。');
@@ -508,6 +525,7 @@ function withNextSteps(result) {
     next.push('检测到可能的系统 Firefox fallback 或未验证 Firefox 路径：这不视为 ruyiPage 绕检测方案通过，必须改用 ruyiPage managed runtime / release 含 ruyi 标识的定制 Firefox。');
   }
   if (!result.ruyiTrace.installed) next.push('如果本 case 选择 ruyiPage + RuyiTrace，当前 RuyiTrace 未通过检测时不得自动降级为仅 ruyiPage；请让用户选择安装 / 提供 RuyiTrace.exe 所在目录，或明确确认降级为仅 ruyiPage。用户选择安装时，需等待 RuyiTrace.exe 可打开且 firefox/RUYI_DOMTRACE.txt 存在后再继续。');
+  if (result.ruyiTrace.installed && !result.ruyiTrace.kernelVerified) next.push('RuyiTrace 已安装但定制 trace 内核未验证（需要 firefox/firefox(.exe) 和 firefox/RUYI_DOMTRACE.txt）；请确认 RuyiTrace 定制 Firefox 是否完整安装。');
   result.nextRequiredInput = next;
   return result;
 }
@@ -526,6 +544,10 @@ function renderRuntimeCheck(c) {
 
 function renderMarkdown(result) {
   const lines = ['# 外部浏览器工具检测结果', ''];
+  lines.push('## Node.js');
+  lines.push(`- 版本：${result.node.version}`);
+  lines.push(`- 是否满足 ≥ v18：${result.node.ok ? '是' : '否'}`);
+  lines.push('');
   const rp = result.ruyiPage;
   lines.push('## ruyiPage');
   lines.push(`- Python 包是否检测到：${rp.packageInstalled ? '是' : '否'}`);
@@ -556,6 +578,7 @@ function renderMarkdown(result) {
 
   lines.push('', '## RuyiTrace');
   lines.push(`- 是否检测到：${result.ruyiTrace.installed ? '是' : '否'}`);
+  lines.push(`- 定制 trace 内核是否验证：${result.ruyiTrace.kernelVerified ? '是' : '否'}`);
   if (result.ruyiTrace.home) lines.push(`- 目录：${result.ruyiTrace.home}`);
   if (result.ruyiTrace.exe) lines.push(`- 可执行文件：${result.ruyiTrace.exeExists ? '存在' : '不存在'} - ${result.ruyiTrace.exe}`);
   if (result.ruyiTrace.firefoxExe) lines.push(`- trace Firefox：${result.ruyiTrace.firefoxExists ? '存在' : '不存在'} - ${result.ruyiTrace.firefoxExe}`);
@@ -574,13 +597,7 @@ function renderMarkdown(result) {
 }
 
 function detectQuick(args) {
-  const nodeVersion = process.version;
-  const nodeMajor = parseInt(nodeVersion.replace(/^v/, '').split('.')[0], 10) || 0;
-  const nodeOk = nodeMajor >= 18;
-
-  return {
-    node: { version: nodeVersion, ok: nodeOk },
-  };
+  return { node: detectNode() };
 }
 
 function renderQuickMarkdown(result) {
