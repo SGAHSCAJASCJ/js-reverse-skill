@@ -48,8 +48,8 @@ function usage() {
 --yes：跳过用户确认，直接安装缺失项。`;
 }
 
-function run(cmd, args, timeout = 300000) {
-  const ret = spawnSync(cmd, args, { encoding: 'utf8', timeout, windowsHide: true });
+function run(cmd, args, timeout = 300000, env = null) {
+  const ret = spawnSync(cmd, args, { encoding: 'utf8', timeout, windowsHide: true, env: env ? { ...process.env, ...env } : undefined });
   return {
     ok: ret.status === 0,
     status: ret.status,
@@ -61,6 +61,28 @@ function run(cmd, args, timeout = 300000) {
 
 function exists(p) {
   try { return !!p && fs.existsSync(p); } catch { return false; }
+}
+
+const MIRROR_CANDIDATES = [
+  'https://ghproxy.net',
+  'https://gh-proxy.com',
+];
+
+function detectBestMirror() {
+  if (process.env.GITHUB_MIRROR) return process.env.GITHUB_MIRROR;
+  // 用已知的 release URL + 范围请求测试（只下载 1 字节，避免全量下载）
+  // ghproxy 等镜像只转发 releases/download 路径，不代理仓库主页和 api.github.com
+  const testPath = 'https://github.com/LoseNine/ruyipage/releases/download/151-ruyi/firefox-151.0a1.en-US.win64.zip';
+  for (const m of MIRROR_CANDIDATES) {
+    const ret = run('curl', ['-sk', '--max-time', '10', '-r', '0-0', '-o', 'NUL', '-w', '%{http_code}', `${m}/${testPath}`], 15000);
+    const code = ret.stdout.trim();
+    if (ret.ok && (code === '200' || code === '206')) return m;
+  }
+  return '';
+}
+
+function mirrorEnv(mirror) {
+  return mirror ? { GITHUB_MIRROR: mirror } : null;
 }
 
 function detectState(python) {
@@ -103,16 +125,32 @@ function installRuyipagePackage(python) {
   return { ok: ret.ok, output: (ret.stdout || ret.stderr || ret.error || '').slice(0, 2000) };
 }
 
-function installRuyipageRuntime(python) {
+function installRuyipageRuntime(python, mirror) {
   fs.mkdirSync(RUYIPAGE_BROWSERS_DIR, { recursive: true });
-  const ret = run(python, ['-m', 'ruyipage', 'install', '--install-dir', RUYIPAGE_BROWSERS_DIR], 900000);
-  return { ok: ret.ok, output: (ret.stdout || ret.stderr || ret.error || '').slice(0, 2000) };
+  // 两步安装：先用镜像下载 zip，再用 --from-file 本地安装
+  // 原因：python -m ruyipage install 直连 GitHub 下载，不支持镜像，速度极慢
+  const script = path.join(__dirname, 'download_ruyi_tool.js');
+  const env = mirrorEnv(mirror);
+  // 步骤1：下载 zip（支持镜像加速）
+  const dlRet = run(process.execPath, [script, '--tool', 'ruyipage-firefox', '--dest', TOOLS_DIR, '--json'], 900000, env);
+  let zipFile = '';
+  try {
+    const parsed = JSON.parse(dlRet.stdout.replace(/^\uFEFF/, ''));
+    zipFile = parsed.destFile || '';
+  } catch { /* ignore */ }
+  if (!zipFile || !fs.existsSync(zipFile)) {
+    return { ok: false, output: `下载失败：${(dlRet.stdout || dlRet.stderr || dlRet.error || '').slice(0, 1500)}` };
+  }
+  // 步骤2：用 --from-file 本地安装（不走网络）
+  const instRet = run(python, ['-m', 'ruyipage', 'install', '--from-file', zipFile, '--install-dir', RUYIPAGE_BROWSERS_DIR], 300000);
+  return { ok: instRet.ok, output: (instRet.stdout || instRet.stderr || instRet.error || '').slice(0, 2000) };
 }
 
-function downloadAndExtractRuyiTrace() {
+function downloadAndExtractRuyiTrace(mirror) {
   fs.mkdirSync(TOOLS_DIR, { recursive: true });
   const script = path.join(__dirname, 'download_ruyi_tool.js');
-  const ret = run(process.execPath, [script, '--tool', 'ruyitrace', '--dest', TOOLS_DIR, '--extract', '--json'], 600000);
+  const env = mirrorEnv(mirror);
+  const ret = run(process.execPath, [script, '--tool', 'ruyitrace', '--dest', TOOLS_DIR, '--extract', '--json'], 600000, env);
   let parsed = null;
   try { parsed = JSON.parse(ret.stdout.replace(/^\uFEFF/, '')); } catch { /* ignore */ }
   return {
@@ -122,7 +160,7 @@ function downloadAndExtractRuyiTrace() {
   };
 }
 
-function install(state, args) {
+function install(state, args, mirror) {
   const steps = [];
 
   if (!state.ruyipagePackage) {
@@ -130,11 +168,11 @@ function install(state, args) {
   }
 
   if (!state.ruyipageRuntime) {
-    steps.push({ name: '安装 ruyiPage 定制 Firefox runtime', ...installRuyipageRuntime(args.python) });
+    steps.push({ name: '安装 ruyiPage 定制 Firefox runtime', ...installRuyipageRuntime(args.python, mirror) });
   }
 
   if (!state.ruyitrace) {
-    steps.push({ name: '下载并解压 RuyiTrace', ...downloadAndExtractRuyiTrace() });
+    steps.push({ name: '下载并解压 RuyiTrace', ...downloadAndExtractRuyiTrace(mirror) });
   }
 
   return steps;
@@ -201,8 +239,17 @@ function main() {
   const before = detectState(args.python);
   const allInstalled = before.node.ok && before.ruyipagePackage && before.ruyipageRuntime && before.ruyitrace && before.ruyitraceKernel;
 
+  let mirror = '';
+  if (!allInstalled) {
+    console.error('检测 GitHub 镜像...');
+    mirror = detectBestMirror();
+    if (mirror) console.error(`使用镜像：${mirror}`);
+    else console.error('未检测到可用镜像，将直连 GitHub（可能较慢）');
+  }
+
   const result = {
     python: args.python,
+    mirror,
     before,
     skipped: allInstalled,
     steps: [],
@@ -220,19 +267,21 @@ function main() {
     if (!before.ruyipagePackage) console.log(`  - ruyiPage Python 包（pip install）`);
     if (!before.ruyipageRuntime) console.log(`  - ruyiPage 定制 Firefox runtime → ${RUYIPAGE_BROWSERS_DIR}`);
     if (!before.ruyitrace) console.log(`  - RuyiTrace 定制 trace 内核 → ${RUYITRACE_DIR}`);
+    if (mirror) console.log(`\nGitHub 镜像：${mirror}`);
     console.log('\n添加 --yes 跳过确认直接安装。');
     if (args.markdown) {
       const lines = ['# 一键安装', '', '检测到缺失组件，添加 `--yes` 确认安装：', ''];
       if (!before.ruyipagePackage) lines.push('- ruyiPage Python 包（pip install）');
       if (!before.ruyipageRuntime) lines.push(`- ruyiPage 定制 Firefox runtime → \`${RUYIPAGE_BROWSERS_DIR}\``);
       if (!before.ruyitrace) lines.push(`- RuyiTrace 定制 trace 内核 → \`${RUYITRACE_DIR}\``);
+      if (mirror) lines.push('', `> GitHub 镜像：${mirror}`);
       lines.push('', '```bash', `node scripts/install_all.js --yes --markdown`, '```');
       process.stdout.write(lines.join('\n') + '\n');
     }
     return;
   }
 
-  result.steps = install(before, args);
+  result.steps = install(before, args, mirror);
   result.after = verify(args);
 
   if (args.json) console.log(JSON.stringify(result, null, 2));
