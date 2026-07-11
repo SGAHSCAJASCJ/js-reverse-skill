@@ -1,8 +1,8 @@
 # isTrusted 事件检测与可信输入取证规则
 
-当用户选择 ruyiPage、Camoufox 自动执行点击、拖拽、鼠标移动、键盘输入、滚动或验证码交互时读取本文件。目标是在前置取证阶段尽量使用浏览器原生输入路径，避免普通 JavaScript 合成事件导致 `event.isTrusted === false` 被目标站检测。
+当用户选择 ruyiPage 自动执行点击、拖拽、鼠标移动、键盘输入、滚动或验证码交互时读取本文件。目标是在前置取证阶段尽量使用浏览器原生输入路径，避免普通 JavaScript 合成事件导致 `event.isTrusted === false` 被目标站检测。
 
-> 适用范围：L2/L3 涉及浏览器自动化交互时必读；L1 不涉及。
+> 适用范围：涉及浏览器自动化交互时必读。
 
 ## 核心硬性规则
 
@@ -37,14 +37,12 @@ new WheelEvent('wheel', { bubbles: true, deltaY: 120, ruyi: true });
 
 ruyiPage 取证报告中要记录：使用的是 native BiDi action、human action、`ruyi: true` 事件，还是用户手动操作。普通 JS 合成事件不能被写成可信操作。
 
-## Camoufox
-
-Camoufox 模式从启动开始使用官方入口，默认 `headless=False` 和 `humanize=True`。鼠标、键盘、拖拽、滚动优先使用 Camoufox / Playwright 风格的原生输入接口或 MCP 的官方交互能力，不要通过 `page.evaluate(() => element.dispatchEvent(...))` 合成事件。
+## 合成事件降级处理
 
 如果某个流程必须依赖页面内合成事件，应先暂停并说明 `isTrusted=false` 风险，让用户选择：
 
 - 改为用户手动操作。
-- 切换到 ruyiPage 并使用 native BiDi action 或 `ruyi: true`。
+- 使用 ruyiPage native BiDi action 或 `ruyi: true`。
 - 在授权范围内接受该风险，仅用于非关键取证。
 
 ## 验证码与轨迹 fixture

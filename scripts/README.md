@@ -6,7 +6,7 @@
 
 | 脚本 | 功能 | 典型用法 |
 |------|------|---------|
-| `check_external_tools.js` | 检测 ruyiPage / RuyiTrace / camoufox / camoufox-mcp 安装状态 | `node check_external_tools.js --markdown` |
+| `check_external_tools.js` | 检测 ruyiPage / RuyiTrace 安装状态 | `node check_external_tools.js --markdown` |
 | `check_node_leakage.js` | 检查 Node 宿主常见泄露变量（含 undici），给出阻断清单 | `node check_node_leakage.js --markdown` |
 | `check_tls_clients.js` | 检测 TLS 指纹兼容客户端（CycleTLS / impers / curl-cffi-node / curl_cffi / cyCronet） | `node check_tls_clients.js --markdown` |
 | `check_web_verify_patcher.js` | 检查 web-verify-patcher skill 是否已安装 | `node check_web_verify_patcher.js --markdown` |
@@ -17,14 +17,14 @@
 | 脚本 | 功能 | 触发阶段 | 典型用法 |
 |------|------|---------|---------|
 | `check_intake.js` | 校验 task.md 目标字段完整性（URL / API / 参数名 / 样本等） | Phase 0 | `node check_intake.js --input task.md --markdown` |
-| `check_code_quality.js` | 检查代码简洁性 / 模块化 / 中文注释 UTF-8 编码 | Phase 5 (L3) | |
-| `check_final_artifact.js` | 检查交付目录规范 / 单一入口 / 无浏览器自动化 / Session 客户端 | Phase 5 (L2+) | |
-| `check_fingerprint_fixture.js` | 检查指纹 fixture 覆盖 Canvas / WebGL / Audio / DOM 几何等 | Phase 5 (L3) | |
-| `check_trace_api_coverage.js` | 检查 Trace API inventory 和 env coverage matrix | Phase 5 (L3) | |
-| `check_dynamic_resources.js` | 检查动态资源仅作快照，运行时刷新模块已设计 | Phase 5 (L2+) | |
-| `check_change_memory.js` | 检查代码变更记忆.md 是否维护修改原因 / 禁止回退等 | Phase 5 (L3) | |
+| `check_code_quality.js` | 检查代码简洁性 / 模块化 / 中文注释 UTF-8 编码 | Phase 5 | |
+| `check_final_artifact.js` | 检查交付目录规范 / 单一入口 / 无浏览器自动化 / Session 客户端 | Phase 5 | |
+| `check_fingerprint_fixture.js` | 检查指纹 fixture 覆盖 Canvas / WebGL / Audio / DOM 几何等 | Phase 5 | |
+| `check_trace_api_coverage.js` | 检查 Trace API inventory 和 env coverage matrix | Phase 5 | |
+| `check_dynamic_resources.js` | 检查动态资源仅作快照，运行时刷新模块已设计 | Phase 5 | |
+| `check_change_memory.js` | 检查代码变更记忆.md 是否维护修改原因 / 禁止回退等 | Phase 5 | |
 | `check_stage_reports.js` | 检查阶段报告中文文件名 / UTF-8 / 必要阶段存在 | Phase 5 | `node check_stage_reports.js --case-dir case --markdown` |
-| `compare_fixture.js` | 对比 fixture 样本与实际输出，定位首个偏差点 | Phase 5 (L2+) | `node compare_fixture.js --fixture sample.fixture.json --actual node-output.json --field sign --markdown` |
+| `compare_fixture.js` | 对比 fixture 样本与实际输出，定位首个偏差点 | Phase 5 | `node compare_fixture.js --fixture sample.fixture.json --actual node-output.json --field sign --markdown` |
 
 ## 分析工具（2 个）
 

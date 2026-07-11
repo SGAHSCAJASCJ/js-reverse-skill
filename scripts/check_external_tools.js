@@ -13,12 +13,6 @@ function parseArgs(argv) {
     ruyitraceExe: '',
     ruyiPageInstallDir: '',
     ruyiPageBrowserPath: '',
-    camoufoxInstallDir: '',
-    camoufoxMcpProjectDir: '',
-    camoufoxTraceDir: '',
-    requireCamoufox: false,
-    requireCamoufoxMcp: false,
-    requireCamoufoxTrace: false,
     json: false,
     markdown: false,
     quick: false,
@@ -30,19 +24,12 @@ function parseArgs(argv) {
     else if (a === '--ruyitrace-exe') args.ruyitraceExe = argv[++i] || '';
     else if (a === '--ruyipage-install-dir') args.ruyiPageInstallDir = argv[++i] || '';
     else if (a === '--ruyipage-browser-path') args.ruyiPageBrowserPath = argv[++i] || '';
-    else if (a === '--camoufox-install-dir') args.camoufoxInstallDir = argv[++i] || '';
-    else if (a === '--camoufox-mcp-project-dir') args.camoufoxMcpProjectDir = argv[++i] || '';
-    else if (a === '--require-camoufox') args.requireCamoufox = true;
-    else if (a === '--require-camoufox-mcp') args.requireCamoufoxMcp = true;
-    else if (a === '--camoufox-trace-dir') args.camoufoxTraceDir = argv[++i] || '';
-    else if (a === '--require-camoufox-trace') args.requireCamoufoxTrace = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--quick') args.quick = true;
     else if (a === '--help' || a === '-h') args.help = true;
     else throw new Error(`未知参数：${a}`);
   }
-  if (args.requireCamoufoxMcp) args.requireCamoufox = true;
   if (!args.json && !args.markdown) args.markdown = true;
   return args;
 }
@@ -52,14 +39,11 @@ function usage() {
   node scripts/check_external_tools.js --markdown
   node scripts/check_external_tools.js --python python --ruyipage-install-dir <ruyipage-browsers-dir> --markdown
   node scripts/check_external_tools.js --python python --ruyipage-browser-path <firefox.exe> --ruyitrace-home <RuyiTrace-dir> --json
-  node scripts/check_external_tools.js --python python --require-camoufox --camoufox-install-dir <camoufox-cache-dir> --markdown
-  node scripts/check_external_tools.js --python python --require-camoufox --require-camoufox-mcp --camoufox-mcp-project-dir <camoufox-reverse-mcp-dir> --json
-  node scripts/check_external_tools.js --require-camoufox-trace --camoufox-trace-dir <camoufox-reverse-kernel-dir> --markdown
   node scripts/check_external_tools.js --quick
 
-说明：检测 ruyiPage Python 包、ruyiPage 定制 Firefox runtime、是否误用系统 Firefox fallback、RuyiTrace 目录结构，以及 Camoufox Python 包、浏览器本体 fetch 状态、camoufox-reverse-mcp 可导入状态和 camoufox-reverse trace 内核可用状态。
+说明：检测 ruyiPage Python 包、ruyiPage 定制 Firefox runtime、是否误用系统 Firefox fallback、RuyiTrace 目录结构。
 注意：选择 ruyiPage 时，只有“ruyiPage 包可用 + 定制 Firefox runtime 验证通过”才视为可用；普通系统 Firefox fallback 不视为通过。
---quick：快速模式，只检测 Node.js 版本、camoufox 和 camoufox-reverse-mcp 是否可 import（一次 spawnSync），不执行 camoufox CLI 子命令、不扫描目录、不检测 ruyipage/ruyitrace；适合 L1 纯算场景。`;
+--quick：快速模式，只检测 Node.js 版本是否满足要求，不执行子命令、不扫描目录、不检测 ruyipage/ruyitrace。`;
 }
 
 function exists(p) {
@@ -500,285 +484,10 @@ function detectRuyiTrace(args) {
   };
 }
 
-
-
-function detectCamoufoxPackage(explicitPython) {
-  const code = [
-    'import json, importlib.metadata as md',
-    'try:',
-    ' import camoufox',
-    ' from camoufox.sync_api import Camoufox',
-    ' async_ok=True',
-    ' async_error=""',
-    ' try:',
-    '  from camoufox.async_api import AsyncCamoufox',
-    ' except Exception as ae:',
-    '  async_ok=False',
-    '  async_error=str(ae)',
-    ' version=getattr(camoufox, "__version__", "")',
-    ' try:',
-    '  version=version or md.version("camoufox")',
-    ' except Exception:',
-    '  pass',
-    ' print(json.dumps({"ok": True, "version": version, "async_ok": async_ok, "async_error": async_error}, ensure_ascii=False))',
-    'except Exception as e:',
-    ' print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))',
-  ].join('\n');
-
-  const checked = [];
-  for (const c of pythonCandidates(explicitPython)) {
-    const ret = run(c.cmd, c.argsPrefix.concat(['-c', code]), 15000);
-    const checkedItem = { python: [c.cmd].concat(c.argsPrefix).join(' '), ok: ret.ok, stderr: ret.stderr || ret.error };
-    checked.push(checkedItem);
-    if (!ret.ok) continue;
-    let parsed = null;
-    try { parsed = JSON.parse((ret.stdout || '').replace(/^\uFEFF/, '')); } catch { parsed = null; }
-    if (parsed && parsed.ok) {
-      return {
-        packageInstalled: true,
-        installed: true,
-        python: c.cmd,
-        pythonArgsPrefix: c.argsPrefix,
-        version: parsed.version || '',
-        syncApiAvailable: true,
-        asyncApiAvailable: !!parsed.async_ok,
-        asyncApiError: parsed.async_error || '',
-        checked,
-      };
-    }
-    if (parsed && parsed.error) checkedItem.error = parsed.error;
-  }
-  return {
-    packageInstalled: false,
-    installed: false,
-    syncApiAvailable: false,
-    asyncApiAvailable: false,
-    asyncApiError: '',
-    reason: '未检测到可 import camoufox / camoufox.sync_api.Camoufox 的 Python 环境',
-    checked,
-  };
-}
-
-function camoufoxCli(pkg, subcommand, timeout = 20000) {
-  if (!pkg.packageInstalled) return { ok: false, stdout: '', stderr: '', error: 'Camoufox Python 包未安装', command: '' };
-  return run(pkg.python, (pkg.pythonArgsPrefix || []).concat(['-m', 'camoufox', subcommand]), timeout);
-}
-
-function getDefaultCamoufoxDirs(explicitInstallDir) {
-  const dirs = [];
-  if (explicitInstallDir) dirs.push(path.resolve(explicitInstallDir));
-  if (process.env.CAMOUFOX_CACHE_DIR) dirs.push(path.resolve(process.env.CAMOUFOX_CACHE_DIR));
-  if (process.env.CAMOUFOX_BROWSER_PATH) {
-    const p = path.resolve(process.env.CAMOUFOX_BROWSER_PATH);
-    dirs.push(isDir(p) ? p : path.dirname(p));
-  }
-  if (process.platform === 'win32') {
-    const base = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-    dirs.push(path.join(base, 'camoufox', 'camoufox', 'Cache'));
-    dirs.push(path.join(base, 'camoufox'));
-  } else if (process.platform === 'darwin') {
-    dirs.push(path.join(os.homedir(), 'Library', 'Caches', 'camoufox'));
-  } else {
-    const base = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
-    dirs.push(path.join(base, 'camoufox'));
-  }
-  return unique(dirs);
-}
-
-function looksLikeCamoufoxBinary(p) {
-  if (!p) return false;
-  const base = path.basename(p).toLowerCase();
-  if (process.platform === 'win32') return base === 'camoufox.exe' || base === 'firefox.exe' && /camoufox/i.test(p);
-  if (process.platform === 'darwin') return base === 'camoufox.app' || (/camoufox/i.test(p) && base === 'firefox');
-  return base === 'camoufox-bin' || base === 'camoufox' || (/camoufox/i.test(p) && base === 'firefox');
-}
-
-function scanCamoufoxDir(root, maxEntries = 2000) {
-  const out = [];
-  const resolved = path.resolve(root);
-  if (!exists(resolved)) return out;
-  if (!isDir(resolved)) return looksLikeCamoufoxBinary(resolved) ? [resolved] : out;
-  const queue = [{ dir: resolved, depth: 0 }];
-  let visited = 0;
-  while (queue.length && visited < maxEntries) {
-    const { dir, depth } = queue.shift();
-    visited++;
-    let entries = [];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { entries = []; }
-    for (const ent of entries) {
-      const child = path.join(dir, ent.name);
-      if (looksLikeCamoufoxBinary(child)) out.push(child);
-      if (ent.isDirectory() && depth < 5 && !['node_modules', '.git', '__pycache__'].includes(ent.name)) queue.push({ dir: child, depth: depth + 1 });
-    }
-  }
-  return unique(out);
-}
-
-function detectCamoufox(args) {
-  const pkg = detectCamoufoxPackage(args.python);
-  const pathCmd = camoufoxCli(pkg, 'path', 20000);
-  const versionCmd = camoufoxCli(pkg, 'version', 20000);
-  const listCmd = camoufoxCli(pkg, 'list', 20000);
-  const pathLines = (pathCmd.stdout || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  const cliBrowserPath = pathCmd.ok && pathLines.length ? pathLines[pathLines.length - 1] : '';
-  const cliBrowserPathExists = !!cliBrowserPath && exists(cliBrowserPath);
-  const scannedDirs = getDefaultCamoufoxDirs(args.camoufoxInstallDir);
-  let scannedBinaries = [];
-  for (const dir of scannedDirs) scannedBinaries = scannedBinaries.concat(scanCamoufoxDir(dir));
-  scannedBinaries = unique(scannedBinaries);
-  const browserFetched = cliBrowserPathExists || scannedBinaries.length > 0;
-  const recommendedBrowserPath = cliBrowserPathExists ? cliBrowserPath : (scannedBinaries[0] || '');
-  let conclusion = '';
-  if (!pkg.packageInstalled && !browserFetched) conclusion = '不可使用：未检测到 Camoufox Python 包，也未检测到 Camoufox 浏览器本体。';
-  else if (!pkg.packageInstalled && browserFetched) conclusion = '暂不可使用：检测到疑似 Camoufox 浏览器本体，但当前 Python 环境未安装 camoufox 包；需提供可导入 camoufox 的 Python / venv。';
-  else if (pkg.packageInstalled && !browserFetched) conclusion = '可安装但未完成 fetch：Camoufox Python 包存在，但未检测到 `python -m camoufox fetch` 下载的浏览器本体；正式取证前必须先 fetch 或提供缓存目录。';
-  else conclusion = '可使用：检测到 Camoufox Python 包和浏览器本体；正式取证仍必须从第一次打开目标页开始使用 Camoufox 官方入口和反检测启动参数。';
-  return {
-    requested: !!args.requireCamoufox,
-    packageInstalled: !!pkg.packageInstalled,
-    browserFetched,
-    python: pkg,
-    pathCommandOk: !!pathCmd.ok,
-    pathCommand: pathCmd.command,
-    pathCommandOutput: pathCmd.stdout || '',
-    pathCommandError: pathCmd.stderr || pathCmd.error || '',
-    versionCommandOk: !!versionCmd.ok,
-    versionCommandOutput: versionCmd.stdout || '',
-    listCommandOk: !!listCmd.ok,
-    listCommandOutput: listCmd.stdout || '',
-    cliBrowserPath,
-    cliBrowserPathExists,
-    scannedDirs,
-    scannedBinaries,
-    recommendedBrowserPath,
-    usable: !!pkg.packageInstalled && browserFetched,
-    installCommands: [
-      'python -m pip install -U "camoufox[geoip]"',
-      'python -m camoufox fetch',
-      'python -m camoufox version',
-      'python -m camoufox path',
-    ],
-    usageMusts: [
-      '从第一次打开目标页开始使用 Camoufox，不要先用普通 Playwright / Puppeteer / 系统浏览器探测。',
-      '默认 headless:false、humanize:true；Linux 无显示环境且用户确认时才使用官方 headless:"virtual"。',
-      '代理场景按授权启用 geoip:true，必要时 block_webrtc:true，并保持 locale / timezone / geolocation 与出口 IP 一致。',
-      '用户选择 MCP 时，必须先检测 camoufox-reverse-mcp；MCP 不可用时不得静默降级。',
-      'Camoufox 只用于前置取证、采样和日志收集，不得进入最终 result/ 交付代码。',
-    ],
-    conclusion,
-  };
-}
-
-function detectCamoufoxReverseMcp(args) {
-  const projectDir = args.camoufoxMcpProjectDir ? path.resolve(args.camoufoxMcpProjectDir) : '';
-  const pyPathEntries = [];
-  if (projectDir) {
-    if (exists(path.join(projectDir, 'src'))) pyPathEntries.push(path.join(projectDir, 'src'));
-    pyPathEntries.push(projectDir);
-  }
-  const env = pyPathEntries.length ? { PYTHONPATH: pyPathEntries.concat(process.env.PYTHONPATH ? [process.env.PYTHONPATH] : []).join(path.delimiter) } : {};
-  const code = [
-    'import json, importlib.metadata as md',
-    'try:',
-    ' import camoufox_reverse_mcp as m',
-    ' version=""',
-    ' try:',
-    '  version=md.version("camoufox-reverse-mcp")',
-    ' except Exception:',
-    '  pass',
-    ' print(json.dumps({"ok": True, "version": version, "module_file": getattr(m, "__file__", "")}, ensure_ascii=False))',
-    'except Exception as e:',
-    ' print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))',
-  ].join('\n');
-  const checked = [];
-  for (const c of pythonCandidates(args.python)) {
-    const ret = run(c.cmd, c.argsPrefix.concat(['-c', code]), 15000, { cwd: projectDir || undefined, env });
-    const item = { python: [c.cmd].concat(c.argsPrefix).join(' '), ok: ret.ok, stderr: ret.stderr || ret.error };
-    checked.push(item);
-    if (!ret.ok) continue;
-    let parsed = null;
-    try { parsed = JSON.parse((ret.stdout || '').replace(/^\uFEFF/, '')); } catch { parsed = null; }
-    if (parsed && parsed.ok) {
-      return {
-        requested: !!args.requireCamoufoxMcp,
-        installed: true,
-        importable: true,
-        python: c.cmd,
-        pythonArgsPrefix: c.argsPrefix,
-        version: parsed.version || '',
-        moduleFile: parsed.module_file || '',
-        projectDir,
-        projectDirExists: projectDir ? exists(projectDir) : false,
-        checked,
-        mcpCommand: [c.cmd].concat(c.argsPrefix, ['-m', 'camoufox_reverse_mcp']).join(' '),
-        conclusion: '可使用：camoufox-reverse-mcp 可导入；启动 MCP 前仍需确认客户端配置使用同一 Python / venv。',
-      };
-    }
-    if (parsed && parsed.error) item.error = parsed.error;
-  }
-  return {
-    requested: !!args.requireCamoufoxMcp,
-    installed: false,
-    importable: false,
-    projectDir,
-    projectDirExists: projectDir ? exists(projectDir) : false,
-    checked,
-    installCommands: [
-      'git clone https://github.com/WhiteNightShadow/camoufox-reverse-mcp.git <install-dir>',
-      'cd <install-dir>',
-      'python -m pip install -e .',
-      'python -c "import camoufox_reverse_mcp; print(\'ok\')"',
-    ],
-    configExample: {
-      mcpServers: {
-        'camoufox-reverse': {
-          command: 'python',
-          args: ['-m', 'camoufox_reverse_mcp'],
-        },
-      },
-    },
-    conclusion: '不可使用：未检测到可 import camoufox_reverse_mcp 的 Python 环境；如已安装，请提供 Python / venv 或 --camoufox-mcp-project-dir。',
-  };
-}
-
-function detectCamoufoxTrace(args) {
-  const candidates = [];
-  if (args.camoufoxTraceDir) candidates.push(path.resolve(args.camoufoxTraceDir));
-  if (process.env.CAMOUFOX_REVERSE_BROWSER_PATH) candidates.push(path.resolve(process.env.CAMOUFOX_REVERSE_BROWSER_PATH));
-  let found = '';
-  for (const c of candidates) {
-    if (exists(c)) { found = c; break; }
-    if (isDir(c)) {
-      const sub = path.join(c, process.platform === 'win32' ? 'camoufox.exe' : 'camoufox');
-      if (exists(sub)) { found = sub; break; }
-    }
-  }
-  const available = !!found;
-  const installCommands = [
-    '# 默认 python -m camoufox fetch 下载的是普通反检测浏览器，不含 C++ 层 trace 能力',
-    '# trace 内核需随 camoufox-reverse-mcp 提供或单独构建，然后：',
-    'set CAMOUFOX_REVERSE_BROWSER_PATH=<camoufox-reverse 定制版 firefox 路径>',
-    '# 或运行检测：node scripts/check_external_tools.js --require-camoufox-trace --camoufox-trace-dir <dir> --markdown',
-  ];
-  const conclusion = available
-    ? '可使用：检测到 camoufox-reverse 定制版 trace 内核路径。'
-    : '不可用：默认 `python -m camoufox fetch` 浏览器不支持 C++ 层 trace；L3 trace 模式需 camoufox-reverse 定制版内核，请确认来源并提供路径（设置 CAMOUFOX_REVERSE_BROWSER_PATH 或 --camoufox-trace-dir），或明确降级为 ruyiPage + RuyiTrace；不得用默认 camoufox 静默替代。';
-  return {
-    requested: !!args.requireCamoufoxTrace,
-    available,
-    browserPath: found,
-    installCommands,
-    conclusion,
-  };
-}
-
 function detect(args) {
   return {
     ruyiPage: detectRuyiPage(args),
     ruyiTrace: detectRuyiTrace(args),
-    camoufox: detectCamoufox(args),
-    camoufoxReverseMcp: detectCamoufoxReverseMcp(args),
-    camoufoxTrace: detectCamoufoxTrace(args),
     nextRequiredInput: [],
   };
 }
@@ -799,24 +508,6 @@ function withNextSteps(result) {
     next.push('检测到可能的系统 Firefox fallback 或未验证 Firefox 路径：这不视为 ruyiPage 绕检测方案通过，必须改用 ruyiPage managed runtime / release 含 ruyi 标识的定制 Firefox。');
   }
   if (!result.ruyiTrace.installed) next.push('如果本 case 选择 ruyiPage + RuyiTrace，当前 RuyiTrace 未通过检测时不得自动降级为仅 ruyiPage；请让用户选择安装 / 提供 RuyiTrace.exe 所在目录，或明确确认降级为仅 ruyiPage。用户选择安装时，需等待 RuyiTrace.exe 可打开且 firefox/RUYI_DOMTRACE.txt 存在后再继续。');
-  const cf = result.camoufox;
-  if (cf && cf.requested) {
-    if (!cf.packageInstalled && !cf.browserFetched) {
-      next.push('如果本 case 选择 Camoufox，当前未检测到 Camoufox Python 包或浏览器本体。请先询问用户是否已安装：已安装则提供 Python / venv、`python -m camoufox path` 输出或 Camoufox 缓存目录；未安装则让用户确认 Python / venv 和下载缓存目录后再安装。');
-    } else if (cf.packageInstalled && !cf.browserFetched) {
-      next.push('检测到 Camoufox Python 包但未检测到浏览器本体：正式取证前必须让用户确认执行 `python -m camoufox fetch`，或提供已 fetch 的缓存目录 / 浏览器路径。');
-    } else if (!cf.packageInstalled && cf.browserFetched) {
-      next.push('检测到疑似 Camoufox 浏览器本体但未检测到 Python 包：不得直接用普通 Playwright 指向该浏览器；需提供可调用 Camoufox 官方 API 的 Python / venv。');
-    }
-  }
-  const cm = result.camoufoxReverseMcp;
-  if (cm && cm.requested && !cm.importable) {
-    next.push('如果本 case 选择 Camoufox + camoufox-reverse-mcp，当前 MCP 未通过检测时不得自动降级为仅 Camoufox；请让用户选择安装 / 提供 camoufox-reverse-mcp 项目目录，或明确确认降级为仅 Camoufox。');
-  }
-  const tr = result.camoufoxTrace;
-  if (tr && tr.requested && !tr.available) {
-    next.push('如果本 case 选择 L3 trace（camoufox MCP trace 模式），当前未检测到 camoufox-reverse 定制版 trace 内核：默认 `python -m camoufox fetch` 浏览器不支持 C++ 层 trace，不得用它静默替代。请让用户提供 trace 内核路径（设置 CAMOUFOX_REVERSE_BROWSER_PATH 或 --camoufox-trace-dir）或明确降级为 ruyiPage + RuyiTrace。');
-  }
   result.nextRequiredInput = next;
   return result;
 }
@@ -875,73 +566,6 @@ function renderMarkdown(result) {
     lines.push('- 自动捕获示例：`node scripts/capture_ruyitrace_log.js --url <target-page-url> --case-dir case --ruyitrace-home <RuyiTrace-dir> --duration 90 --import-after --markdown`');
   }
 
-
-  lines.push('', '## Camoufox');
-  const cf = result.camoufox;
-  lines.push(`- 是否要求检测：${cf.requested ? '是' : '否'}`);
-  lines.push(`- Python 包是否检测到：${cf.packageInstalled ? '是' : '否'}`);
-  if (cf.python && cf.python.packageInstalled) {
-    lines.push(`- Python：${[cf.python.python].concat(cf.python.pythonArgsPrefix || []).join(' ')}`.trim());
-    lines.push(`- Camoufox 版本：${cf.python.version || '未知'}`);
-    lines.push(`- sync_api.Camoufox 是否可导入：${cf.python.syncApiAvailable ? '是' : '否'}`);
-    lines.push(`- async_api.AsyncCamoufox 是否可导入：${cf.python.asyncApiAvailable ? '是' : '否'}`);
-    if (cf.python.asyncApiError) lines.push(`- Async API 检测错误：${cf.python.asyncApiError}`);
-  } else if (cf.python && cf.python.reason) lines.push(`- Python 检测原因：${cf.python.reason}`);
-  lines.push(`- path 命令是否成功：${cf.pathCommandOk ? '是' : '否'}`);
-  if (cf.pathCommand) lines.push(`- path 命令：${cf.pathCommand}`);
-  lines.push(`- path 输出浏览器路径：${cf.cliBrowserPath || '未检测到'}`);
-  lines.push(`- path 输出路径是否存在：${cf.cliBrowserPathExists ? '是' : '否'}`);
-  lines.push(`- 浏览器本体是否已 fetch / 可定位：${cf.browserFetched ? '是' : '否'}`);
-  if (cf.recommendedBrowserPath) lines.push(`- 推荐浏览器路径：${cf.recommendedBrowserPath}`);
-  if (cf.scannedDirs && cf.scannedDirs.length) lines.push(`- 扫描目录：${cf.scannedDirs.join('、')}`);
-  if (cf.scannedBinaries && cf.scannedBinaries.length) lines.push(`- 扫描命中：${cf.scannedBinaries.join('、')}`);
-  if (cf.pathCommandError) lines.push(`- path 命令错误：${cf.pathCommandError}`);
-  if (cf.versionCommandOutput) lines.push(`- version 输出：${cf.versionCommandOutput}`);
-  lines.push(`- Camoufox 结论：${cf.conclusion}`);
-  if (cf.installCommands && cf.installCommands.length) {
-    lines.push('', '### Camoufox 安装 / fetch 命令');
-    for (const cmd of cf.installCommands) lines.push(`- \`${cmd}\``);
-  }
-  lines.push('', '### Camoufox 启动硬约束');
-  for (const item of cf.usageMusts || []) lines.push(`- ${item}`);
-
-  lines.push('', '## camoufox-reverse-mcp');
-  const cm = result.camoufoxReverseMcp;
-  lines.push(`- 是否要求检测：${cm.requested ? '是' : '否'}`);
-  lines.push(`- 是否可导入：${cm.importable ? '是' : '否'}`);
-  if (cm.projectDir) lines.push(`- 项目目录：${cm.projectDirExists ? '存在' : '不存在'} - ${cm.projectDir}`);
-  if (cm.importable) {
-    lines.push(`- Python：${[cm.python].concat(cm.pythonArgsPrefix || []).join(' ')}`.trim());
-    lines.push(`- 版本：${cm.version || '未知'}`);
-    if (cm.moduleFile) lines.push(`- 模块文件：${cm.moduleFile}`);
-    if (cm.mcpCommand) lines.push(`- MCP 命令：${cm.mcpCommand}`);
-  } else if (cm.checked && cm.checked.length) {
-    const last = cm.checked[cm.checked.length - 1];
-    if (last.error || last.stderr) lines.push(`- 检测原因：${last.error || last.stderr}`);
-  }
-  lines.push(`- MCP 结论：${cm.conclusion}`);
-  if (cm.installCommands && cm.installCommands.length) {
-    lines.push('', '### camoufox-reverse-mcp 安装命令');
-    for (const cmd of cm.installCommands) lines.push(`- \`${cmd}\``);
-  }
-  if (cm.configExample) {
-    lines.push('', '### MCP 配置示例');
-    lines.push('```json');
-    lines.push(JSON.stringify(cm.configExample, null, 2));
-    lines.push('```');
-  }
-
-  lines.push('', '## camoufox-reverse 定制版 trace 内核');
-  const tr = result.camoufoxTrace;
-  lines.push(`- 是否要求检测：${tr.requested ? '是' : '否'}`);
-  lines.push(`- 是否可用（默认 camoufox 不等于支持 trace）：${tr.available ? '是' : '否'}`);
-  if (tr.browserPath) lines.push(`- 内核路径：${tr.browserPath}`);
-  lines.push(`- 结论：${tr.conclusion}`);
-  if (tr.requested && !tr.available && tr.installCommands && tr.installCommands.length) {
-    lines.push('', '### trace 内核说明 / 安装提示');
-    for (const cmd of tr.installCommands) lines.push(`- \`${cmd}\``);
-  }
-
   if (result.nextRequiredInput.length) {
     lines.push('', '## 下一步需要用户确认');
     for (const item of result.nextRequiredInput) lines.push(`- ${item}`);
@@ -954,49 +578,8 @@ function detectQuick(args) {
   const nodeMajor = parseInt(nodeVersion.replace(/^v/, '').split('.')[0], 10) || 0;
   const nodeOk = nodeMajor >= 18;
 
-  const code = [
-    'import json',
-    'try:',
-    ' import camoufox',
-    ' camoufox_ok=True',
-    ' camoufox_error=""',
-    'except Exception as e:',
-    ' camoufox_ok=False',
-    ' camoufox_error=str(e)',
-    'try:',
-    ' import camoufox_reverse_mcp',
-    ' mcp_ok=True',
-    ' mcp_error=""',
-    'except Exception as e:',
-    ' mcp_ok=False',
-    ' mcp_error=str(e)',
-    'print(json.dumps({"camoufox_ok": camoufox_ok, "camoufox_error": camoufox_error, "mcp_ok": mcp_ok, "mcp_error": mcp_error}, ensure_ascii=False))',
-  ].join('\n');
-
-  let camoufoxOk = false;
-  let mcpOk = false;
-  let pythonUsed = '';
-  const checked = [];
-  for (const c of pythonCandidates(args.python)) {
-    const ret = run(c.cmd, c.argsPrefix.concat(['-c', code]), 15000);
-    const label = [c.cmd].concat(c.argsPrefix).join(' ');
-    checked.push({ python: label, ok: ret.ok, stderr: ret.stderr || ret.error });
-    if (!ret.ok) continue;
-    let parsed = null;
-    try { parsed = JSON.parse((ret.stdout || '').replace(/^\uFEFF/, '')); } catch { parsed = null; }
-    if (parsed) {
-      camoufoxOk = !!parsed.camoufox_ok;
-      mcpOk = !!parsed.mcp_ok;
-      pythonUsed = label;
-      break;
-    }
-  }
-
   return {
     node: { version: nodeVersion, ok: nodeOk },
-    camoufox: { importable: camoufoxOk, python: pythonUsed },
-    camoufoxReverseMcp: { importable: mcpOk },
-    checked,
   };
 }
 
@@ -1005,17 +588,11 @@ function renderQuickMarkdown(result) {
   lines.push('## Node.js');
   lines.push(`- 版本: ${result.node.version}`);
   lines.push(`- 是否满足 ≥ v18: ${result.node.ok ? '是' : '否'}`);
-  lines.push('', '## Camoufox');
-  lines.push(`- Python 包是否可 import: ${result.camoufox.importable ? '是' : '否'}`);
-  lines.push(`- Python: ${result.camoufox.python || '未检测到'}`);
-  lines.push('', '## camoufox-reverse-mcp');
-  lines.push(`- 是否可 import: ${result.camoufoxReverseMcp.importable ? '是' : '否'}`);
   lines.push('', '## 结论');
-  if (result.camoufox.importable) {
-    lines.push('- camoufox 可用');
+  if (result.node.ok) {
+    lines.push('- Node.js 版本满足要求');
   } else {
-    lines.push('- camoufox 不可用');
-    lines.push('- 下一步: 安装 camoufox 走动态调试 / 纯静态分析降级');
+    lines.push('- Node.js 版本不满足要求（需 ≥ v18）');
   }
   return lines.join('\n') + '\n';
 }

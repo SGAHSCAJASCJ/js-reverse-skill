@@ -1,4 +1,4 @@
-# Case：L1 纯算还原 SHA1 参数排序签名（智通财经 H5）
+# Case：纯算还原 SHA1 参数排序签名（智通财经 H5）
 
 > 难度：★
 > 还原方案：A 纯算还原
@@ -34,7 +34,6 @@
 
 ## 加密方案
 
-- **分级**：L1
 - **路径**：A 纯算还原
 - **框架**：不使用（Node.js crypto 原生模块）
 - **TLS 客户端**：Node.js fetch
@@ -56,12 +55,12 @@
 
 ## 方案方向
 
-L1 纯静态分析：下载 JS + Grep 定位签名函数 → 确认标准 SHA1 → Node.js `crypto.createHash('sha1')` 复现。
+纯静态分析：下载 JS + Grep 定位签名函数 → 确认标准 SHA1 → Node.js `crypto.createHash('sha1')` 复现。
 
-与 L2 的区别：算法是标准 SHA1，无需 vm 沙箱执行 JS。
-与 L3 的区别：无环境依赖、无混淆、无 JSVMP。
+无需 vm 沙箱：算法是标准 SHA1，可直接用 crypto 复现。
+无需补环境：无环境依赖、无混淆、无 JSVMP。
 
-## L1 标准流程
+## 标准流程
 
 ### Phase 1-2：定位 + 提取
 
@@ -128,17 +127,17 @@ function signGet(params) {
 | # | 坑 | 现象 | 解决方法 |
 |---|---|------|---------|
 | 1 | 透明代理自签 CA | Node.js/Python TLS 校验失败 | `NODE_TLS_REJECT_UNAUTHORIZED=0`（仅本地验证用） |
-| 2 | camoufox 动态调试受阻 | addons.mozilla.org 返回 451 + playwright 版本不兼容 | 改用 L1 纯静态分析（curl + Grep），结果等价 |
+| 2 | trace 取证动态调试受阻 | addons.mozilla.org 返回 451 + playwright 版本不兼容 | 改用纯静态分析（curl + Grep），结果等价 |
 | 3 | 序列化对象递归格式 | 嵌套对象需序列化为 `k[v]` 格式 | 参照 cfd4 序列化器实现递归 serialize |
 
-## 与 L2/L3 的边界判断
+## 边界判断
 
 ```
 算法是标准 SHA1 吗？
-  ├─ 是 → L1 纯算还原（本案例）
+  ├─ 是 → 纯算还原（本案例）
   └─ 否（自定义变种 / 混淆不可读）
-      ├─ 能 vm 执行 → L2
-      └─ 需完整环境 → L3
+      ├─ 能 vm 执行 → vm 沙箱
+      └─ 需完整环境 → 补环境
 ```
 
 ## 可验证事实清单（经验资产）
@@ -156,8 +155,8 @@ function signGet(params) {
 
 | 参考文档 | 关联点 |
 |---------|--------|
-| `references/workflow/l1-purecalc.md` | L1 纯算还原标准流程 |
-| `references/workflow/decision-tree.md` | L1/L2/L3 题型判定边界 |
+| `references/workflow/trace-flow.md` | 统一日志驱动逆向流程 |
+| `references/workflow/decision-tree.md` | 题型判定边界 |
 | `references/crypto/algorithm-families.md` | SHA1 标准算法识别 |
-| `cases/l1-simple-sign-md5.md` | 同类 L1 标准签名案例（MD5 变种） |
-| `cases/l1-sm2-sm4-sm3-guomi-jobonline.md` | 同类 L1 标准算法案例（国密） |
+| `cases/simple-sign-md5.md` | 同类标准签名案例（MD5 变种） |
+| `cases/sm2-sm4-sm3-guomi-jobonline.md` | 同类标准算法案例（国密） |

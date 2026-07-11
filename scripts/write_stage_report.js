@@ -198,7 +198,7 @@ function renderIntakeReport(stage, data) {
     ['响应样本', data.responseSample],
     ['浏览器 fixture', data.fixture],
     ['RuyiTrace NDJSON', data.ruyiTrace],
-    ['Camoufox / ruyiPage 取证记录', data.browserEvidence],
+    ['ruyiPage 取证记录', data.browserEvidence],
   ]) lines.push(`- ${k}：${safeString(v)}`);
   lines.push('', '## 3. 缺失信息与阻塞点', '');
   lines.push(`- 缺失项：${safeString(data.missingItems || data.missing)}`);

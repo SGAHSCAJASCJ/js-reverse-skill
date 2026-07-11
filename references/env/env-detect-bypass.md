@@ -370,20 +370,17 @@ function createFullBrowserEnv(options = {}) {
 }
 ```
 
-## MCP 辅助确定环境需求
+## ruyiPage + RuyiTrace 辅助确定环境需求
 
 ```
-1. [camoufox-reverse] search_code(keyword="window|document|navigator|location|screen")
-   → 先在已加载脚本中识别代码访问了哪些浏览器 API
+1. ruyiPage 加载目标页面，RuyiTrace 记录脚本访问的 window|document|navigator|location|screen 等 API
+   → 先在 trace 中识别代码访问了哪些浏览器 API
 
-2. [camoufox-reverse] add_init_script(script="记录被访问的全局变量和属性")
-   + reload()
-   + get_console_logs
-   → 确定运行时真正访问了哪些环境字段
+2. 通过 RuyiTrace 环境访问日志统计运行时真正访问了哪些环境字段
+   → 确定需要补全的环境字段范围
 
-3. [camoufox-reverse] set_breakpoint_via_hook(target_function="环境检测函数路径")
-   + get_breakpoint_data
-   → 在环境检测函数入口捕获入参、返回值和调用栈，确认需要补全的关键分支
+3. 在 RuyiTrace 中定位环境检测函数入口，捕获入参、返回值和调用栈
+   → 确认需要补全的关键分支
 ```
 
 ## 重要说明

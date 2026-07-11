@@ -47,7 +47,7 @@ node assets/ast-patterns/scripts/compare-with-reference.js --reference ./old-dec
 ### Step 3：环境检测项 diff
 
 ```
-用最新 SDK 在 camoufox trace 模式下运行
+用最新 SDK 在 ruyiPage + RuyiTrace 模式下运行
 trace_property_access(mode="summary", collect_values=True)
 → 获得最新读取的属性列表
 与旧 case 中记录的 trace 覆盖矩阵对比

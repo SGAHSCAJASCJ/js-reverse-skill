@@ -33,7 +33,7 @@
 
 期望：
 - 第一回复必须输出"信息完整性检查"，列出已识别信息和缺失/待确认信息。
-- 必须提示缺少取证模式，给出选项：ruyiPage + RuyiTrace / 仅 ruyiPage / Camoufox + camoufox-reverse-mcp / 仅 Camoufox / 用户手动取证 / AI 自行决定。
+- 必须提示缺少取证模式，给出选项：ruyiPage + RuyiTrace / 仅 ruyiPage / 用户手动取证 / AI 自行决定。
 - 必须提示缺少 TLS 客户端，给出选项：Node.js CycleTLS / impers / curl-cffi / Python curl_cffi / cffi_curl / cyCronet / 不发真实请求。
 - 必须从 cURL 中初步列出可疑加密参数候选，要求用户确认。
 - 确认前不启动浏览器取证、下载 JS、运行 Hook、发送真实请求。
@@ -56,7 +56,7 @@
 
 期望：
 - 不直接启动任何浏览器工具。
-- 提供选择：ruyiPage + RuyiTrace / 仅 ruyiPage / Camoufox + camoufox-reverse-mcp / 仅 Camoufox / 用户手动取证 / AI 自行决定。
+- 提供选择：ruyiPage + RuyiTrace / 仅 ruyiPage / 用户手动取证 / AI 自行决定。
 - 说明 Trace 日志只用于授权补环境和防御性分析。
 - 用户确认后，后续抓包、JS 收集、Hook、断点、截图、Trace 日志采集必须沿用该模式。
 
@@ -377,7 +377,7 @@ node scripts/precheck_runtime.js --markdown
 
 ### 测试 70：isTrusted 可信输入规则必须前置
 
-期望：ruyiPage 优先使用 `page.actions` / `human_move` / `human_click`；Camoufox 必须启用 `humanize`。
+期望：ruyiPage 优先使用 `page.actions` / `human_move` / `human_click`。
 
 ## 十三、高强度检测
 

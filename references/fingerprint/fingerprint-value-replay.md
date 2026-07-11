@@ -35,7 +35,7 @@ node-canvas / headless-gl / 自己实现 DOM 布局 → 结果与真实浏览器
 采集任何具体 WebAPI / 指纹值时，必须按以下顺序判断，不能跳级猜值：
 
 1. **Trace 未截断真实值**：用户已选择 RuyiTrace / 提供 NDJSON，且字段未达到截断阈值、日志覆盖当前业务路径、调用栈与目标参数生成链路相关、`baselineId` 与当前 case 一致。
-2. **同一取证工具补采完整值**：Trace 未选择、缺失、未覆盖、疑似截断或 baseline 不一致时，使用用户已确认的取证模式采样，例如 ruyiPage、Camoufox、用户手动浏览器或对应 MCP / Hook。采样必须复用同一 profile / seed / 代理 / locale / timezone / UA / Client Hints / screen / WebGL 基线。
+2. **同一取证工具补采完整值**：Trace 未选择、缺失、未覆盖、疑似截断或 baseline 不一致时，使用用户已确认的取证模式采样，例如 ruyiPage、用户手动浏览器或对应 Hook。采样必须复用同一 profile / seed / 代理 / locale / timezone / UA / Client Hints / screen / WebGL 基线。
 3. **用户提供的真实浏览器材料**：用户明确提供的 HAR、Hook 输出、浏览器控制台输出、完整响应或截图可作为证据，但必须记录来源、时间、页面、baseline 信息和完整性。
 4. **静态分析 / AI 推断仅辅助定位**：只能用于判断应该采样哪个 API、哪个调用参数、哪个 JS 位置，不能直接写入最终 fixture 的 `result`。
 
@@ -54,7 +54,7 @@ node-canvas / headless-gl / 自己实现 DOM 布局 → 结果与真实浏览器
 
 每个最终写入 fixture 的样本都要能回答：
 
-- 值来自哪里：RuyiTrace 未截断值 / ruyiPage 采样 / Camoufox 采样 / 用户手动浏览器材料 / 其他真实浏览器证据。
+- 值来自哪里：RuyiTrace 未截断值 / ruyiPage 采样 / 用户手动浏览器材料 / 其他真实浏览器证据。
 - 是否完整：`truncated: false`，并记录完整 `valueLength` 与 `sha256`；疑似截断值不得用于最终回放。
 - 属于哪个基线：`baselineId` 必须与 `case/notes/fingerprint-baseline.json` 一致。
 - 为什么不用 Trace：如果没有使用 trace，写明未选择、缺失、未覆盖、截断、baseline 冲突或用户明确降级。
@@ -113,7 +113,7 @@ node-canvas / headless-gl / 自己实现 DOM 布局 → 结果与真实浏览器
   "baselineId": "fp-20260627-001",
   "source": {
     "baselineId": "fp-20260627-001",
-    "mode": "ruyiPage + RuyiTrace / Camoufox / 手动取证",
+    "mode": "ruyiPage + RuyiTrace / 手动取证",
     "valuePriority": "trace-untruncated-first",
     "traceStatus": "unused / used-untruncated / missing / not-covered / truncated / baseline-conflict",
     "traceFallbackReason": "trace 字段疑似截断，已使用 ruyiPage 在同一 baseline 下补采完整值",
@@ -251,7 +251,7 @@ Node.js 交付环境中匹配指纹样本时，按以下顺序：
 - `baselineId`、baseline 文件路径和是否发生 baseline diff。
 - 哪些指纹 API 被目标 JS 访问。
 - 哪些值来自 RuyiTrace 未截断日志，哪些值因为 trace 缺失 / 未覆盖 / 截断 / baseline 冲突而改用自动化取证工具采样。
-- 哪些值来自 ruyiPage / Camoufox / Hook / 用户手动浏览器材料，并记录采样工具、时间、完整长度和 hash。
+- 哪些值来自 ruyiPage / Hook / 用户手动浏览器材料，并记录采样工具、时间、完整长度和 hash。
 - 是否存在疑似截断字段；如果存在，必须写明补采状态，不能把可见长度当成真实长度，也不能把 trace 中 4000 / 4096 字符片段当成最终指纹值。
 - 哪些 API 做了近似降级及原因。
 - 缺失样本是否阻塞。

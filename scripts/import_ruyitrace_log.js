@@ -234,7 +234,7 @@ function renderMarkdown(result) {
     }
     lines.push('', '### 长字段补采要求');
     lines.push('- 不要根据 RuyiTrace 中的 4000 / 4096 字符可见值判断完整加密参数、长 token、长 Cookie、长 body、Canvas dataURL、WebGL readPixels、WebGPU adapter 信息或 Audio channel data 的真实长度。');
-    lines.push('- 如果该字段影响签名、补环境验证或指纹回放，必须通过 HAR/cURL、ruyiPage / Camoufox / 手动浏览器采样、专用 Hook 分片落盘、或最终 Node.js signer 输出重新确认完整值。');
+    lines.push('- 如果该字段影响签名、补环境验证或指纹回放，必须通过 HAR/cURL、ruyiPage / 手动浏览器采样、专用 Hook 分片落盘、或最终 Node.js signer 输出重新确认完整值。');
     lines.push('- 写入 `notes/missing-env-priority.md` 时标明 `actualLength: unknown`、`minLength: 可见长度`、`truncationSuspected: true`。');
   }
 

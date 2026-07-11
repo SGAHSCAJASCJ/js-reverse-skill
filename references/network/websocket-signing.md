@@ -102,7 +102,7 @@ search_code(keyword="EventSource") → 找到 SSE URL
 
 ## 工具支持
 
-### camoufox MCP
+### ruyiPage
 
 | 工具 | WebSocket 分析用途 |
 |---|---|

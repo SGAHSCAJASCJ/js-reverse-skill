@@ -5,17 +5,17 @@
 ## 场景 1：请求参数签名（sign/m/token）
 - **特征**：URL/Body 含签名参数
 - **定位**：搜索参数名 → 追踪赋值 → 签名函数
-- **MCP**：`search_code` + `inject_hook_preset("xhr")` + `get_request_initiator`
+- **ruyiPage**：`search_code` + `inject_hook_preset("xhr")` + `get_request_initiator`
 
 ## 场景 2：动态 Cookie 生成
 - **特征**：Cookie 中有频繁变化字段
 - **类型**：eval 首包 / 预热请求 / 指纹 Cookie
-- **MCP**：`hook_function("Document.prototype.cookie", position='before')` + `inject_hook_preset("crypto")`
+- **ruyiPage**：`hook_function("Document.prototype.cookie", position='before')` + `inject_hook_preset("crypto")`
 
 ## 场景 3：响应数据加密
 - **特征**：接口返回加密字符串非明文 JSON
 - **定位**：Hook JSON.parse 或解密函数入口
-- **MCP**：`search_code("decrypt|JSON.parse|atob")` + `inject_hook_preset("crypto")`
+- **ruyiPage**：`search_code("decrypt|JSON.parse|atob")` + `inject_hook_preset("crypto")`
 
 ## 场景 4：JS 混淆/OB 混淆
 - **特征**：`_0x` 前缀 / 十六进制字符串数组 / 控制流平坦化
@@ -23,8 +23,8 @@
 
 ## 场景 5：WASM 加密
 - **特征**：加密函数调用 WebAssembly 导出函数
-- **级别**：L2（WASM 可 vm 加载，不需补环境）
-- **MCP**：`search_code("WebAssembly|.wasm|instantiate")` + `list_network_requests` 找 .wasm
+- **路径**：WASM 可 vm 加载，不需补环境
+- **ruyiPage**：`search_code("WebAssembly|.wasm|instantiate")` + `list_network_requests` 找 .wasm
 
 ## 场景 6：TLS 指纹/协议检测
 - **特征**：算法全对但请求失败（403/连接超时）
@@ -33,13 +33,13 @@
 
 ## 场景 7：反检测站点分析
 - **特征**：Cloudflare/瑞数/极验等反爬检测
-- **MCP**（仅取证）：`launch_browser(humanize=true)` → 观察 `redirect_chain` → `inject_hook_preset("debugger_bypass")` → 采集证据后用纯协议代码还原
+- **ruyiPage**（仅取证）：`launch_browser(humanize=true)` → 观察 `redirect_chain` → `inject_hook_preset("debugger_bypass")` → 采集证据后用纯协议代码还原
 
 ## 场景 8：JSVMP + 环境伪装
 - **特征**：JSVMP 不可拆解，签名算法封装在字节码中，与环境指纹深度绑定
-- **级别**：L3（JS 需完整浏览器环境，路径 D 补环境）
+- **路径**：JS 需完整浏览器环境，路径 D 补环境
 - **方法论**（路径 D 六步法）：
-  1. camoufox trace 或 RuyiTrace 采集 JSVMP 实际读取的属性
+  1. RuyiTrace 采集 JSVMP 实际读取的属性
   2. 在 Node 环境中运行相同采集代码
   3. 逐项 diff，按影响分级修复（致命级→高危→中危）
   4. 编写 patchEnvironment() 全量修复
@@ -49,7 +49,7 @@
 ## 场景 9：请求体整体加密
 - **特征**：请求 Body 不是 JSON 明文，而是 AES/SM4/DES 整体加密后的 Base64/Hex 字符串；服务端解密后处理
 - **与场景 1 的区别**：场景 1 是参数级签名（sign 字段），场景 9 是 Body 级加密（整个 payload 加密）
-- **级别**：L1（标准算法可提取）或 L2（自定义算法需 vm 执行）
+- **路径**：标准算法可提取或自定义算法需 vm 执行
 - **识别信号**：
   - Content-Type 是 `application/octet-stream` 或非标准类型
   - Body 是 Base64/Hex 字符串，非 JSON 可读
@@ -75,7 +75,7 @@
 
 ## 场景 10：WebSocket / SSE 消息签名
 - **特征**：接口用 WebSocket 或 SSE 通信，签名在消息帧或连接 URL 中
-- **级别**：L1（消息签名算法可提取）或 L3（消息签名依赖环境指纹）
+- **路径**：消息签名算法可提取或消息签名依赖环境指纹
 - **方法论**：详见 `references/network/websocket-signing.md`
 
 ---
@@ -84,7 +84,7 @@
 
 | 案例文件 | 关联点 |
 |---------|--------|
-| `cases/l1-simple-sign-md5.md` | 场景 1 实战（L1 纯算 + 零浏览器路径） |
+| `cases/simple-sign-md5.md` | 场景 1 实战（纯算 + 零浏览器路径） |
 | `cases/jsvmp-xhr-interceptor-env-emulation.md` | 场景 8 实战（JSVMP + jsdom 环境伪装） |
 | `cases/jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md` | 场景 8 双签名变体 |
 | `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | 场景 2 + 场景 7（瑞数 RS6 Cookie 生成 + 412 挑战） |

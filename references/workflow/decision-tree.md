@@ -1,17 +1,17 @@
 # 题型决策树
 
-> **触发条件**：不确定走哪个路径、哪个 L 级别时读
+> **触发条件**：不确定走哪个路径、哪个还原模式时读
 
 ## 6 题型决策表
 
-| 题型 | 特征 | L 级别 | 路径 | 工具栈 |
-|---|---|---|---|---|
-| 1. 纯算法 | 算法可纯算提取（不管几个参数，不管有无混淆） | L1 | A 纯算还原 | camoufox MCP 黄金路径（降级模式：无浏览器 Grep） |
-| 2. 混淆 JS | OB/CFF/eval，无 JSVMP | L1/L2 | AST 反混淆 + 纯算/vm沙箱 | camoufox MCP（AST 反混淆后按算法可提取性判断：可提取=L1 / 需 vm 沙箱=L2） |
-| 3. 自定义算法 | 算法不可直接提取（自定义MD5/混淆无法静态还原） | L2 | B vm 沙箱执行原 JS | camoufox MCP 标准模式 |
-| 4. WASM 加密 | 加密逻辑在 WebAssembly | L2 | C WASM 加载 | camoufox MCP 标准模式 + WASM 加载（不需补环境） |
-| 5. JSVMP 行为型 | webmssdk / byted_acrawler，200 正常，JS 需完整浏览器环境 | L3 | D 环境伪装 | camoufox trace / RuyiTrace |
-| 6. JSVMP 签名型 | 瑞数 / Akamai，412 循环，JS 需完整浏览器环境 | L3 | D 补环境（sdenv） | RuyiTrace |
+| 题型 | 特征 | 还原路径 | 工具栈 |
+|---|---|---|---|
+| 1. 纯算法 | 算法可纯算提取（不管几个参数，不管有无混淆） | A 纯算还原 | ruyipage 取证 + RuyiTrace 定位 + Node.js crypto 实现 |
+| 2. 混淆 JS | OB/CFF/eval，无 JSVMP | AST 反混淆 + 纯算/vm沙箱 | ruyipage 取证 + RuyiTrace 定位 + AST 反混淆后按算法可提取性判断 |
+| 3. 自定义算法 | 算法不可直接提取（自定义MD5/混淆无法静态还原） | B vm 沙箱执行原 JS | ruyipage 取证 + RuyiTrace 定位 + vm 沙箱 |
+| 4. WASM 加密 | 加密逻辑在 WebAssembly | C WASM 加载 | ruyipage 取证 + RuyiTrace 定位 + WASM 加载（不需补环境） |
+| 5. JSVMP 行为型 | webmssdk / byted_acrawler，200 正常，JS 需完整浏览器环境 | D 环境伪装 | ruyipage 取证 + RuyiTrace 采集 + 补环境 |
+| 6. JSVMP 签名型 | 瑞数 / Akamai，412 循环，JS 需完整浏览器环境 | D 补环境（sdenv） | ruyipage 取证 + RuyiTrace 采集 + sdenv 补环境 |
 
 ## 6 阻塞点
 
@@ -19,11 +19,11 @@
 
 | 阻塞点 | 原因 | 解除方式 |
 |---|---|---|
-| 1. 未确认取证模式 | 用户未选择 L1/L2/L3 | 让用户选择（Phase 0.2） |
+| 1. 未确认取证模式 | 用户未选择 ruyipage+RuyiTrace 或手动取证 | 让用户选择（Phase 0.2） |
 | 2. 未确认 TLS 客户端 | 需要发真实请求但未选客户端 | 让用户选择（Phase 0.2） |
 | 3. 未确认目标参数 | 只盯用户给的参数，没列全候选 | Phase 2.2 列全候选让用户确认 |
 | 4. 未确认登录/授权 | 试图绕过登录/验证码 | 暂停让用户手动登录 |
-| 5. 工具不可用 | 选了 RuyiTrace 但未安装 | 暂停让用户安装或降级 |
+| 5. 工具不可用 | ruyipage/RuyiTrace 未安装 | 暂停让用户安装 |
 | 6. 最终方案违反红线 | 滑向浏览器自动化作为最终交付 | 回到降级梯度逐级尝试 |
 
 ## JSVMP 路径选择决策树
@@ -36,7 +36,7 @@
   ├─ 反爬类型判断（不加 hook 先 navigate 或 Phase 0.5 自动抓包）
   │   ├─ 412 循环 → 签名型（瑞数/Akamai）
   │   │   → 直接路径 D 补环境（sdenv 纯 Node.js）
-  │   │   → 只能走源码级插桩（instrumentation mode="ast"）
+  │   │   → 只能走源码级插桩（AST mode）
   │   │   → 前三板斧禁用（会破坏签名）
   │   │
   │   └─ 200 正常 → 行为型（抖音/TikTok）
@@ -52,44 +52,48 @@
 ```
 
 **路径选择总结**：
-- 签名型 JSVMP（412）→ L3 路径 D（sdenv 补环境）
-- 行为型 JSVMP（200+webmssdk）→ L3 路径 D（补环境）
-- 算法可纯算提取（无 JSVMP）→ L1 路径 A
-- 算法不可提取但 JS 可 vm 执行（无 JSVMP）→ L2 路径 B（vm 沙箱）
-- WASM 加密 → L2 路径 C（WASM 加载，不补环境）
-- JSVMP 不确定时 → L3 路径 D（环境伪装成功率高，是 JSVMP 的标准打法）
+- 签名型 JSVMP（412）→ 路径 D（sdenv 补环境）
+- 行为型 JSVMP（200+webmssdk）→ 路径 D（补环境）
+- 算法可纯算提取（无 JSVMP）→ 路径 A
+- 算法不可提取但 JS 可 vm 执行（无 JSVMP）→ 路径 B（vm 沙箱）
+- WASM 加密 → 路径 C（WASM 加载，不补环境）
+- JSVMP 不确定时 → 路径 D（环境伪装成功率高，是 JSVMP 的标准打法）
 
-## 反爬类型三分法
+## 反爬类型识别
 
 ### 签名型反爬（环境即签名）
 - **特征**：redirect_chain 反复 412/302 → 200；加载 `sdenv*.js` / `acmescripts*.js`；`FSSBBIl1UgzbN7N` / `NfBCSins2OywS`
 - **典型**：瑞数 / Akamai / Shape Security
-- **路径**：L3 补环境（sdenv 纯 Node.js）
+- **路径**：路径 D 补环境（sdenv 纯 Node.js）
 
 ### 行为型反爬（参数签名 + 拦截器）
 - **特征**：HTTP 200 正常加载；加载 `webmssdk` / `byted_acrawler`；签名参数 X-Bogus / a_bogus
 - **典型**：TikTok / 抖音 / 字节系
-- **路径**：L3，路径 D 环境伪装（补环境，JS 需完整浏览器环境）
+- **路径**：路径 D 环境伪装（补环境，JS 需完整浏览器环境）
 
 ### 纯混淆（无环境检测）
 - **特征**：`_0x` 大量前缀 / obfuscator.io / 控制流平坦化
-- **路径**：L1/L2，AST 反混淆 + 通用流程
+- **路径**：AST 反混淆 + 通用流程（按算法可提取性选择路径 A 或 B）
+
+### WASM 加密
+- **特征**：加密逻辑在 WebAssembly 中，JS 调用 WASM 导出函数
+- **路径**：路径 C WASM 加载（不需补环境）
 
 ### 识别标准动作
 ```
-第一步：navigate(url) 不加任何 hook → 读 redirect_chain + final_status
-第二步：按特征判断（412循环=签名型 / webmssdk=行为型 / _0x=纯混淆）
-第三步：JSVMP 类型不确定时，带 pre_inject_hooks 对照实验
+第一步：ruyipage navigate(url) 不加任何 hook → 读 redirect_chain + final_status
+第二步：按特征判断（412循环=签名型 / webmssdk=行为型 / _0x=纯混淆 / WebAssembly.instantiate=WASM）
+第三步：JSVMP 类型不确定时，对照 RuyiTrace NDJSON 的 api 调用频率和 stack 分布
 ```
 
 ## 模式选择矩阵
 
-| 模式 | 适用场景 | 模板 | L 级别 |
-|---|---|---|---|
-| A 纯算法还原 | 算法可完整提取（不管几个参数） | `templates/node-request/` 或 `templates/python-request/` | L1 |
-| B vm 沙箱执行 | 算法不可直接提取，但 JS 可 vm 执行 | `templates/vm-sandbox/` | L2 |
-| C WASM 加载 | 加密逻辑在 WebAssembly 中（不需补环境） | `templates/wasm-loader/` | L2 |
-| D 环境伪装 | JS 需完整浏览器环境才能执行（JSVMP） | 见 `references/env/` | L3 |
+| 模式 | 适用场景 | 模板 |
+|---|---|---|
+| A 纯算法还原 | 算法可完整提取（不管几个参数） | `templates/node-request/` 或 `templates/python-request/` |
+| B vm 沙箱执行 | 算法不可直接提取，但 JS 可 vm 执行 | `templates/vm-sandbox/` |
+| C WASM 加载 | 加密逻辑在 WebAssembly 中（不需补环境） | `templates/wasm-loader/` |
+| D 环境伪装 | JS 需完整浏览器环境才能执行（JSVMP） | 见 `references/env/` |
 
 ## 语言选择策略
 
@@ -105,5 +109,5 @@
 |---------|--------|
 | `cases/jsvmp-xhr-interceptor-env-emulation.md` | JSVMP 路径 A vs 路径 D 决策 |
 | `cases/jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md` | 双签名 = 双通道拦截决策 |
-| `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | RS6 签名型反爬 → L3 补环境 |
+| `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | RS6 签名型反爬 → 补环境 |
 | `cases/universal-vmp-source-instrumentation.md` | VMP 题型判定 + 路径 A/D 决策 |

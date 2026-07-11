@@ -10,13 +10,14 @@
 | [jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md](jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md) | JSVMP 双签名 + XHR/fetch 双通道 + cacheOpts | ★★★★★ | jsdom + Firefox native code 伪装 + got-scraping TLS | 行为型 |
 | [jsvmp-ruishu6-cookie-412-sdenv.md](jsvmp-ruishu6-cookie-412-sdenv.md) | RS6 + Cookie 生成 + 412 挑战 + sdenv | ★★★★★ | sdenv(魔改 jsdom + C++ Addon) | 签名型 |
 | [universal-vmp-source-instrumentation.md](universal-vmp-source-instrumentation.md) | 通用 VMP 骨架(RS/Akamai/webmssdk) | ★★★★ | 源码级插桩 + hot_keys 学习 | 混合 |
-| [l1-simple-sign-md5.md](l1-simple-sign-md5.md) | 标准 md5 排序参数签名 + 盐 + 时间戳；缺/错 sign → 403 | ★ | 纯 Node 复现(md5)，零浏览器路径 | 无(标准签名) |
-| [l2-vm-sandbox-custom-algo.md](l2-vm-sandbox-custom-algo.md) | 自定义 MD5/混淆算法，vm 沙箱执行（骨架模板） | ★★★ | vm.createContext + 最小 sandbox | 无/轻检测 |
-| [l2-vm-sandbox-chameleon-iwencai.md](l2-vm-sandbox-chameleon-iwencai.md) | chameleon.js 混淆 + cookie"v"=hexin-v + try-catch 静默吞错 + 中等量环境 stub | ★★★ | vm.createContext + 中等量浏览器环境 stub(Element/Document/XHR) | 无/轻检测 |
-| [l1-sm2-sm4-sm3-guomi-jobonline.md](l1-sm2-sm4-sm3-guomi-jobonline.md) | SM2/SM4/SM3 国密三参数签名 + 随机密钥下发 | ★★ | 纯 Node 复现(sm-crypto) | 无(标准国密) |
-| [l3-jsvmp-bundle-bdms-a_bogus-douyin.md](l3-jsvmp-bundle-bdms-a_bogus-douyin.md) | JSVMP + bundle.js 常驻 + bdms.init + XHR patch + uncaughtException 兜底 | ★★★★ | vm + 手写环境补丁 + XHR patch 只真发 mssdk 请求 | 行为型 |
+| [simple-sign-md5.md](simple-sign-md5.md) | 标准 md5 排序参数签名 + 盐 + 时间戳；缺/错 sign → 403 | ★ | 纯 Node 复现(md5)，零浏览器路径 | 无(标准签名) |
+| [vm-sandbox-custom-algo.md](vm-sandbox-custom-algo.md) | 自定义 MD5/混淆算法，vm 沙箱执行（骨架模板） | ★★★ | vm.createContext + 最小 sandbox | 无/轻检测 |
+| [vm-sandbox-chameleon-iwencai.md](vm-sandbox-chameleon-iwencai.md) | chameleon.js 混淆 + cookie"v"=hexin-v + try-catch 静默吞错 + 中等量环境 stub | ★★★ | vm.createContext + 中等量浏览器环境 stub(Element/Document/XHR) | 无/轻检测 |
+| [sm2-sm4-sm3-guomi-jobonline.md](sm2-sm4-sm3-guomi-jobonline.md) | SM2/SM4/SM3 国密三参数签名 + 随机密钥下发 | ★★ | 纯 Node 复现(sm-crypto) | 无(标准国密) |
+| [jsvmp-bundle-bdms-a_bogus-douyin.md](jsvmp-bundle-bdms-a_bogus-douyin.md) | JSVMP + bundle.js 常驻 + bdms.init + XHR patch + uncaughtException 兜底 | ★★★★ | vm + 手写环境补丁 + XHR patch 只真发 mssdk 请求 | 行为型 |
+| [browser-extract-modified-md5-yuanrenxue.md](browser-extract-modified-md5-yuanrenxue.md) | obfuscator.io + 修改版 MD5(T常量含动态时间戳) + WAF cookie + charCode反hook | ★★★ | puppeteer 提取 m/f/完整cookie + Node.js https 请求 | 签名型 |
 
-> 同质化案例（不进速查表，按需读取）：[l1-sha1-sort-params-zhitongcaijing.md](l1-sha1-sort-params-zhitongcaijing.md) — 标准 SHA1 签名，与 l1-simple-sign-md5 同路径，供同站升级参考
+> 同质化案例（不进速查表，按需读取）：[sha1-sort-params-zhitongcaijing.md](sha1-sort-params-zhitongcaijing.md) — 标准 SHA1 签名，与 simple-sign-md5 同路径，供同站升级参考
 
 ## 使用方式
 
@@ -36,11 +37,12 @@ CHECK-2 速查:
 | `a_bogus` + 180-192 字符 + 无 cacheOpts | jsvmp-xhr-interceptor-env-emulation | 高(国内版单签名) |
 | `sdenv` / `FSSBBIl1UgzbN7N` / 412 挑战 | jsvmp-ruishu6-cookie-412-sdenv | 高(RS) |
 | `while-switch` + 200KB+ 文件 | universal-vmp-source-instrumentation | 中(通用骨架) |
-| `sign` 32 位 hex + 伴随 `t` 时间戳 + 缺/错返回 403 `invalid sign` | l1-simple-sign-md5 | 高(标准签名 L1) |
-| `E-CONTENT-PATH` / `E-SIGN` / `businessData` + SM2/SM4/SM3 | l1-sm2-sm4-sm3-guomi-jobonline | 高(国密L1) |
-| 自定义 MD5(非标准输出) / 混淆算法不可静态还原 / eval 包裹算法 | l2-vm-sandbox-custom-algo | 中(自定义算法 L2) |
-| `chameleon` / `hexin-v` / `TOKEN_SERVER_TIME` + try-catch 静默吞错 | l2-vm-sandbox-chameleon-iwencai | 高(同花顺 L2) |
-| `bdms.init` / `signUrl` / `bundle.js` 常驻 + `a_bogus` + `mssdk.bytedance.com` | l3-jsvmp-bundle-bdms-a_bogus-douyin | 高(抖音 L3 常驻) |
+| `sign` 32 位 hex + 伴随 `t` 时间戳 + 缺/错返回 403 `invalid sign` | simple-sign-md5 | 高(标准签名) |
+| `E-CONTENT-PATH` / `E-SIGN` / `businessData` + SM2/SM4/SM3 | sm2-sm4-sm3-guomi-jobonline | 高(国密) |
+| 自定义 MD5(非标准输出) / 混淆算法不可静态还原 / eval 包裹算法 | vm-sandbox-custom-algo | 中(自定义算法) |
+| `chameleon` / `hexin-v` / `TOKEN_SERVER_TIME` + try-catch 静默吞错 | vm-sandbox-chameleon-iwencai | 高(同花顺) |
+| `bdms.init` / `signUrl` / `bundle.js` 常驻 + `a_bogus` + `mssdk.bytedance.com` | jsvmp-bundle-bdms-a_bogus-douyin | 高(抖音常驻) |
+| `RM4hZBv0dDon443M` / 修改版 MD5(T常量含动态时间戳) + `$_zw` 指纹数组 + charCode 反hook | browser-extract-modified-md5-yuanrenxue | 高(猿人学浏览器提取) |
 
 ## 新增案例
 

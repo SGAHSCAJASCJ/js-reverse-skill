@@ -1,4 +1,4 @@
-# Case：L3 bundle.js 常驻加载 + bdms.init + XHR patch 截获 a_bogus（抖音）
+# Case：bundle.js 常驻加载 + bdms.init + XHR patch 截获 a_bogus（抖音）
 
 > 难度：★★★★
 > 还原方案：D 环境伪装（bundle.js 常驻 + XHR patch）
@@ -39,7 +39,6 @@
 
 ## 加密方案
 
-- **分级**：L3
 - **路径**：D 环境伪装（bundle.js 常驻 + XHR patch 喂入-截出）
 - **框架**：vm（Node.js 原生 vm，非 jsdom）
 - **TLS 客户端**：Node.js 原生 https（OpenSSL TLS 指纹）
@@ -73,7 +72,7 @@
 
 本案例更适合 API 服务场景（常驻 signer），jsvmp-xhr-interceptor 更适合一次性脚本场景。
 
-## L3 标准流程
+## 标准流程
 
 ### Phase 1-2：定位 + SDK 提取
 
@@ -168,16 +167,16 @@ const aBogus = signer.sign(targetUrl);
 
 **关键**：crash 与请求是否真发无关，是 JSVMP 执行字节码的内部问题，只能靠 uncaughtException 兜底。
 
-## 与 L2 的边界判断
+## 边界判断
 
 ```
 JSVMP 字节码能否在最小 sandbox 中执行？
-  ├─ 能（无环境检测）→ L2 vm 沙箱
-  └─ 不能（需完整环境 + bdms.init 注册拦截器）→ L3 环境伪装（本案例）
+  ├─ 能（无环境检测）→ vm 沙箱
+  └─ 不能（需完整环境 + bdms.init 注册拦截器）→ 环境伪装（本案例）
 
 JSVMP 的 a_bogus 能否纯算还原？
-  ├─ 能 → L1
-  └─ 不能（字节码保护）→ L3
+  ├─ 能 → 纯算还原
+  └─ 不能（字节码保护）→ 环境伪装
 ```
 
 ## 可验证事实清单（经验资产）
@@ -199,10 +198,10 @@ JSVMP 的 a_bogus 能否纯算还原？
 
 | 参考文档 | 关联点 |
 |---------|--------|
-| `references/workflow/l3-trace.md` | L3 标准流程 |
-| `references/workflow/decision-tree.md` | L1/L2/L3 题型判定边界 |
+| `references/workflow/trace.md` | 标准流程 |
+| `references/workflow/decision-tree.md` | 题型判定边界 |
 | `references/env/env-debug-loop.md` | 环境补丁调试循环 |
 | `references/workflow/common-pitfalls.md` | 反模式 7（signer 无状态并发） |
-| `cases/jsvmp-xhr-interceptor-env-emulation.md` | 同站 L3 jsdom 方案对比 |
+| `cases/jsvmp-xhr-interceptor-env-emulation.md` | 同站 jsdom 方案对比 |
 | `cases/jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md` | 字节系双签名方案 |
 | `references/workflow/experience-rules.md` | 规则 7（signer 单例常驻） |

@@ -1,6 +1,6 @@
-# 浏览器取证、ruyiPage / RuyiTrace / Camoufox 与登录处理
+# 浏览器取证与 ruyiPage / RuyiTrace 流程
 
-每次开始新的网页端 JS 补环境任务时读取本文件。不要等确认目标站存在自动化/CDP/JS Hook 检测后才选择工具；必须在任何取证动作前，让用户先确认取证模式。任务需要浏览器交互、用户提到 ruyiPage、RuyiTrace、Camoufox、camoufox-reverse-mcp，或出现登录、验证码、MFA 时也读取本文件。
+每次开始新的网页端 JS 补环境任务时读取本文件。不要等确认目标站存在自动化/CDP/JS Hook 检测后才选择工具；必须在任何取证动作前，让用户先确认取证模式。任务需要浏览器交互、用户提到 ruyiPage、RuyiTrace，或出现登录、验证码、MFA 时也读取本文件。
 
 ## 取证模式选择触发时机
 
@@ -13,10 +13,10 @@
 - 收集 JS bundle / chunk / sourcemap。
 - 注入 Hook、设置 XHR/fetch 断点、读取调用栈。
 - 截图、读取页面标题、Cookie、localStorage、sessionStorage。
-- 启动 ruyiPage、RuyiTrace、Camoufox、camoufox-reverse-mcp、Playwright、Puppeteer 或其他浏览器自动化工具。
+- 启动 ruyiPage、RuyiTrace、Playwright、Puppeteer 或其他浏览器自动化工具。
 - 采集 RuyiTrace NDJSON 日志。
 
-不要把 ruyiPage / RuyiTrace / Camoufox 作为“确认存在自动化检测之后才启用”的补救方案。它们应作为用户从一开始选择的取证路线。用户未选择前，只能做离线文本检查和缺失信息提醒，不能开始浏览器取证。
+不要把 ruyiPage / RuyiTrace 作为“确认存在自动化检测之后才启用”的补救方案。它们应作为用户从一开始选择的取证路线。用户未选择前，只能做离线文本检查和缺失信息提醒，不能开始浏览器取证。
 
 ## 取证模式选择
 
@@ -24,31 +24,23 @@
 
 | 模式 | 说明 | 建议 |
 |---|---|---|
-| ruyiPage + RuyiTrace | ruyiPage 做 Firefox/BiDi 自动化取证，RuyiTrace 采集内核层 NDJSON 环境日志 | 高风控、需要补环境日志时推荐 |
-| 仅 ruyiPage | 用 Firefox/BiDi 打开页面、抓包、收集 JS，不采集 RuyiTrace 日志 | 只需要取证，不需要环境日志时 |
-| Camoufox + camoufox-reverse-mcp | 用 Camoufox 反指纹浏览器和 MCP 工具完成网络、脚本、Hook、调用栈与可选属性访问追踪 | 目标更适合 Firefox/Camoufox 路线、需要 MCP 工具链时 |
-| 仅 Camoufox | 使用 Camoufox 官方 Python API 打开页面、抓包、收集 JS，不依赖 MCP | 用户已有 Camoufox 或只需轻量取证时 |
+| ruyiPage + RuyiTrace | ruyiPage 做 Firefox/BiDi 自动化取证，RuyiTrace 采集内核层 NDJSON 环境日志 | 默认推荐，高风控、需要补环境日志时首选 |
 | 用户手动取证 | 用户提供 cURL、HAR、JS 文件、调用栈截图、RuyiTrace 日志 | 用户不允许自动化或需要真实登录态时 |
-| AI 自行决定 | 根据目标风险、本机工具可用性初选，但必须回报选择结果并在启动前再次确认 | 用户不确定时 |
 
-用户未选择前，不要启动 ruyiPage、RuyiTrace、Camoufox、camoufox-reverse-mcp、Playwright 或 Puppeteer。
+用户未选择前，不要启动 ruyiPage、RuyiTrace、Playwright 或 Puppeteer。
 
 用户确认后，将其记录为本 case 的“取证模式”。后续所有取证操作必须沿用该模式：
 
 - 已选 ruyiPage + RuyiTrace：用 ruyiPage 做页面/网络/JS 取证，用 RuyiTrace 采集环境日志；不要临时改用普通 Playwright。
-- 已选仅 ruyiPage：所有浏览器自动化取证使用 ruyiPage；如后续需要 RuyiTrace 日志，先请求用户确认升级为 ruyiPage + RuyiTrace。
-- 已选 Camoufox + camoufox-reverse-mcp：所有浏览器自动化取证使用 camoufox-reverse-mcp 或 Camoufox 官方入口；如 MCP 缺失，不得静默降级为仅 Camoufox，必须先让用户选择安装 / 配置 MCP 或明确降级。
-- 已选仅 Camoufox：所有浏览器自动化取证使用 Camoufox 官方 Python API；如后续需要 MCP 的网络、脚本、Hook 或属性访问追踪能力，先请求用户确认升级为 Camoufox + camoufox-reverse-mcp。
 - 已选用户手动取证：不要启动本机浏览器自动化；只让用户提供 cURL、HAR、JS 文件、调用栈截图、RuyiTrace 日志等材料。
-- 已选 AI 自行决定：先检测工具并提出将使用的模式；用户确认后才启动。
 
-如果所选工具不可用、路径缺失、runtime 不合格、需要登录、或后续必须更换工具，必须暂停并让用户确认，不得自动 fallback 到普通系统 Firefox、普通 Playwright、Puppeteer 或非 Camoufox 的 Playwright Firefox。
+如果所选工具不可用、路径缺失、runtime 不合格、需要登录、或后续必须更换工具，必须暂停并让用户确认，不得自动 fallback 到普通系统 Firefox、普通 Playwright、Puppeteer 或其他 Playwright Firefox。
 
-详细 ruyiPage / RuyiTrace 流程见 `ruyi-tooling.md`；详细 Camoufox 流程见 `camoufox-tooling.md`；自动点击、拖拽、键盘、滚动和验证码交互的 `isTrusted` 可信输入规则见 `quality/trusted-input.md`。
+详细 ruyiPage / RuyiTrace 流程见 `ruyi-tooling.md`；自动点击、拖拽、键盘、滚动和验证码交互的 `isTrusted` 可信输入规则见 `quality/trusted-input.md`。
 
 ## 指纹基线一致性硬约束
 
-使用 ruyiPage、RuyiTrace、Camoufox、camoufox-reverse-mcp 或用户手动浏览器进行取证时，必须把“同一 case 的指纹一致性”作为前置门禁，而不是等发现指纹冲突后再补救。
+使用 ruyiPage、RuyiTrace 或用户手动浏览器进行取证时，必须把“同一 case 的指纹一致性”作为前置门禁，而不是等发现指纹冲突后再补救。
 
 - 第一次成功打开目标页并完成基础自检后，立即写入 `case/notes/fingerprint-baseline.json`，生成 `baselineId`。
 - 后续抓包、Hook、RuyiTrace、截图、JS 收集、指纹采样和 fixture 对比必须复用同一 profile / userdir / seed / 代理 / locale / timezone / viewport / UA / Client Hints / screen / WebGL 基线。
@@ -73,12 +65,11 @@
 当取证阶段需要点击、鼠标移动、拖拽、键盘输入、滚动或验证码交互时，必须先按已确认工具选择可信输入路径：
 
 - ruyiPage：优先 `page.actions` 原生 BiDi 动作链、`human_move`、`human_click`、`drag`；如果必须构造 JS 事件，必须使用 ruyiPage 特定的 `ruyi: true`。
-- Camoufox：从启动开始 `humanize=True`，交互使用 Camoufox / Playwright 风格原生输入接口或 MCP 官方交互能力，不把 `page.evaluate(() => dispatchEvent(...))` 作为主路径。
 - 用户手动：登录、MFA、验证码答案和高风险验证优先让用户在已确认取证浏览器中手动完成。
 
 ## 高强度自动化痕迹与取证风险
 
-如果目标疑似高强度检测，不允许先用普通 headless Playwright / Puppeteer / Selenium / 系统浏览器探测再切换工具。必须从第一次打开页面起使用用户确认的 ruyiPage、Camoufox 或用户手动浏览器，并固定 fingerprint baseline。
+如果目标疑似高强度检测，不允许先用普通 headless Playwright / Puppeteer / Selenium / 系统浏览器探测再切换工具。必须从第一次打开页面起使用用户确认的 ruyiPage 或用户手动浏览器，并固定 fingerprint baseline。
 
 取证阶段重点检查并记录：
 
@@ -162,103 +153,6 @@ ruyiPage 的价值在于使用 Firefox + WebDriver BiDi，并配合其 managed r
 ```
 
 
-## Camoufox / camoufox-reverse-mcp 定位
-
-Camoufox 来源：<https://github.com/daijro/camoufox>，官方文档核对时间：2026-06-20。camoufox-reverse-mcp 来源：<https://github.com/WhiteNightShadow/camoufox-reverse-mcp>，官方 README 核对时间：2026-06-20。
-
-Camoufox 是基于 Firefox 的反指纹浏览器方案，Python API 与 Playwright 风格兼容；官方安装流程不是只安装 Python 包，还必须执行 `python -m camoufox fetch` 下载浏览器本体。camoufox-reverse-mcp 是围绕 Camoufox 的 MCP 工具集，适合在授权范围内进行网络捕获、脚本列表 / 源码保存、关键字搜索、Hook、请求详情、请求 initiator、Cookie / Storage 和可选属性访问追踪。
-
-选择 Camoufox 或 Camoufox + camoufox-reverse-mcp 后，必须在启动任何浏览器前检测：
-
-```bash
-node scripts/check_external_tools.js --python python --require-camoufox --markdown
-node scripts/check_external_tools.js --python python --require-camoufox --camoufox-install-dir <camoufox-cache-dir> --markdown
-node scripts/check_external_tools.js --python python --require-camoufox --require-camoufox-mcp --camoufox-mcp-project-dir <camoufox-reverse-mcp-dir> --json
-```
-
-放行条件：
-
-- Camoufox Python 包可导入，并能导入 `camoufox.sync_api.Camoufox`。
-- `python -m camoufox path` 返回的浏览器路径存在，或在用户提供 / 默认缓存目录中检测到 Camoufox 浏览器本体。
-- 用户选择 MCP 时，`camoufox_reverse_mcp` 可导入；如果用户提供项目目录，应优先通过该目录的 `src/` 检测。
-- 用户选择 MCP 但 MCP 不可用时，不得静默降级为仅 Camoufox。必须让用户选择：安装 / 提供 MCP 项目目录，或明确降级为仅 Camoufox。
-
-未检测到 Camoufox 时，使用以下提示：
-
-```markdown
-当前没有检测到可用 Camoufox，或只检测到 Python 包但未检测到 `python -m camoufox fetch` 下载的浏览器本体。
-
-请确认：
-1. 你是否已经在某个 Python / venv 中安装 Camoufox？如果已安装，请提供 Python 解释器路径或 venv 激活方式。
-2. 你是否已经执行过 `python -m camoufox fetch`？如果已执行，请提供 `python -m camoufox path` 输出，或 Camoufox 缓存目录。
-3. 如果没有安装，请提供希望使用的 Python / venv 和下载缓存目录；如果你未提供目录，我会说明将使用 Camoufox 默认缓存目录。
-```
-
-未检测到 camoufox-reverse-mcp 时，使用以下提示：
-
-```markdown
-当前没有检测到 camoufox-reverse-mcp。你选择的是 Camoufox + camoufox-reverse-mcp，因此不能直接降级为仅 Camoufox。
-
-请确认：
-1. 是否已经克隆并安装 camoufox-reverse-mcp？如果已安装，请提供项目目录或可导入该包的 Python / venv。
-2. 如果未安装，请提供希望克隆到的目录；我会先输出安装计划，确认后再执行 `git clone` 与 `python -m pip install -e .`。
-3. 如果你不想安装 MCP，请明确回复“降级为仅 Camoufox”。
-```
-
-### camoufox-reverse 定制版 trace 内核的检测与提议门禁
-
-`python -m camoufox fetch` 下载的是默认反检测浏览器，**不含 C++ 层 trace 能力**。L3 trace 模式（`launch_browser(enable_trace=True)` / `trace_property_access`）必须使用 camoufox-reverse 定制版内核。
-
-触发与检测：
-
-- 触发时机：Phase 0.2 / 0.5 判定为 L3（JSVMP / 强风控 / 指纹深度绑定）且用户选择 "Camoufox + camoufox-reverse-mcp" 的 trace 路径时。
-- 检测命令：`node scripts/check_external_tools.js --require-camoufox-trace --markdown`（或带 `--camoufox-trace-dir <dir>` / 依赖环境变量 `CAMOUFOX_REVERSE_BROWSER_PATH`）。
-- 判定标准：检测到定制版内核路径（且文件存在）才算 `available`；默认 camoufox 浏览器存在**不代表** trace 可用。
-
-提议门禁（与 ruyiPage/RuyiTrace 同级）：
-
-- trace 内核 `available`：正常进入 L3 trace 流程。
-- trace 内核 `missing`：**不得用默认 camoufox 静默替代**（trace 功能将不可用）。必须让用户选择：
-  1. 提供 camoufox-reverse 定制版内核路径（设置 `CAMOUFOX_REVERSE_BROWSER_PATH` 或 `--camoufox-trace-dir`），等待检测通过；
-  2. 明确降级为 ruyiPage + RuyiTrace（L3 降级路径）；
-  3. 若 L3 判定存疑、实际只是 L1 纯算，则回退到 L1 纯静态分析，不再纠结 trace 内核。
-
-### Camoufox 启动硬约束
-
-从第一次打开目标页开始就使用 Camoufox 官方入口或 MCP，不得先用普通 Playwright / Puppeteer / 系统浏览器探测。默认约束：
-
-- 使用有头模式：`headless=False`。Linux 无显示环境且用户确认时才可使用官方 `headless="virtual"`。
-- 开启拟人鼠标：`humanize=True`。
-- 代理场景必须考虑指纹一致性：用户授权代理时优先 `geoip=True`，必要时 `block_webrtc=True`，并让 locale / timezone / geolocation 与出口 IP 和 fingerprint baseline 一致。
-- 不要每次启动随机窗口尺寸、字体、WebGL 等指纹值；首次成功取证后必须固化真实样本或工具输出，后续复用同一 baseline。
-- 高风险或需要登录态时，优先使用持久上下文，并将 profile 放在 case 临时目录，结束后按敏感 Profile 处理。
-- MCP 模式先调用 `check_environment`，再 `launch_browser(headless=false, humanize=true, geoip=true, block_webrtc=true)`；需要属性访问日志时才加 `enable_trace=true`，并记录 trace 文件位置。
-- 鼠标、键盘、拖拽和滚动使用 Camoufox / MCP 原生输入路径；不要用 `page.evaluate` 合成事件作为高风控交互主路径。
-
-仅 Camoufox Python API 示例只用于前置取证，不得复制进最终 `result/`：
-
-```python
-from camoufox.sync_api import Camoufox
-
-with Camoufox(headless=False, humanize=True, geoip=True, block_webrtc=True) as browser:
-    page = browser.new_page()
-    page.goto("https://example.com")
-```
-
-MCP 取证顺序：
-
-1. `check_environment`：确认 MCP、Camoufox、浏览器状态。
-2. `launch_browser(headless=false, humanize=true, geoip=true, block_webrtc=true)`：从第一次打开页面就启用反检测配置。
-3. `network_capture(action="start")`：先于 `navigate` 开始捕获。
-4. `navigate(url="目标页面")`：打开页面；需要登录时暂停，让用户手动登录并回复“已经登录成功”。
-5. `list_network_requests` / `get_network_request`：筛选目标接口，请求详情只保存授权分析所需字段。
-6. `get_request_initiator`：定位请求发起栈。
-7. `scripts(action="list|get|save")` / `search_code`：收集相关 JS 文件和关键词命中。
-8. `inject_hook_preset("xhr"/"fetch"/"cookie"/"crypto")` 或 `hook_function`：只做最小必要 Hook，并在阶段结束后 `reset_browser_state`。
-9. 可选 `trace_property_access(duration=0, mode="summary", collect_values=True)`：当需要浏览器环境访问日志辅助补环境时使用；这不是 RuyiTrace 的替代品，只作为 Camoufox 侧增强。
-
-Camoufox 与 MCP 只用于前置取证、采样和日志收集。最终交付项目不得包含 `Camoufox`、`AsyncCamoufox`、`camoufox_reverse_mcp`、`launch_browser`、`network_capture`、`page.goto`、`browser.new_page` 等浏览器自动化 / 取证代码。
-
 ## 登录处理
 
 绝不要求用户提供：
@@ -290,7 +184,7 @@ Camoufox 与 MCP 只用于前置取证、采样和日志收集。最终交付项
 - 加密参数：
 - 参数位置：Query / Header / Body / Cookie
 - 登录状态：用户已手动确认登录成功
-- 取证模式：ruyiPage + RuyiTrace / 仅 ruyiPage / Camoufox + camoufox-reverse-mcp / 仅 Camoufox / 用户手动取证 / AI 自行决定
+- 取证模式：ruyiPage + RuyiTrace / 用户手动取证
 - 已知 JS 文件：
 - 是否已有 Copy as cURL：
 - 是否已有 HAR：

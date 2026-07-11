@@ -94,7 +94,7 @@ Object.defineProperty(Navigator.prototype, 'userAgent', {
 描述符来源优先级：
 
 1. 用户真实浏览器控制台采集。
-2. ruyiPage / Camoufox / 真实浏览器取证样本。
+2. ruyiPage / 真实浏览器取证样本。
 3. RuyiTrace 环境访问证据。
 4. 常见浏览器行为模板。
 5. 目标 JS 检测结果。

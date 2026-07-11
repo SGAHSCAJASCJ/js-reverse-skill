@@ -1,14 +1,13 @@
 # 指纹基线一致性规则
 
-本文件在每个新 case 的浏览器取证、指纹采样、RuyiTrace / Camoufox 日志采集、生成 `fingerprint.fixture.json` 或发现指纹冲突时读取。目标是保证同一 case 内所有浏览器证据来自同一套稳定指纹基线，避免多次随机化导致 navigator、screen、WebGL、语言、时区、UA、Client Hints 等互相冲突。
+本文件在每个新 case 的浏览器取证、指纹采样、RuyiTrace 日志采集、生成 `fingerprint.fixture.json` 或发现指纹冲突时读取。目标是保证同一 case 内所有浏览器证据来自同一套稳定指纹基线，避免多次随机化导致 navigator、screen、WebGL、语言、时区、UA、Client Hints 等互相冲突。
 
 ## 硬性规则
 
 - 同一 case 必须维护一个指纹基线文件：`case/notes/fingerprint-baseline.json`。
 - 第一次成功取证后立即固化 `baselineId`，后续抓包、Hook、RuyiTrace、指纹采样、fixture 对比、动态资源刷新取证都必须复用该基线。
-- 禁止每次打开 ruyiPage、Camoufox 时重新随机一套指纹；不得把不同浏览器、不同 Profile、不同代理地区或不同随机 seed 的样本混用。
+- 禁止每次打开 ruyiPage 时重新随机一套指纹；不得把不同浏览器、不同 Profile、不同代理地区或不同随机 seed 的样本混用。
 - ruyiPage 必须复用同一 case 的 `base_dir`、`userdir`、`smart_fingerprint` 输出和定制 Firefox runtime；RuyiTrace 若不是同一浏览器 / profile，必须先做基线 diff。
-- Camoufox 必须优先使用持久 profile、固定 seed 或固定配置；只要工具支持随机指纹，就必须在第一次成功取证后把实际值固化，并在后续启动时复用，不得继续随机。
 - 指纹 fixture、RuyiTrace 摘要、Hook 采样、最终总结都必须记录 `baselineId`。缺少 `baselineId` 或 baseline 文件时，涉及指纹的 case 不能进入最终交付。
 - 如果 UA、Client Hints、language、timezone、platform、viewport、screen、DPR、WebGL vendor/renderer、Canvas、Audio、字体、DOM 几何、proxy/IP 地区之间出现冲突，暂停并重新采样或让用户确认切换基线；不得自动合并。
 - 用户明确更换代理、地区、Profile、浏览器工具或登录态容器时，必须生成新的 `baselineId`，旧样本只能作为历史证据，不能和新基线混用。
@@ -20,7 +19,7 @@
   "version": 1,
   "baselineId": "fp-20260627-001",
   "caseId": "",
-  "mode": "ruyiPage + RuyiTrace / Camoufox / 用户手动取证",
+  "mode": "ruyiPage + RuyiTrace / 用户手动取证",
   "tool": {
     "name": "ruyiPage",
     "profile": "case/tmp/browser-profile",

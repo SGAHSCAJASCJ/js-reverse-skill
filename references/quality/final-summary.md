@@ -2,7 +2,7 @@
 
 项目完成后或准备最终交付时必须读取本文件并默认生成 `case/result/最终项目总结.md`。最终总结 / 项目复盘 / 任务报告不是按用户要求才生成，而是规范性硬性产物；只有用户明确要求不生成最终总结时才可跳过，并需在阶段输出中记录原因。总结报告必须使用 UTF-8 写入，避免 Windows PowerShell / cmd 默认编码把中文写成 "连续问号"。
 
-> 适用范围：所有级别的 case 完成后必读；L1 可简化但不可跳过（除非用户明确豁免）。
+> 适用范围：所有 case 完成后必读；简单 case 可简化但不可跳过（除非用户明确豁免）。
 
 ## 编码硬规则
 
@@ -47,7 +47,7 @@ node scripts/write_markdown_utf8.js --input case/tmp/最终项目总结草稿.md
 - 目标加密参数：
 - 参数位置：Query / Header / Body / Cookie
 - 是否需要登录：
-- 取证模式：ruyiPage + RuyiTrace / 仅 ruyiPage / Camoufox + camoufox-reverse-mcp / 仅 Camoufox / 用户手动取证 / AI 自行决定
+- 取证模式：ruyiPage + RuyiTrace / 仅 ruyiPage / 用户手动取证 / AI 自行决定
 - 最终请求 TLS 指纹兼容客户端：Node.js CycleTLS / Node.js impers / Node.js curl-cffi / curl-cffi-node / Python curl_cffi / Python cffi_curl / Python cyCronet / 不发真实请求
 - 最终请求 Session 模式：启用 / 不发真实请求
 - 补环境框架选择：不使用补环境框架（默认） / Node.js 内置 vm / jsEnv
@@ -271,7 +271,7 @@ node scripts/write_markdown_utf8.js --input case/tmp/最终项目总结草稿.md
 - 是否涉及指纹 API：
 - 值来源优先级执行情况：已优先检查 Trace / 未选择 Trace / Trace 缺失 / Trace 未覆盖 / Trace 4000 或 4096 长字段疑似截断 / Trace baseline 冲突 / 不涉及
 - Trace 未截断可用值：API、字段路径、证据文件、长度、hash：
-- Trace 不可用或疑似截断时的补采工具：ruyiPage / Camoufox / 用户手动浏览器 / 其他；采样是否复用同一 `baselineId`：
+- Trace 不可用或疑似截断时的补采工具：ruyiPage / 用户手动浏览器 / 其他；采样是否复用同一 `baselineId`：
 - 长指纹值完整性：涉及的 Canvas / WebGL / WebGPU / Audio / 字体 / DOM 几何 API、trace 可见长度、真实长度是否 unknown、是否已补采完整值、`valueLength`、`sha256`、分片数量、`truncated: false`：
 - 真实浏览器采样来源：
 - 禁止猜值检查：AI 猜值 / 默认值 / 随机值 / Node.js 模拟库结果是否进入最终 fixture：否 / 是，处理方式：

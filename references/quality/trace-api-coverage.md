@@ -1,8 +1,8 @@
 # Trace API 覆盖矩阵门禁
 
-本文件用于解决"Trace 已经命中 WebAPI，但补环境阶段仍反复遇错新增 WebAPI"的流程问题。只要存在 Trace NDJSON（RuyiTrace / Camoufox trace）、Node trace、`missing-env.json`、Hook 环境访问日志或等价环境日志，进入第一版 Node.js 补环境实现前必须读取本文件。
+本文件用于解决"Trace 已经命中 WebAPI，但补环境阶段仍反复遇错新增 WebAPI"的流程问题。只要存在 Trace NDJSON（RuyiTrace）、Node trace、`missing-env.json`、Hook 环境访问日志或等价环境日志，进入第一版 Node.js 补环境实现前必须读取本文件。
 
-> 适用范围：L3 Trace 模式必读；L2 若有 trace 也参考；L1 不涉及。
+> 适用范围：Trace 模式必读；若有 trace 也参考。
 
 ## 核心原则
 

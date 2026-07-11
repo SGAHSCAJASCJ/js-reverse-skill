@@ -92,7 +92,7 @@ function isFirefoxProfileDir(p) {
 
 function isProfilePath(p) {
   const lower = normalizeSlash(p).toLowerCase();
-  if (/(^|\/)(cloak-profile|camoufox-profile|camoufox-user-data|browser-profile|user-data-dir|user-data|firefox-profile|chrome-profile|ruyipage-profile|profile)(\/|$)/.test(lower)
+  if (/(^|\/)(cloak-profile|browser-profile|user-data-dir|user-data|firefox-profile|chrome-profile|ruyipage-profile|profile)(\/|$)/.test(lower)
     || /(^|\/)[^/]*profile[^/]*(\/|$)/.test(lower)
     || /(^|\/)(cookies|local storage|indexeddb|session storage)(\/|$)/.test(lower)
     || /\b(cookie|localstorage|sessionstorage|authorization|token)\b/i.test(lower)) return true;
@@ -114,7 +114,7 @@ function isDisposableDirName(name) {
   return [
     'tmp', '.tmp', 'temp', '.temp', 'cache', '.cache',
     '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',
-    'browser-temp', 'camoufox-trace', 'camoufox-values', 'failed', '.downloads', '.tmp-downloads',
+    'browser-temp', 'failed', '.downloads', '.tmp-downloads',
   ].includes(n);
 }
 
@@ -275,8 +275,8 @@ function collectDisposableDirs(caseDir) {
     'tmp', '.tmp', 'temp', '.temp', 'browser-temp', 'cache', '.cache',
     'downloads/failed', 'downloads/.tmp', 'downloads/.cache',
     'logs/tmp', 'logs/.tmp', 'trace/tmp', 'trace/.tmp',
-    'ruyi-trace/tmp', 'ruyi-trace/.tmp', 'camoufox-trace', 'camoufox-values',
-    'camoufox-trace/tmp', 'camoufox-values/tmp', 'screenshots/tmp', 'screenshots/.tmp',
+    'ruyi-trace/tmp', 'ruyi-trace/.tmp',
+    'screenshots/tmp', 'screenshots/.tmp',
   ];
   for (const rel of direct) dirs.push(path.join(caseDir, rel));
 

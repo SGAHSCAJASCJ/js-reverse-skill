@@ -2,13 +2,13 @@
 
 > **触发条件**：执行某个 Phase 不确定具体怎么做时读
 >
-> 本文档是 SKILL.md Phase 0-5 顶层骨架的展开，按 L1/L2/L3 分级。
+> 本文档是 SKILL.md Phase 0-5 顶层骨架的展开，统一流程，不分级。
 
 ## Phase 0：任务确认 + 环境搭建
 
 ### 0.1 任务理解（双模式输入）
 - **完整模式**：用户提供标准请求/响应包 → 直接从包中提取 URL/Method/Headers/Params/Body，跳过 Phase 0.5 抓包
-- **极简模式**：用户只提供 URL+参数名 → Phase 0.5 camoufox 自动抓包获取上述信息
+- **极简模式**：用户只提供 URL+参数名 → Phase 0.5 ruyipage 自动抓包获取上述信息
 - 两种模式都需下载目标 JS 文件用于识别反爬类型
 - 识别并标记签名/动态参数
 
@@ -16,7 +16,7 @@
 - **必填**：目标 URL（两种模式都需）、目标参数名（可为空，自动识别）
 - **完整模式提供**：目标 API、请求方法、参数位置、成功请求样本、响应特征
 - **极简模式自动获取**（Phase 0.5 抓包填充）：上述字段
-- **可选确认**：取证模式（L1/L2/L3，可由 Phase 0.5 自动判断）、TLS 客户端、登录态
+- **可选确认**：取证模式（默认 ruyipage+RuyiTrace）、TLS 客户端、登录态
 
 强制阻断项：
 - 未确认授权 / 登录状态：不得尝试绕过登录、验证码、MFA
@@ -39,7 +39,7 @@ node scripts/check_external_tools.js --markdown
 project_name/
 ├── config/           # 密钥、Headers、JS 代码等配置
 ├── utils/            # 加密函数、请求封装
-├── case/             # 取证材料（L2/L3）
+├── case/             # 取证材料
 │   ├── js/
 │   ├── requests/
 │   ├── fixtures/
@@ -49,19 +49,17 @@ project_name/
 └── README.md
 ```
 
-### 0.5 自动识别分流（用户未指定 L 级别时执行）
+### 0.5 自动识别（用户未提供请求包时执行）
 - 完整模式：从包中提取参数值特征/响应码/JS URL → 下载 JS → 综合判断反爬类型
-- 极简模式：启动 camoufox 轻量抓包（无 hook），navigate(URL) → 提取上述信息 → 下载 JS → 综合判断
+- 极简模式：启动 ruyipage 轻量抓包（无 hook），navigate(URL) → 提取上述信息 → 下载 JS → 综合判断
 - **抓包结果复用到 Phase 1**，不重复抓包
-- 分流到 L1/L2/L3，回填 CHECK-3 意图声明
-- 详见 SKILL.md "自动识别分流"段
+- 详见 SKILL.md "自动识别"段
 
-## Phase 1：网络侦察（L1/L2/L3）
+## Phase 1：网络侦察（ruyipage 取证）
 
 ### 1.1 抓包分析
-- L1: 复用 Phase 0.5 抓包结果（极简模式）或用户提供的包（完整模式），**不重抓**；`get_request_initiator` 定位签名函数（黄金路径）
-- L2: `network_capture(action='start')` → 触发请求 → `list_network_requests` → `get_network_request`
-- L3: ruyipage `page.capture.start(targets="<api-keyword>", collect_bodies=True)` → `page.get(url)` → `page.capture.wait()`
+- ruyipage `page.capture.start(targets="<api-keyword>", collect_bodies=True)` → `page.get(url)` → `page.capture.wait()`
+- 极简模式复用 Phase 0.5 抓包结果，**不重抓**
 
 ### 1.2 加密参数识别
 对比多次请求，区分：
@@ -81,19 +79,26 @@ project_name/
 
 **只有记录到 `writer`，才能确认"找到的函数"确实影响目标请求。**
 
-### 1.4 黄金路径
+### 1.4 入口定位（黄金路径）
 ```
-L1/L2: network_capture → get_request_initiator → 直达签名函数
-L3: RuyiTrace NDJSON → 按 stack.file/line 定位
+ruyipage 网络包 → JS 文件定位 → RuyiTrace NDJSON stack 定位签名函数
+  → 按 stack.file/line/col 聚合
+  → 按 api 调用频率和时间邻近度定位签名入口
 ```
 
-## Phase 2：源码分析
+## Phase 2：源码分析 + RuyiTrace 日志采集
 
-### 2.1 关键词搜索
+### 2.1 RuyiTrace NDJSON 采集（核心证据源）
+- 自动捕获优先：`scripts/capture_ruyitrace_log.js` 自动启动 trace Firefox 采集 NDJSON
+- 手动采集兜底：自动捕获失败/需登录验证/用户明确要求手动时
+- 导入摘要：`scripts/import_ruyitrace_log.js` 生成 `notes/ruyitrace-summary.md`
+- 详见 `references/workflow/trace-flow.md`
+
+### 2.2 关键词搜索
 ```
-L1/L2: search_code(keyword="参数名") + search_code(keyword="encrypt|sign|md5|aes")
-L3: 在 RuyiTrace 抓的 JS 文件中 Grep
-L1 降级模式(无 camoufox): 在用户提供的 JS 文件中 Grep
+在 RuyiTrace 抓的 JS 文件中 Grep:
+  - 参数名 / encrypt / sign / md5 / aes
+  - 按 NDJSON stack.file/line/col 聚合定位具体 JS 文件和函数
 ```
 
 常用搜索词：
@@ -104,7 +109,7 @@ JSON.stringify / localStorage.getItem / document.cookie
 crypto / encrypt / decrypt
 ```
 
-### 2.2 混淆识别与还原
+### 2.3 混淆识别与还原
 | 混淆类型 | 特征 | 还原策略 |
 |---|---|---|
 | OB 混淆 | `_0x` 前缀变量、十六进制字符串数组 | 字符串解密 + 变量重命名 |
@@ -114,7 +119,7 @@ crypto / encrypt / decrypt
 
 需要 AST 反混淆时用 `assets/ast-patterns/`（8 站点专用规则 + 13 流水线脚本）。
 
-### 2.3 JSVMP 识别
+### 2.4 JSVMP 识别
 **严禁反编译字节码**，走路径 A（算法追踪）或路径 D（环境伪装/补环境）。
 
 识别标志：
@@ -123,7 +128,11 @@ crypto / encrypt / decrypt
 - 改写或劫持浏览器原生 API（XHR / fetch / Cookie）
 - 超大数组（字节码）+ 指针变量 + 栈操作 + 跳转指令
 
-### 2.4 静态分析关键判断清单
+### 2.5 调用链追踪
+- RuyiTrace NDJSON 按时间邻近度定位签名函数
+- 按 `api` 调用频率和 `stack` 指向的 JS 文件/函数逐层定位
+
+### 2.6 静态分析关键判断清单
 - [ ] 参数是单独加密还是整条请求链被接管
 - [ ] 页码、时间戳、随机数、Cookie、UA、环境变量是否参与运算
 - [ ] 是否存在响应解密（接口返回加密字符串而非明文 JSON）
@@ -131,33 +140,29 @@ crypto / encrypt / decrypt
 - [ ] 是否有前置请求（预热接口、Token 获取接口）
 - [ ] 是否有请求链改写（拦截 XHR/fetch 添加签名头）
 
-## Phase 3：动态验证
+## Phase 3：日志逆向分析
 
 ### 3.1 环境指纹采集（核心突破点）
 ```
-L3 camoufox trace（默认）:
-  launch_browser(enable_trace=True) → navigate(url)
-  → trace_property_access(mode="summary", collect_values=True)
-  → 获得 JSVMP 实际读取的属性列表 + 真实值
-  → 只补这些属性（狙击式补环境）
-
-L3 RuyiTrace 降级:
+RuyiTrace NDJSON 狙击式采集:
   capture_ruyitrace_log.js 自动抓 NDJSON
   → import_ruyitrace_log.js 生成摘要
   → 按 api/stack.file/line/col 定位环境依赖
-
-L2 无 trace:
-  compare_env + 分批 evaluate_js 采集
-  → 与 Node 环境全量 diff
-  → 按影响分级修复（撒网式补环境）
+  → 只补 trace 证明 JSVMP 真的读了的 API（狙击式补环境）
 ```
 
-### 3.2 Hook 验证（13 Hook 模板见 `references/hooks/hook-templates.md`）
-- `inject_hook_preset(preset="xhr"/"fetch"/"crypto"/"cookie")`
-- `hook_function(function_path="签名函数", mode='trace', log_args=true, log_return=true, log_stack=true)`
+### 3.2 环境模块分类
+将 NDJSON 日志分类到：
+- Navigator / Screen / Location / Storage
+- Canvas / WebGL / Audio / WebRTC
+- Crypto / Performance / Date / Random
+- DOM / Element / CSS / Layout
+- Worker / Service Worker / iframe
+
+### 3.3 Hook 验证（13 Hook 模板见 `references/hooks/hook-templates.md`）
 - 纪律：**只观察不篡改，命中后尽快移除**
 
-### 3.3 多次请求对比
+### 3.4 多次请求对比
 ≥3 次请求，确认变化因子（时间戳/随机数/签名值）
 
 ## Phase 4：算法还原 / 补环境
@@ -171,14 +176,24 @@ L2 无 trace:
 6. UA 自洽：环境补丁每项与 `navigator.userAgent` 声明一致
 7. 环境伪装最小化：只补经 trace/hook 证明 JSVMP 真的读了的 API
 
-### 4.2 补环境子流程（路径 D，按 L2/L3 分级）
-- L1 纯算还原通常不需要补环境（算法可完整提取）；若发现需要 vm 沙箱（自定义 MD5/算法不可提取）→ 升级 L2
-- L2 标准 25 步：+ native 保护 → 指纹基线 → Session 链 → TLS 验证
-- L3 全量 48 步：+ trace 覆盖矩阵 → 代码变更记忆 → 23 章总结
+### 4.2 解法模式（基于日志证据选择）
 
-详见 `references/env/` 目录下文档。
+| 模式 | 适用场景 | 模板 |
+|---|---|---|
+| A 纯算法还原 | 日志显示算法可完整提取 | `templates/node-request/` 或 `templates/python-request/` |
+| B vm 沙箱执行 | 日志显示服务端返回混淆 JS 生成 Cookie/Token | `templates/vm-sandbox/` |
+| C WASM 加载 | 日志显示加密逻辑在 WebAssembly 中 | `templates/wasm-loader/` |
+| D 环境伪装 | 日志显示 JSVMP 深度绑定环境指纹 | 见 `references/env/`（默认纯 vm，按需升级 sdenv） |
 
-### 4.3 配置文件策略
+### 4.3 补环境子流程（路径 D）
+基于 RuyiTrace NDJSON 证据补环境，详见 `references/env/` 目录下文档。
+
+补环境工作量取决于日志显示的环境依赖复杂度：
+- 算法可纯算提取 → 通常不需要补环境
+- JS 可 vm 执行但需少量环境 stub → 最小 sandbox
+- JSVMP 需完整浏览器环境 → 全量补环境 + NativeProtect
+
+### 4.4 配置文件策略
 | 产物类型 | 存放位置 |
 |---|---|
 | Cookie 字符串 | `config/cookies.txt` 或 `config/cookies.json` |
@@ -192,28 +207,27 @@ L2 无 trace:
 ### 5.1 运行验证
 - 运行 final.js/final.py，确认输出正确数据
 - ≥5 次请求交叉验证签名稳定性
-- L2: `verify_signer_offline(signer_code, samples=[...])` 离线验证
 
 ### 5.2 交付门禁（分级：解题必需 vs 交付加分）
 
-**解题必需**（所有级别，不通过不交付）：
+**解题必需**（不通过不交付）：
 - 一个执行入口 / 禁止任何浏览器自动化代码 / ≥5 次请求签名稳定性验证 / 中文最终总结
 
-**交付加分**（L2+，用户要求"生产级交付"时强制）：
+**交付加分**（用户要求"生产级交付"时强制）：
 - Session 模式 / `check_final_artifact.js` / 代码风格检查
 
-**工程化附加**（L3，用户要求"生产级交付"时强制）：
+**工程化附加**（用户要求"生产级交付"时强制）：
 - `check_code_quality.js` / `check_fingerprint_fixture.js` / `check_trace_api_coverage.js`
 - 23 章总结 / trace 覆盖矩阵
 - 选用 sdenv 路径时额外执行 runtime 自检，默认纯 vm 路线跳过
 
 > 默认只执行"解题必需"。用户明确要求"生产级交付"时才执行附加门禁。
 
-### 5.3 阶段报告（按级别分级）
-- L1：不要求，只生成精简总结（5-8 章）
-- L2：关键阶段报告（12-15 章）
-- L3：全量阶段报告（8 阶段 + 13 章节动态报告）
-- 所有级别"中文"始终硬性
+### 5.3 阶段报告
+- 默认：精简总结（5-8 章）
+- 用户要求"生产级交付"：关键阶段报告（12-15 章）
+- 用户要求"完整工程化"：全量阶段报告（8 阶段 + 13 章节动态报告）
+- 所有报告"中文"始终硬性
 
 ### 5.4 经验沉淀
 主动询问用户是否沉淀到 `cases/`（按 `_template.md` 格式）

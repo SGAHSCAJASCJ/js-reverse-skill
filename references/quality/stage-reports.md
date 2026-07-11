@@ -2,7 +2,7 @@
 
 本文件用于约束一个高难度补环境 case 在多轮对话中的阶段性总结产物。阶段报告不是最终总结的替代品，而是在每个合适的推进节点沉淀当前进展、修改内容、能力增量、WebAPI / 指纹变化、Bug 修复、测试结果、阻塞点、native 能力缺口和下一步计划，方便跨轮对话继续工作。
 
-> 适用范围：L2/L3 多轮 case 必读；L1 单轮简单任务可简化或跳过。
+> 适用范围：多轮补环境 case 必读；单轮简单任务可简化或跳过。
 
 ## 硬性规则
 
@@ -19,7 +19,7 @@
 | 阶段 | 文件名 | 触发时机 |
 |---|---|---|
 | 需求信息确认 | `01-需求信息确认.md` | 用户提供 URL、API、参数、样本、取证模式等初始材料后，或发现信息不完整并列出缺失项时 |
-| 取证方案确认 | `02-取证方案确认.md` | 用户确认 ruyiPage / RuyiTrace / Camoufox / 手动取证 / AI 自行决定后 |
+| 取证方案确认 | `02-取证方案确认.md` | 用户确认 ruyiPage / RuyiTrace / 手动取证 / AI 自行决定后 |
 | 请求样本与可疑参数确认 | `03-请求样本与可疑参数确认.md` | 解析 cURL / HAR / 请求样本并列出所有可疑加密参数后 |
 | JS文件与入口定位 | `04-JS文件与入口定位.md` | 收集 JS 文件、定位 source / entry / builder / writer 后 |
 | 补环境前置分析 | `05-补环境前置分析.md` | 进入 Node.js 补环境前，完成日志、trace、依赖和风险优先级整理后 |
@@ -89,7 +89,7 @@ node scripts/check_stage_reports.js --case-dir case --require-stage WebAPI补齐
 - 用户声明的加密参数。
 - 请求样本中发现的可疑加密参数。
 - 参数位置：Query / Header / Body / Cookie。
-- 取证模式选择：ruyiPage + RuyiTrace / 仅 ruyiPage / Camoufox + camoufox-reverse-mcp / 仅 Camoufox / 用户手动取证 / AI 自行决定。
+- 取证模式选择：ruyiPage + RuyiTrace / 仅 ruyiPage / 用户手动取证 / AI 自行决定。
 - 最终请求 TLS 指纹兼容客户端选择。
 - 最终请求 Session 模式：默认启用；session client 类型、Cookie jar 策略和销毁方式。
 - 指纹基线状态：未创建 / 已创建 / 待采样；`baselineId` 与 baseline 文件路径。
@@ -129,7 +129,7 @@ node scripts/check_stage_reports.js --case-dir case --require-stage WebAPI补齐
 - 响应样本：
 - 浏览器 fixture：
 - Trace NDJSON：
-- Camoufox / ruyiPage 取证记录：
+- ruyiPage 取证记录：
 
 ## 3. 缺失信息与阻塞点
 

@@ -8,23 +8,23 @@
 - **最小还原**：只还原影响参数生成和入口定位的部分，不做全文件美化。
 - **运行时优先**：能直接在 Node.js / 浏览器中运行的解释器，直接运行并 Hook 出口，比静态还原更可靠。
 - **AST 工具辅助**：OB 混淆、字符串数组、计算属性等可批量处理的，使用 AST 工具一次还原。
-- **L1/L2/L3 分流**：
-  - L1 纯算：静态分析 + AST 还原即可。
-  - L2 camoufox MCP：`search_code` + `set_breakpoint_via_hook` + `trace_function` 辅助定位。
-  - L3 trace：JSVMP / WASM 必须用 trace 模式捕获执行轨迹，按 I/O 反推算法。
+- **分流策略**：
+  - 纯算场景：静态分析 + AST 还原即可。
+  - 需动态定位场景：ruyiPage `search_code` + `set_breakpoint_via_hook` + `trace_function` 辅助定位。
+  - JSVMP / WASM 场景：必须用 RuyiTrace 捕获执行轨迹，按 I/O 反推算法。
 
 ## 混淆类型速查表
 
 | 类型 | 识别特征 | 还原策略 | 工具 |
 |---|---|---|---|
 | OB (obfuscator.io) | `_0x` 前缀变量、十六进制字符串数组、旋转函数 | 定位数组→执行旋转→全局替换→AST 美化 | `assets/ast-patterns/scripts/run-pipeline.js`（含 OB 变种 pass） |
-| 控制流平坦化 (CFF) | `while(true) switch(state)` 状态机 | 按状态转移顺序还原顺序代码 | MCP `trace_function` 追踪状态转移 |
+| 控制流平坦化 (CFF) | `while(true) switch(state)` 状态机 | 按状态转移顺序还原顺序代码 | ruyiPage `trace_function` 追踪状态转移 |
 | eval/Function 打包 | `eval(function(p,a,c,k,e,d){...})` | Hook eval/Function 拦截实际代码 | `references/hooks/hook-templates.md` 的 eval/Function Hook |
 | AAEncode | 日文颜文字字符 `ﾟωﾟﾉ` | 直接执行或替换执行为输出 | 浏览器 console |
 | JJEncode | 全是 `$` 和特殊字符 | 直接执行或替换执行为输出 | 浏览器 console |
 | JSFuck | 仅使用 `[]()!+` 六种字符 | 直接执行 | 浏览器 console |
-| 自定义 VM | 超大数组作字节码、解释器循环、switch/查找表 | 不反编译，Hook I/O 反推 | L3 trace 模式 |
-| JSVMP | 200KB+ 文件、自定义操作码表、改写原生 API | 不反编译，Hook 出口反推 | L3 trace + RuyiTrace |
+| 自定义 VM | 超大数组作字节码、解释器循环、switch/查找表 | 不反编译，Hook I/O 反推 | RuyiTrace 模式 |
+| JSVMP | 200KB+ 文件、自定义操作码表、改写原生 API | 不反编译，Hook 出口反推 | RuyiTrace |
 
 ## 1. OB 混淆还原
 
@@ -104,12 +104,12 @@ while (true) {
 3. 去掉 switch-case 包装，还原为顺序代码。
 4. 简化多余的变量赋值。
 
-**L2/L3 MCP 辅助**：
+**ruyiPage 辅助**：
 
 ```
-[camoufox-reverse] set_breakpoint_via_hook(target_function="状态机入口函数")
-[camoufox-reverse] trace_function(function_path="状态机函数", log_args=true, log_return=true)
-[camoufox-reverse] get_trace_data → 查看状态值变化
+ruyiPage: set_breakpoint_via_hook(target_function="状态机入口函数")
+ruyiPage: trace_function(function_path="状态机函数", log_args=true, log_return=true)
+ruyiPage: get_trace_data → 查看状态值变化
 ```
 
 ## 3. eval / Function 打包还原
@@ -168,12 +168,12 @@ window.Function = function(...args) {
 3. 通过 Hook 解释器的关键操作（函数调用、赋值、返回）来理解行为。
 4. 直接在 Node.js 中运行字节码解释器。
 
-**L3 trace 辅助**：
+**RuyiTrace 辅助**：
 
 ```
-[camoufox-reverse] trace_function(function_path="解释器函数", log_args=true, log_return=true)
-[camoufox-reverse] get_trace_data → 观察每步操作的输入输出
-[camoufox-reverse] set_breakpoint_via_hook(target_function="解释器核心函数") → 捕获关键调用
+ruyiPage: trace_function(function_path="解释器函数", log_args=true, log_return=true)
+ruyiPage: get_trace_data → 观察每步操作的输入输出
+ruyiPage: set_breakpoint_via_hook(target_function="解释器核心函数") → 捕获关键调用
 ```
 
 RuyiTrace 模式下，可捕获 C++ 内核级 NDJSON 轨迹，记录每个属性访问、函数调用、赋值操作，适合深度分析字节码执行流程。
@@ -192,19 +192,19 @@ RuyiTrace 模式下，可捕获 C++ 内核级 NDJSON 轨迹，记录每个属性
 3. 追踪加密函数的输入和输出。
 4. 用已知 I/O 反推算法。
 
-**L3 trace 黄金路径**：
+**RuyiTrace 黄金路径**：
 
 ```
-[camoufox-reverse] inject_hook_preset(preset="xhr") → 一键 Hook XHR 请求
-[camoufox-reverse] get_request_initiator(request_id=N) → 获取请求的 JS 调用栈（黄金路径）
-[camoufox-reverse] add_init_script → 注入全局 Hook
+ruyiPage: inject_hook_preset(preset="xhr") → 一键 Hook XHR 请求
+ruyiPage: get_request_initiator(request_id=N) → 获取请求的 JS 调用栈（黄金路径）
+ruyiPage: add_init_script → 注入全局 Hook
 ```
 
-JSVMP 场景必须使用 L3 trace 模式，参见 `references/workflow/l3-trace.md`。
+JSVMP 场景必须使用 RuyiTrace 模式，参见 `references/workflow/trace-flow.md`。
 
-## MCP 工作流
+## ruyiPage 工作流
 
-混淆代码分析的 MCP 标准工作流：
+混淆代码分析的 ruyiPage 标准工作流：
 
 ```
 1. save_script → 保存混淆代码到本地
@@ -260,7 +260,7 @@ node assets/ast-patterns/scripts/collect-residue-metrics.js output-dir/decoded.j
 - 混淆类型：OB / CFF / eval / AAEncode / JJEncode / JSFuck / 自定义 VM / JSVMP
 - 还原策略：AST 还原 / Hook 拦截 / 直接执行 / trace 反推
 - 还原范围：全文件 / 入口部分 / I/O 接口
-- 使用工具：AST 脚本 / MCP trace / RuyiTrace
+- 使用工具：AST 脚本 / ruyiPage trace / RuyiTrace
 - 还原后可读性：高 / 中 / 低
 - 是否影响参数生成：是 / 否
 ```

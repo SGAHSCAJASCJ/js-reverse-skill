@@ -64,7 +64,7 @@ eval(...) / new Function(...)（打包）
 - Shape Security
 
 **特征**：redirect_chain 反复 412/302 → 200
-**路径**：L3 补环境（sdenv 纯 Node.js）
+**路径**：补环境（sdenv 纯 Node.js）
 
 ### 行为型反爬（参数签名 + 拦截器）
 - 抖音
@@ -72,14 +72,14 @@ eval(...) / new Function(...)（打包）
 - 字节系
 
 **特征**：HTTP 200 正常加载 + webmssdk
-**路径**：L3，路径 D 环境伪装（补环境）
+**路径**：路径 D 环境伪装（补环境）
 
 ### 纯混淆（无环境检测）
 - obfuscator.io 类
 - 各类小站
 
 **特征**：`_0x` 大量前缀
-**路径**：L1/L2，AST 反混淆 + 通用流程
+**路径**：AST 反混淆 + 通用流程
 
 ## 验证码家族（交接 web-verify-patcher skill）
 

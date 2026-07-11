@@ -13,33 +13,32 @@
 
 ## 注入方式
 
-### 通过 MCP 注入（推荐）
+### 通过 ruyiPage 注入（推荐）
 
 ```
-[camoufox-reverse] add_init_script(script=HookScript)
+ruyiPage: add_init_script(script=HookScript)
 → 在页面脚本加载前注入，确保 Hook 在目标代码之前生效
 
-[camoufox-reverse] evaluate_js(expression=HookScript)
+ruyiPage: evaluate_js(expression=HookScript)
 → 在当前页面上下文执行，适合页面已加载后的动态注入
 
-[camoufox-reverse] inject_hook_preset(preset="xhr|fetch|crypto|websocket|debugger_bypass|cookie|runtime_probe")
+ruyiPage: inject_hook_preset(preset="xhr|fetch|crypto|websocket|debugger_bypass|cookie|runtime_probe")
 → 一键注入预设 Hook，覆盖常见逆向场景
 
-[camoufox-reverse] hook_function(function_path="目标函数", hook_code="...", position="before|after|replace")
+ruyiPage: hook_function(function_path="目标函数", hook_code="...", position="before|after|replace")
 → 对指定函数注入自定义 Hook
 ```
 
-### MCP 注入最佳实践
+### ruyiPage 注入最佳实践
 
 1. **使用 `add_init_script`**：确保 Hook 在目标代码之前生效
 2. **优先使用 `inject_hook_preset`**：一键注入 xhr/fetch/crypto/websocket/debugger_bypass/cookie/runtime_probe 预设 Hook
 3. **使用 `hook_function`**：对特定函数注入 before/after/replace Hook
 4. **使用 `console.log` 输出**：通过 `get_console_logs` 收集结果
 5. **使用 `console.trace`**：在关键点输出调用栈
-6. **Camoufox 优势**：Juggler 协议沙箱隔离，Hook 不会被页面 JS 检测到
-7. **使用 Proxy 代替直接覆写**：更隐蔽，不改变 `typeof` 结果
-8. **首屏挑战页用 `navigate(pre_inject_hooks=[...])`**：RS/Akamai 首包挑战在 hook 装好前就跑完了，用这个参数让 hook 先装再 goto
-9. **装完 hook 想让它先于页面 JS 跑**：用 `reload_with_hooks()` 替代裸 `reload()`，同时会清掉各类 `__mcp_*_log`
+6. **使用 Proxy 代替直接覆写**：更隐蔽，不改变 `typeof` 结果
+7. **首屏挑战页需在页面脚本执行前装好 Hook**：RS/Akamai 首包挑战在 hook 装好前就跑完了，必须让 hook 先装再加载目标页面
+8. **装完 hook 想让它先于页面 JS 跑**：带 hook 重新加载页面，同时清理各类 hook 日志变量
 
 ## Hook 模板库
 

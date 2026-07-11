@@ -7,7 +7,7 @@
 - 只用于用户授权范围内的网页端 JS 补环境结果验证。
 - 只做低频、最小化请求，优先复现用户已提供的成功 cURL / HAR。
 - TLS 指纹兼容只解决普通 HTTP 客户端与浏览器在 TLS ClientHello、ALPN、HTTP/2、JA3/JA4、Cronet / curl-impersonate 网络栈上的差异；不能替代登录态、验证码、一次性 token、设备校验或业务授权。
-- 最终真实请求必须写入一体化 `final.js` 或 `final.py`，由 Node.js / Python TLS 指纹兼容 Session 客户端直接发起；不得生成加密参数后再使用 ruyiPage、Playwright、Puppeteer、Selenium、Camoufox 或其他浏览器自动化验证。
+- 最终真实请求必须写入一体化 `final.js` 或 `final.py`，由 Node.js / Python TLS 指纹兼容 Session 客户端直接发起；不得生成加密参数后再使用 ruyiPage、Playwright、Puppeteer、Selenium 或其他浏览器自动化验证。
 
 ## 前置阶段必须选择客户端
 
@@ -188,7 +188,7 @@ def send_with_firefox_aligned_tls(session, method, url, **kwargs):
 `cyCronet` / `cycronet` 更适合 Chromium / Chrome baseline。即使当前版本提供 `add_tls_profile` / `set_tls_profiles`，通常也主要控制 cipher suites、curves 和部分 extensions，底层仍是 Cronet / Chromium 网络栈，HTTP/2 Akamai 指纹、JA4 结构和 Firefox 的 BoringSSL / NSS 行为可能不同。
 
 - 取证 baseline 是 Firefox：优先使用 curl_cffi 的 Firefox 对齐流程；不要把 cyCronet 作为 Firefox 对齐首选。
-- 取证 baseline 是 Chrome / Chromium / Camoufox Chromium 类工具：可以考虑 cyCronet，并同样先采样 baseline、再对比 JA3 / JA4 / HTTP2 指纹。
+- 取证 baseline 是 Chrome / Chromium 类工具：可以考虑 cyCronet，并同样先采样 baseline、再对比 JA3 / JA4 / HTTP2 指纹。
 - 如果用户明确要求用 cyCronet 对齐 Firefox，必须先实测；若 JA4 或 HTTP/2 指纹无法一致，暂停并说明能力边界。
 
 ## 客户端模板

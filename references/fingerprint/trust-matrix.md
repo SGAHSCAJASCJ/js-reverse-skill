@@ -7,7 +7,7 @@
 | 等级 | 来源 | 使用方式 |
 |---|---|---|
 | A | 浏览器真实运行样本、DevTools 断点、Hook 命中调用栈、RuyiTrace NDJSON 轨迹 | 可作为 fixtures 和入口证据，直接用于补环境 |
-| B | HAR / cURL / Network 导出、sourcemap 定位、MCP trace_function 输出 | 可作为强证据，但需复核动态值 |
+| B | HAR / cURL / Network 导出、sourcemap 定位、ruyiPage trace_function 输出 | 可作为强证据，但需复核动态值 |
 | C | 静态搜索、格式化代码、webpack module 名称、AST 分析 | 可作为线索，不单独定论 |
 | D | 根据常见模式推断、经验猜测、UA 或平台默认值 | 只能写入"疑似"，必须继续验证 |
 

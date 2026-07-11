@@ -35,9 +35,9 @@
 |---|---|---|---|
 | 固定字段 | 多次请求值不变 | 直接从抓包复制 | 写死常量 |
 | 明文字段 | 从页面/接口响应中直接可见 | 搜 Network Response / DOM 内容 | 从响应提取 |
-| 本地算法字段 | 客户端计算得出（md5/aes/rsa/自编） | L1 纯算还原 / L2 vm 沙箱 | 复现算法 |
+| 本地算法字段 | 客户端计算得出（md5/aes/rsa/自编） | 纯算还原 / vm 沙箱 | 复现算法 |
 | 服务端 token | 服务端下发，客户端仅携带 | 分析前置接口 + Session 链 | 请求前置接口 |
-| 风控指纹 | 环境/设备指纹，不参与签名但影响校验 | L3 补环境 | 指纹基线对齐 |
+| 风控指纹 | 环境/设备指纹，不参与签名但影响校验 | 补环境 | 指纹基线对齐 |
 | 验证码交互 | 人机验证产物（滑块/点选/图片） | 交接 web-verify-patcher | 打码平台 |
 
 ### 分类流程
@@ -83,15 +83,15 @@ TLS 指纹问题的完整解决方案见 `network/tls-validation.md`。核心原
 - 最终请求必须使用 Session 模式，复用同一 Cookie jar、UA、TLS 指纹。
 - 取证 baseline 是 Firefox 时，curl_cffi 必须按 JA3 / JA4 / Akamai 指纹对齐，不能只改 UA。
 
-### L2/L3 MCP 辅助验证
+### ruyiPage 辅助验证
 
 ```
-[camoufox-reverse] launch_browser(os_type="macos")
-[camoufox-reverse] get_fingerprint_info
+ruyiPage: launch_browser(os_type="macos")
+ruyiPage: get_fingerprint_info
 → 验证当前浏览器环境中的 UA、平台和指纹是否与目标站点要求一致
 ```
 
-注意：MCP 只用于取证和参数生成验证，最终请求不得使用浏览器自动化发送，必须使用 TLS 指纹兼容客户端。
+注意：ruyiPage 只用于取证和参数生成验证，最终请求不得使用浏览器自动化发送，必须使用 TLS 指纹兼容客户端。
 
 ## 2. HTTP/2 协议
 

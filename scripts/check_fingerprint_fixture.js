@@ -57,9 +57,9 @@ function pickBaselineId(obj) {
 
 
 const BAD_VALUE_SOURCE_RE = /(AI\s*(?:推断|猜|生成|guess)|猜测|编造|伪造|默认值|随机值|mock|fake|placeholder|static\s*analysis|静态分析|inferred|guessed|random\s*value|jsdom|node-canvas|headless-gl)/i;
-const REAL_VALUE_SOURCE_RE = /(RuyiTrace|NDJSON|ruyiPage|Camoufox|手动|真实浏览器|browser|Hook|HAR|MCP|用户提供|console|network)/i;
+const REAL_VALUE_SOURCE_RE = /(RuyiTrace|NDJSON|ruyiPage|手动|真实浏览器|browser|Hook|HAR|MCP|用户提供|console|network)/i;
 const TRACE_TOOL_RE = /(RuyiTrace|NDJSON)/i;
-const AUTOMATION_OR_USER_TOOL_RE = /(ruyiPage|Camoufox|手动|真实浏览器|browser|Hook|HAR|MCP|用户提供|console|network)/i;
+const AUTOMATION_OR_USER_TOOL_RE = /(ruyiPage|手动|真实浏览器|browser|Hook|HAR|MCP|用户提供|console|network)/i;
 const LONG_VALUE_THRESHOLD = 3900;
 const BAD_TRUNCATED_KEY_RE = /^(visiblePreview|visibleSha256|sha256OfVisible|visibleValue|visibleSnippet|preview|clippedPreview)$/i;
 const BAD_TRUNCATED_TEXT_RE = /(\.\.\.<(?:clipped|truncated)>|<clipped>|<truncated>|__ruyiTraceLongString__|sha256OfVisible|visibleSha256|visiblePreview|realLength["']?\s*[:=]\s*["']?unknown)/i;
@@ -220,7 +220,7 @@ function validateValueSources(fp) {
     const labelText = sourceLabel(source);
     const isFixtureRoot = label === 'fixture.source';
     if (!hasSourceMeta(source)) problems.push(`${label} 的 source 缺少 mode / capturedBy / tool / sourceType 等来源字段。`);
-    if (!REAL_VALUE_SOURCE_RE.test(sourceText)) problems.push(`${label} 的 source 未体现真实浏览器证据来源；请记录 RuyiTrace 未截断值，或 ruyiPage / Camoufox / 手动浏览器采样来源。`);
+    if (!REAL_VALUE_SOURCE_RE.test(sourceText)) problems.push(`${label} 的 source 未体现真实浏览器证据来源；请记录 RuyiTrace 未截断值，或 ruyiPage / 手动浏览器采样来源。`);
     if (BAD_VALUE_SOURCE_RE.test(sourceText)) {
       if (!isFixtureRoot) sourceSummary.badSourceRecords += 1;
       problems.push(`${label} 的 source 疑似为 AI 猜值、静态分析、默认值、随机值、mock 值或 Node.js 模拟库结果，不能作为最终指纹回放值。`);
@@ -259,7 +259,7 @@ function validateValueSources(fp) {
     if (valueIsMarkedTruncated) problems.push(`样本 ${item.path} 标记为 truncated=true，不能作为最终回放值；请用同一 baseline 下的取证工具补采完整值。`);
     if (isTraceValueSource(source, item.record) && (maxLen >= LONG_VALUE_THRESHOLD || isTruncatedTraceStatus(status) || valueIsMarkedTruncated)) {
       sourceSummary.blockedTruncatedResultRecords += 1;
-      problems.push(`样本 ${item.path} 来自 Trace 且疑似长字段截断；不能把 RuyiTrace 4000 / 4096 可见片段作为完整指纹值，请用同一 baseline 下的 ruyiPage / Camoufox / 手动浏览器补采完整值。`);
+      problems.push(`样本 ${item.path} 来自 Trace 且疑似长字段截断；不能把 RuyiTrace 4000 / 4096 字符可见片段作为完整指纹值，请用同一 baseline 下的 ruyiPage / 手动浏览器补采完整值。`);
     }
     if (maxLen >= LONG_VALUE_THRESHOLD && inherited) {
       problems.push(`样本 ${item.path} 是长字符串 / 大结果但未记录每条样本自己的 source、valueLength 和 sha256；请补充完整浏览器采样来源，避免误把 Trace 4000 / 4096 字符可见片段当成真实值。`);

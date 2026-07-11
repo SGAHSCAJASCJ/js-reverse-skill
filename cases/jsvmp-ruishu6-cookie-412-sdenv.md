@@ -64,8 +64,8 @@
 ## 已验证定位路径（CHECK-2 命中后直接执行）
 
 ```
-步骤 1: Camoufox 反检测浏览器 + 网络捕获
-  启动 Camoufox（C++ 引擎级指纹伪装），注入 XHR/Fetch/Crypto 持久化 Hook，导航到目标页面。
+步骤 1: trace 取证 反检测浏览器 + 网络捕获
+  启动 trace 取证（C++ 引擎级指纹伪装），注入 XHR/Fetch/Crypto 持久化 Hook，导航到目标页面。
   通过 list_network_requests 发现请求链路：
     请求 #1 返回 412 + Set-Cookie + HTML body
     请求 #2 加载 230KB JS 文件
@@ -93,7 +93,7 @@
   标准 JSVMP Hook 无效。
 
 步骤 6: 环境对比
-  使用 compare_env 采集 Camoufox 中的真实浏览器环境数据，
+  使用 compare_env 采集 trace 取证 中的真实浏览器环境数据，
   发现 document.cookie 中包含 enable_XxxYyy=true 标记，
   说明RS JS 执行成功后会设置一个启用标记。
 
@@ -199,14 +199,14 @@ class RuishuClient {
 
 | # | 坑 | 现象 | 解决方法 |
 |---|---|------|---------|
-| 1 | 误判反爬类型 | 通过 webFetch 直接请求返回 412，猜测是 JSL 加速乐（`__jsl_clearance_s` cookie），实际是RS信息（RS） | 不要猜，用 Camoufox 实际抓包看 412 响应体结构和 Set-Cookie 头 |
-| 2 | Cookie 有效但请求返回 400 | Camoufox 获取的 Cookie 有效（curl 测试返回 200），但 axios 请求返回 400 | RS不仅检查 Cookie，还检查请求头指纹 — UA 必须与生成 Cookie 时一致，且必须包含 `Sec-Fetch-Site: same-origin` 等 Fetch Metadata 头 |
+| 1 | 误判反爬类型 | 通过 webFetch 直接请求返回 412，猜测是 JSL 加速乐（`__jsl_clearance_s` cookie），实际是RS信息（RS） | 不要猜，用 trace 取证 实际抓包看 412 响应体结构和 Set-Cookie 头 |
+| 2 | Cookie 有效但请求返回 400 | trace 取证 获取的 Cookie 有效（curl 测试返回 200），但 axios 请求返回 400 | RS不仅检查 Cookie，还检查请求头指纹 — UA 必须与生成 Cookie 时一致，且必须包含 `Sec-Fetch-Site: same-origin` 等 Fetch Metadata 头 |
 | 3 | jsdom 执行RS JS 卡死（超时） | 原生 jsdom + `runScripts: 'dangerously'` 加载 412 页面，RS JS 执行后进入死循环 | `typeof document.all` 在 jsdom 中返回 `"object"` 而非 `"undefined"`，RS检测到非浏览器环境后故意卡死。必须用 sdenv（C++ 层面实现 `MarkAsUndetectable()`）或真实浏览器 |
 | 4 | V8 `%GetUndetectable()` 不够 | 用 V8 内部函数获取的 undetectable 对象通过了 `typeof === "undefined"` 检测，但它是空对象，没有 `HTMLAllCollection` 的方法 | RS JSVMP 后续尝试调用该对象的方法时报错 `_$xx[_$yy[49]] is not a function`。`document.all` 不仅要通过 typeof 检测，还要有完整的集合行为 |
 | 5 | RS入口函数名每次不同 | 412 响应体底部的入口函数调用（如 `_$bV()`, `_$l1()`, `_$jH()`）每次请求都不同 | 正则匹配时需要用 `_\$[a-zA-Z0-9]+\(\)` 而非固定函数名 |
 | 6 | Node.js v24 的 Navigator 原型有只读属性 | `Navigator.prototype` 上的 `language` 等属性已经有了 getter，用 `Object.assign` 赋值报错 | 必须用 `Object.defineProperty` 逐个覆盖 |
 | 7 | sdenv 原生模块编译 | sdenv 的核心 `documentAll.node` 是 C++ 原生模块，需要 node-gyp 编译 | pnpm 安装时默认不执行 build scripts，需要手动 `pnpm approve-builds` 或 `npx node-gyp rebuild` |
-| 8 | JSVMP Hook 工具对RS6无效 | Camoufox 的 `hook_jsvmp_interpreter` 通过 Hook `Function.prototype.apply/call` 追踪，但RS6使用内部函数表+直接调用，日志为空 | 不是所有 JSVMP 都能用标准 Hook 工具分析，需要根据具体实现选择分析方法 |
+| 8 | JSVMP Hook 工具对RS6无效 | trace 取证 的 `hook_jsvmp_interpreter` 通过 Hook `Function.prototype.apply/call` 追踪，但RS6使用内部函数表+直接调用，日志为空 | 不是所有 JSVMP 都能用标准 Hook 工具分析，需要根据具体实现选择分析方法 |
 
 ---
 
@@ -249,5 +249,5 @@ class RuishuClient {
 | `references/env/native-capability-gap.md` | native 能力缺口闭环（typeof document.all === "undefined"） |
 | `references/env/runtime-frameworks.md` | 框架选择（sdenv vs jsdom） |
 | `references/network/session-chain.md` | Session 请求链（412 挑战 → Cookie 生成 → 200 重试） |
-| `references/workflow/decision-tree.md` | RS6 路径决策（签名型反爬 → L3 补环境） |
+| `references/workflow/decision-tree.md` | RS6 路径决策（签名型反爬 → 补环境） |
 | `references/workflow/experience-rules.md` | 规则 2/6/8（JSVMP 寄存器 / 回查案例 / 路径选择） |

@@ -1,4 +1,4 @@
-# Case：L2 vm 沙箱执行自定义算法（骨架模板）
+# Case：vm 沙箱执行自定义算法（骨架模板）
 
 > 难度：★★★（骨架模板）
 > 还原方案：B vm 沙箱执行
@@ -6,11 +6,11 @@
 > 最后验证日期：2026-07-11
 > 平台类型：通用骨架（自定义 MD5 / 混淆算法 / 算法不可静态提取但 JS 可 vm 执行）
 
-> **骨架案例**。本文是**方法论模板**，适用于：自定义 MD5/SHA 实现、混淆后算法不可静态还原、算法可提取但依赖少量环境属性（非 JSVMP）等 L2 场景。
+> **骨架案例**。本文是**方法论模板**，适用于：自定义 MD5/SHA 实现、混淆后算法不可静态还原、算法可提取但依赖少量环境属性（非 JSVMP）等场景。
 >
 > 使用方式：
 > 1. 在 CHECK-2 指纹匹配时，若检测到"算法不可直接提取但 JS 可 vm 执行"特征，直接走本案例的流程
-> 2. 完成具体站点逆向后，复制本文件重命名为 `l2-vm-<具体技术特征>.md`，按真实数据填充占位符
+> 2. 完成具体站点逆向后，复制本文件重命名为 `vm-<具体技术特征>.md`，按真实数据填充占位符
 
 ---
 
@@ -18,8 +18,8 @@
 
 ### JS 特征
 - [ ] 算法函数存在但不可直接提取（自定义 MD5 变种 / 混淆后控制流打乱 / eval 包裹）
-- [ ] 无 JSVMP 字节码虚拟机（区别于 L3）
-- [ ] 无 200KB+ 大文件 + while-switch 解释器（区别于 L3）
+- [ ] 无 JSVMP 字节码虚拟机（区别于补环境场景）
+- [ ] 无 200KB+ 大文件 + while-switch 解释器（区别于补环境场景）
 - [ ] 算法依赖少量环境属性（如 navigator.userAgent / 时间戳），但不依赖完整浏览器环境
 
 ### 参数特征
@@ -54,25 +54,25 @@
 
 ## 方案方向
 
-L2 vm 沙箱执行：提取算法 JS 代码 → 在 Node.js `vm` 模块中执行 → 喂入参数截出签名。
+vm 沙箱执行：提取算法 JS 代码 → 在 Node.js `vm` 模块中执行 → 喂入参数截出签名。
 
-与 L1 的区别：算法不可直接用 `crypto` 复现（自定义实现），但 JS 代码本身可独立执行（不需要完整浏览器环境）。
+与纯算的区别：算法不可直接用 `crypto` 复现（自定义实现），但 JS 代码本身可独立执行（不需要完整浏览器环境）。
 
-与 L3 的区别：不需要 jsdom / 补环境 / 浏览器指纹，只需 `vm.createContext` 提供最小 sandbox。
+与补环境的区别：不需要 jsdom / 补环境 / 浏览器指纹，只需 `vm.createContext` 提供最小 sandbox。
 
-## L2 标准流程（25 步详见 references/workflow/l2-mcp-survey.md）
+## 标准流程（详见 references/workflow/trace-flow.md）
 
 ### Phase 1-2：定位 + 提取
 
 ```
-1. camoufox MCP 黄金路径定位签名函数
+1. trace 取证黄金路径定位签名函数
    network_capture → get_request_initiator → 直达签名函数
 2. search_code(keyword="参数名") → 定位赋值点
 3. scripts(action='save') → 保存算法 JS
 4. 识别算法类型：
-   - 标准 MD5/SHA/AES → 降级 L1 纯算
-   - 自定义 MD5（chrsz 变化 / 轮函数修改）→ L2 vm 执行
-   - 混淆不可静态还原 → L2 vm 执行
+   - 标准 MD5/SHA/AES → 降级纯算还原
+   - 自定义 MD5（chrsz 变化 / 轮函数修改）→ vm 执行
+   - 混淆不可静态还原 → vm 执行
 5. 提取算法函数 + 依赖的全局变量/常量
 ```
 
@@ -169,9 +169,9 @@ const sign = sandbox.document.cookie;  // 或 sandbox.someGlobalVar
 ```
 
 **关键要点**：
-- `Element` / `Document` 只需构造函数 + prototype stub，**不需要完整原型链**（EventTarget → Node → Element → ...），这是 L2 与 L3 的边界
+- `Element` / `Document` 只需构造函数 + prototype stub，**不需要完整原型链**（EventTarget → Node → Element → ...），这是 vm 沙箱与补环境的边界
 - `document.cookie` 必须用 `Object.defineProperty` 实现 getter/setter，目标 JS 通过 setCookie 写入签名值
-- 不需要 NativeProtect（L2 目标 JS 通常不做 toString 检测；若做则升级 L3）
+- 不需要 NativeProtect（目标 JS 通常不做 toString 检测；若做则升级补环境）
 
 ### Phase 4：验证
 
@@ -204,32 +204,32 @@ const sign = sandbox.document.cookie;  // 或 sandbox.someGlobalVar
 | 7 | setInterval 阻止退出 | 签名生成后进程挂起 | 测试入口 `process.exit(0)` |
 | 8 | Element/Document 缺失 | `ReferenceError: Element is not defined` | sandbox 添加构造函数 + prototype stub（目标 JS patch 原型方法时需要） |
 
-## 与 L1/L3 的边界判断
+## 边界判断
 
 ```
 算法提取后能否用标准 crypto 库复现？
-  ├─ 能 → L1 纯算还原（走 l1-purecalc.md）
+  ├─ 能 → 纯算还原（走 trace-flow.md）
   └─ 不能
       │
       ├─ 算法 JS 能否在最小 sandbox 中执行（不需要 document/window/navigator.* 指纹）？
-      │   ├─ 能 → L2 vm 沙箱（本案例）
-      │   └─ 不能（需要完整浏览器环境 / JSVMP）→ L3 补环境
+      │   ├─ 能 → vm 沙箱（本案例）
+      │   └─ 不能（需要完整浏览器环境 / JSVMP）→ 补环境
       │
       └─ 是否是 JSVMP（200KB+ / while-switch / 字节码数组）？
-          ├─ 是 → L3 路径 D
-          └─ 否 → L2 路径 B
+          ├─ 是 → 补环境路径 D
+          └─ 否 → vm 沙箱路径 B
 ```
 
-### L2 内部的 sandbox 量级判断
+### sandbox 量级判断
 
-L2 不是只有"最小 sandbox"一种形态。按目标 JS 对浏览器环境的依赖程度分两档：
+不是只有"最小 sandbox"一种形态。按目标 JS 对浏览器环境的依赖程度分两档：
 
-| 量级 | 触发信号 | sandbox 内容 | 与 L3 边界 |
+| 量级 | 触发信号 | sandbox 内容 | 与补环境边界 |
 |------|---------|-------------|-----------|
-| **基础** | 目标 JS 只依赖 Date/Math/navigator.userAgent | 基础全局变量 | 远离 L3 |
-| **中等** | 目标 JS patch Element.prototype / XMLHttpRequest.prototype / 读写 document.cookie | + DOM 构造函数 stub + cookie getter/setter | 接近 L3 但不需要完整原型链和 NativeProtect |
+| **基础** | 目标 JS 只依赖 Date/Math/navigator.userAgent | 基础全局变量 | 远离补环境 |
+| **中等** | 目标 JS patch Element.prototype / XMLHttpRequest.prototype / 读写 document.cookie | + DOM 构造函数 stub + cookie getter/setter | 接近补环境但不需要完整原型链和 NativeProtect |
 
-**升级 L3 信号**：目标 JS 做 `Function.prototype.toString` 检测 / `document.all` 检测 / 完整原型链 instanceof 检测 → 需要 NativeProtect 和完整原型链 → 升级 L3。
+**升级补环境信号**：目标 JS 做 `Function.prototype.toString` 检测 / `document.all` 检测 / 完整原型链 instanceof 检测 → 需要 NativeProtect 和完整原型链 → 升级补环境。
 
 ## 可验证事实清单（经验资产）
 
@@ -244,11 +244,10 @@ L2 不是只有"最小 sandbox"一种形态。按目标 JS 对浏览器环境的
 
 | 参考文档 | 关联点 |
 |---------|--------|
-| `references/workflow/l2-mcp-survey.md` | L2 camoufox MCP 标准流程（25 步） |
-| `references/workflow/decision-tree.md` | L1/L2/L3 题型判定边界 |
-| `references/workflow/l1-purecalc.md` | L1 降级判断（能否纯算复现） |
-| `references/env/runtime-frameworks.md` | L2→L3 升级判断（何时需 jsdom/sdenv） |
+| `references/workflow/trace-flow.md` | 统一日志驱动逆向流程 |
+| `references/workflow/decision-tree.md` | 题型判定边界 |
+| `references/env/runtime-frameworks.md` | 升级补环境判断（何时需 jsdom/sdenv） |
 | `references/env/env-debug-loop.md` | 静默吞错诊断 + setInterval 退出陷阱 |
 | `references/workflow/common-pitfalls.md` | 反模式 8（try-catch 静默吞错） |
-| `cases/l2-vm-sandbox-chameleon-iwencai.md` | L2 中等量 sandbox 实战案例（同花顺 chameleon.js） |
+| `cases/vm-sandbox-chameleon-iwencai.md` | 中等量 sandbox 实战案例（同花顺 chameleon.js） |
 | `templates/vm-sandbox/` | vm 沙箱交付模板 |

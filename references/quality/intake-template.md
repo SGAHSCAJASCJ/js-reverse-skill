@@ -2,7 +2,7 @@
 
 > **双模式输入**：
 > - **完整模式**：用户提供标准请求/响应包（cURL/HAR/原始报文）→ 直接从包中提取信息，跳过 Phase 0.5 抓包
-> - **极简模式**：用户只提供 URL + 目标参数名（可选）→ Phase 0.5 camoufox 自动抓包获取其余信息
+> - **极简模式**：用户只提供 URL + 目标参数名（可选）→ Phase 0.5 ruyiPage 自动抓包获取其余信息
 >
 > 本模板用于用户主动补充信息或 skill 抓包后确认信息时使用。
 
@@ -28,18 +28,18 @@
 ### 取证模式（自动判断，用户可覆盖）
 
 skill 根据 Phase 0.5 抓包结果 + JS 文件特征自动判断：
-- JS 文件 <50KB + 无 while-switch + 标准 md5/aes 特征 → L1 纯算（MCP 自动跟踪 + 纯算还原）
-- JS 文件含 WASM 加载 → L2（WASM 加载，不需补环境）
-- JS 文件含 webmssdk / a_bogus → L3 行为型
-- 响应码 412 循环 → L3 签名型
-- JS 文件含 _0x 前缀 → L1/L2 纯混淆（AST 反混淆后按算法可提取性判断）
+- JS 文件 <50KB + 无 while-switch + 标准 md5/aes 特征 → 纯算还原（自动跟踪 + 纯算还原）
+- JS 文件含 WASM 加载 → WASM 加载，不需补环境
+- JS 文件含 webmssdk / a_bogus → 行为型补环境
+- 响应码 412 循环 → 签名型补环境
+- JS 文件含 _0x 前缀 → 纯混淆（AST 反混淆后按算法可提取性判断）
 
-用户可显式指定：ruyiPage+RuyiTrace / Camoufox / 用户手动取证
+用户可显式指定：ruyiPage+RuyiTrace / 用户手动取证
 
 ### TLS 指纹客户端（自动选择，用户可覆盖）
 
-- L1 纯算无 TLS 检测：标准 fetch/requests
-- L2/L3 有 TLS 检测：Node.js curl-cffi-node / Python curl_cffi / cyCronet
+- 纯算无 TLS 检测：标准 fetch/requests
+- 有 TLS 检测：Node.js curl-cffi-node / Python curl_cffi / cyCronet
 - 不发真实请求：只输出本地 sign/参数
 
 ### 请求详情（skill 抓包获取）

@@ -59,7 +59,7 @@
   │   · 对比脚本使用的 Cookie 与浏览器当前 Cookie
   │   · 检查是否有 HttpOnly Cookie 漏掉（Network 面板看完整 Cookie）
   │
-  ├─ MCP 辅助：
+  ├─ ruyiPage 辅助：
   │   · get_cookies → 获取浏览器中的 Cookie
   │   · evaluate_js(expression="document.cookie") → 获取 JS 可见 Cookie
   │
@@ -72,7 +72,7 @@
   │   · 重点关注：/api/init、/token、/config 等路径
   │   · 检查前置请求的响应中是否有 Token、Session ID
   │
-  ├─ MCP 辅助：
+  ├─ ruyiPage 辅助：
   │   · start_network_capture → 触发操作 → list_network_requests
   │   · 按时间排序，找到主请求之前的接口
   │
@@ -113,7 +113,7 @@
   │   · 检查签名计算是否包含环境指纹
   │   · 对比有无环境值时的请求结果
   │
-  ├─ MCP 辅助：
+  ├─ ruyiPage 辅助：
   │   · get_fingerprint_info → 查看浏览器指纹
   │   · search_code(keyword="navigator|screen|canvas") → 搜索环境检测代码
   │
@@ -195,7 +195,7 @@
   在签名函数的哈希/加密调用之前，
   打印完整的输入字符串，逐字符对比
 
-技巧 4：MCP 辅助对比
+技巧 4：ruyiPage 辅助对比
   - set_breakpoint_via_hook(target_function="签名函数")
   - get_breakpoint_data → 获取浏览器端的真实入参和返回值
   - 与脚本端逐项对比
@@ -262,9 +262,9 @@
 
 ## 排查工具速查
 
-### MCP 工具（Camoufox + camoufox-reverse-mcp）
+### ruyiPage 浏览器工具
 
-| 排查场景 | MCP 工具 | 用法 |
+| 排查场景 | ruyiPage 工具 | 用法 |
 |---------|---------|------|
 | 对比请求差异 | `start_network_capture` + `get_network_request` | 在浏览器中捕获真实请求，与脚本请求对比 |
 | 获取真实签名值 | `set_breakpoint_via_hook` + `get_breakpoint_data` | 在签名函数设伪断点，捕获真实入参和返回值 |
@@ -292,7 +292,7 @@
 
 | 排查场景 | 脚本 | 用法 |
 |---------|---------|------|
-| 外部工具检测 | `check_external_tools.js` | 检测 ruyiPage / RuyiTrace / Camoufox 可用性 |
+| 外部工具检测 | `check_external_tools.js` | 检测 ruyiPage / RuyiTrace 可用性 |
 | TLS 客户端检测 | `check_tls_clients.js` | 检测 CycleTLS / impers / curl_cffi 等可用性 |
 | Node 泄露检查 | `check_node_leakage.js` | 检测宿主 Node 能力泄露 |
 | 纯计算预检 | `precheck_runtime.js` | 六类纯计算能力检查 |

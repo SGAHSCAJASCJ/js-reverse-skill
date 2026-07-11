@@ -47,12 +47,8 @@ case/
 - 参数位置：Query / Header / Body / Cookie
 
 ## 取证
-- 取证模式：ruyiPage + RuyiTrace / 仅 ruyiPage / Camoufox + camoufox-reverse-mcp / 仅 Camoufox / 用户手动取证 / AI 自行决定
+- 取证模式：ruyiPage + RuyiTrace / 仅 ruyiPage / 用户手动取证 / AI 自行决定
 - 最终请求 TLS 客户端：Node.js CycleTLS / impers / curl-cffi / Python curl_cffi / cffi_curl / cyCronet / 不发真实请求
-
-## 难度分级
-- 级别：L1 纯算 / L2 vm 沙箱 / L3 补环境
-- 分级依据：
 
 ## 指纹基线
 - baselineId：
@@ -73,9 +69,8 @@ case/
 
 ## 加密方案
 
-> 一句话说明最终采用的方案路径(L1 纯算 / L2 vm 沙箱 / L3 补环境)+ 核心方法。
+> 一句话说明最终采用的方案路径(纯算还原 / vm 沙箱执行 / 环境伪装)+ 核心方法。
 
-- 分级:L1 / L2 / L3
 - 路径:A 纯算还原 / B vm 沙箱执行 / C WASM 加载 / D 环境伪装
 - 框架:不使用 / vm / jsdom
 - TLS 客户端:CycleTLS / curl-cffi-node / impers / curl-cffi / curl_cffi / cyCronet / 不发真实请求

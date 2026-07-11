@@ -19,7 +19,7 @@ assets/
 │   ├── scripts/
 │   └── ...
 ├── env-patch-snippets/                    ← 补环境代码片段
-│   └── native-protect.js                  ← NativeProtect 类（L3 基础设施）
+│   └── native-protect.js                  ← NativeProtect 类（补环境基础设施）
 └── fixture-templates/                     ← fixture 模板
     ├── constructor-errors.fixture.json    ← 构造函数行为采样模板
     └── resource-manifest.json             ← 动态资源清单模板
@@ -29,7 +29,7 @@ assets/
 
 ### native-protect.js
 
-L3 补环境基础设施，覆盖多通道 toString + DataCloneError 保护。详见 `references/env/env-native-protection.md`。
+补环境基础设施，覆盖多通道 toString + DataCloneError 保护。详见 `references/env/env-native-protection.md`。
 
 ```javascript
 const NativeProtect = require('./assets/env-patch-snippets/native-protect.js');

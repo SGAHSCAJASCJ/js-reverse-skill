@@ -25,13 +25,13 @@ setInterval(function() { debugger; }, 100);
 
 ### 绕过方案
 
-**方案 A：MCP 一键绕过**
+**方案 A：ruyiPage 一键绕过**
 ```
-[camoufox-reverse] bypass_debugger_trap()
+ruyiPage: bypass_debugger_trap()
 或
-[camoufox-reverse] inject_hook_preset(preset="debugger_bypass")
+ruyiPage: inject_hook_preset(preset="debugger_bypass")
 或手动注入：
-[camoufox-reverse] add_init_script(script=反debugger脚本)
+ruyiPage: add_init_script(script=反debugger脚本)
 ```
 
 ```javascript
@@ -61,7 +61,7 @@ setInterval = function(fn, ms) {
 
 **方案 B：加载前拦截 debugger 构造**
 ```
-[camoufox-reverse] add_init_script(script=反debugger脚本)
+ruyiPage: add_init_script(script=反debugger脚本)
 ```
 
 ## 2. 开发者工具检测
