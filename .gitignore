@@ -6,7 +6,15 @@ platforms/
 skills/
 cases_backup/
 cases/*/js/
+cases/*/workspace/
 cases/*/node_modules/
+.workbuddy/
+
+# 案例下载的第三方大文件（分析材料，非交付物）
+cases/zhitongcaijing/app.js
+cases/zhitongcaijing/chunk-vendors.js
+cases/zhitongcaijing/flexible.js
+cases/zhitongcaijing/index.html
 
 # 通用
 *.log
