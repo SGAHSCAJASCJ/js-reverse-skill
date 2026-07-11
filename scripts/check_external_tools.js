@@ -15,8 +15,10 @@ function parseArgs(argv) {
     ruyiPageBrowserPath: '',
     camoufoxInstallDir: '',
     camoufoxMcpProjectDir: '',
+    camoufoxTraceDir: '',
     requireCamoufox: false,
     requireCamoufoxMcp: false,
+    requireCamoufoxTrace: false,
     json: false,
     markdown: false,
     quick: false,
@@ -32,6 +34,8 @@ function parseArgs(argv) {
     else if (a === '--camoufox-mcp-project-dir') args.camoufoxMcpProjectDir = argv[++i] || '';
     else if (a === '--require-camoufox') args.requireCamoufox = true;
     else if (a === '--require-camoufox-mcp') args.requireCamoufoxMcp = true;
+    else if (a === '--camoufox-trace-dir') args.camoufoxTraceDir = argv[++i] || '';
+    else if (a === '--require-camoufox-trace') args.requireCamoufoxTrace = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--quick') args.quick = true;
@@ -50,9 +54,10 @@ function usage() {
   node scripts/check_external_tools.js --python python --ruyipage-browser-path <firefox.exe> --ruyitrace-home <RuyiTrace-dir> --json
   node scripts/check_external_tools.js --python python --require-camoufox --camoufox-install-dir <camoufox-cache-dir> --markdown
   node scripts/check_external_tools.js --python python --require-camoufox --require-camoufox-mcp --camoufox-mcp-project-dir <camoufox-reverse-mcp-dir> --json
+  node scripts/check_external_tools.js --require-camoufox-trace --camoufox-trace-dir <camoufox-reverse-kernel-dir> --markdown
   node scripts/check_external_tools.js --quick
 
-说明：检测 ruyiPage Python 包、ruyiPage 定制 Firefox runtime、是否误用系统 Firefox fallback、RuyiTrace 目录结构，以及 Camoufox Python 包、浏览器本体 fetch 状态和 camoufox-reverse-mcp 可导入状态。
+说明：检测 ruyiPage Python 包、ruyiPage 定制 Firefox runtime、是否误用系统 Firefox fallback、RuyiTrace 目录结构，以及 Camoufox Python 包、浏览器本体 fetch 状态、camoufox-reverse-mcp 可导入状态和 camoufox-reverse trace 内核可用状态。
 注意：选择 ruyiPage 时，只有“ruyiPage 包可用 + 定制 Firefox runtime 验证通过”才视为可用；普通系统 Firefox fallback 不视为通过。
 --quick：快速模式，只检测 Node.js 版本、camoufox 和 camoufox-reverse-mcp 是否可 import（一次 spawnSync），不执行 camoufox CLI 子命令、不扫描目录、不检测 ruyipage/ruyitrace；适合 L1 纯算场景。`;
 }
@@ -736,12 +741,44 @@ function detectCamoufoxReverseMcp(args) {
   };
 }
 
+function detectCamoufoxTrace(args) {
+  const candidates = [];
+  if (args.camoufoxTraceDir) candidates.push(path.resolve(args.camoufoxTraceDir));
+  if (process.env.CAMOUFOX_REVERSE_BROWSER_PATH) candidates.push(path.resolve(process.env.CAMOUFOX_REVERSE_BROWSER_PATH));
+  let found = '';
+  for (const c of candidates) {
+    if (exists(c)) { found = c; break; }
+    if (isDir(c)) {
+      const sub = path.join(c, process.platform === 'win32' ? 'camoufox.exe' : 'camoufox');
+      if (exists(sub)) { found = sub; break; }
+    }
+  }
+  const available = !!found;
+  const installCommands = [
+    '# 默认 python -m camoufox fetch 下载的是普通反检测浏览器，不含 C++ 层 trace 能力',
+    '# trace 内核需随 camoufox-reverse-mcp 提供或单独构建，然后：',
+    'set CAMOUFOX_REVERSE_BROWSER_PATH=<camoufox-reverse 定制版 firefox 路径>',
+    '# 或运行检测：node scripts/check_external_tools.js --require-camoufox-trace --camoufox-trace-dir <dir> --markdown',
+  ];
+  const conclusion = available
+    ? '可使用：检测到 camoufox-reverse 定制版 trace 内核路径。'
+    : '不可用：默认 `python -m camoufox fetch` 浏览器不支持 C++ 层 trace；L3 trace 模式需 camoufox-reverse 定制版内核，请确认来源并提供路径（设置 CAMOUFOX_REVERSE_BROWSER_PATH 或 --camoufox-trace-dir），或明确降级为 ruyiPage + RuyiTrace；不得用默认 camoufox 静默替代。';
+  return {
+    requested: !!args.requireCamoufoxTrace,
+    available,
+    browserPath: found,
+    installCommands,
+    conclusion,
+  };
+}
+
 function detect(args) {
   return {
     ruyiPage: detectRuyiPage(args),
     ruyiTrace: detectRuyiTrace(args),
     camoufox: detectCamoufox(args),
     camoufoxReverseMcp: detectCamoufoxReverseMcp(args),
+    camoufoxTrace: detectCamoufoxTrace(args),
     nextRequiredInput: [],
   };
 }
@@ -775,6 +812,10 @@ function withNextSteps(result) {
   const cm = result.camoufoxReverseMcp;
   if (cm && cm.requested && !cm.importable) {
     next.push('如果本 case 选择 Camoufox + camoufox-reverse-mcp，当前 MCP 未通过检测时不得自动降级为仅 Camoufox；请让用户选择安装 / 提供 camoufox-reverse-mcp 项目目录，或明确确认降级为仅 Camoufox。');
+  }
+  const tr = result.camoufoxTrace;
+  if (tr && tr.requested && !tr.available) {
+    next.push('如果本 case 选择 L3 trace（camoufox MCP trace 模式），当前未检测到 camoufox-reverse 定制版 trace 内核：默认 `python -m camoufox fetch` 浏览器不支持 C++ 层 trace，不得用它静默替代。请让用户提供 trace 内核路径（设置 CAMOUFOX_REVERSE_BROWSER_PATH 或 --camoufox-trace-dir）或明确降级为 ruyiPage + RuyiTrace。');
   }
   result.nextRequiredInput = next;
   return result;
@@ -888,6 +929,17 @@ function renderMarkdown(result) {
     lines.push('```json');
     lines.push(JSON.stringify(cm.configExample, null, 2));
     lines.push('```');
+  }
+
+  lines.push('', '## camoufox-reverse 定制版 trace 内核');
+  const tr = result.camoufoxTrace;
+  lines.push(`- 是否要求检测：${tr.requested ? '是' : '否'}`);
+  lines.push(`- 是否可用（默认 camoufox 不等于支持 trace）：${tr.available ? '是' : '否'}`);
+  if (tr.browserPath) lines.push(`- 内核路径：${tr.browserPath}`);
+  lines.push(`- 结论：${tr.conclusion}`);
+  if (tr.requested && !tr.available && tr.installCommands && tr.installCommands.length) {
+    lines.push('', '### trace 内核说明 / 安装提示');
+    for (const cmd of tr.installCommands) lines.push(`- \`${cmd}\``);
   }
 
   if (result.nextRequiredInput.length) {

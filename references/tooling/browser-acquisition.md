@@ -205,6 +205,24 @@ node scripts/check_external_tools.js --python python --require-camoufox --requir
 3. 如果你不想安装 MCP，请明确回复“降级为仅 Camoufox”。
 ```
 
+### camoufox-reverse 定制版 trace 内核的检测与提议门禁
+
+`python -m camoufox fetch` 下载的是默认反检测浏览器，**不含 C++ 层 trace 能力**。L3 trace 模式（`launch_browser(enable_trace=True)` / `trace_property_access`）必须使用 camoufox-reverse 定制版内核。
+
+触发与检测：
+
+- 触发时机：Phase 0.2 / 0.5 判定为 L3（JSVMP / 强风控 / 指纹深度绑定）且用户选择 "Camoufox + camoufox-reverse-mcp" 的 trace 路径时。
+- 检测命令：`node scripts/check_external_tools.js --require-camoufox-trace --markdown`（或带 `--camoufox-trace-dir <dir>` / 依赖环境变量 `CAMOUFOX_REVERSE_BROWSER_PATH`）。
+- 判定标准：检测到定制版内核路径（且文件存在）才算 `available`；默认 camoufox 浏览器存在**不代表** trace 可用。
+
+提议门禁（与 ruyiPage/RuyiTrace 同级）：
+
+- trace 内核 `available`：正常进入 L3 trace 流程。
+- trace 内核 `missing`：**不得用默认 camoufox 静默替代**（trace 功能将不可用）。必须让用户选择：
+  1. 提供 camoufox-reverse 定制版内核路径（设置 `CAMOUFOX_REVERSE_BROWSER_PATH` 或 `--camoufox-trace-dir`），等待检测通过；
+  2. 明确降级为 ruyiPage + RuyiTrace（L3 降级路径）；
+  3. 若 L3 判定存疑、实际只是 L1 纯算，则回退到 L1 纯静态分析，不再纠结 trace 内核。
+
 ### Camoufox 启动硬约束
 
 从第一次打开目标页开始就使用 Camoufox 官方入口或 MCP，不得先用普通 Playwright / Puppeteer / 系统浏览器探测。默认约束：

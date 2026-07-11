@@ -13,8 +13,10 @@
 ## L3 默认路径：camoufox MCP trace 模式
 
 ### 前置条件
-- camoufox-reverse 定制版浏览器（支持 C++ 层 trace）
-- camoufox-reverse-mcp 已安装
+- camoufox-reverse 定制版浏览器（支持 C++ 层 trace）—— **注意：这不是 `python -m camoufox fetch` 下载的默认浏览器**，需随 camoufox-reverse-mcp 提供或单独构建；安装后通过 `CAMOUFOX_REVERSE_BROWSER_PATH` 或 `check_external_tools.js --require-camoufox-trace` 确认。
+- camoufox-reverse-mcp 已安装（不在 pip 官方源，需 `git clone` 后 `pip install -e .`）。
+
+> ⚠️ 检测/提议门禁：进入本流程前先 `node scripts/check_external_tools.js --require-camoufox-trace --markdown`；若 trace 内核 `missing`，**不得用默认 camoufox 静默替代**，按 `browser-acquisition.md` 让用户提供内核路径或降级为 ruyiPage + RuyiTrace。
 
 ### trace 流程
 ```

@@ -77,6 +77,30 @@ MCP 客户端配置示例：
 }
 ```
 
+### camoufox 默认版 与 camoufox-reverse 定制版（trace 内核）的区别
+
+- `python -m camoufox fetch` 下载的是 **默认反检测浏览器**（上游 daijro/camoufox），只用于抓包、采样、轻量取证；**不支持** `enable_trace` / `trace_property_access`。
+- L3 trace 模式需要 **camoufox-reverse 定制版内核**（支持 C++ 层属性访问追踪）。它通常由 `camoufox-reverse-mcp` 项目随附或单独构建，**不是** `camoufox fetch` 的产物。
+- 默认浏览器与 trace 内核是两条独立链路：选型时若判定为 L3 trace，必须先确认 trace 内核可用；未检测到时按 `browser-acquisition.md` 的 L3 trace 门禁处理，不得用默认 camoufox 静默替代。
+
+### camoufox-reverse-mcp 不会自动安装（L1 不依赖）
+
+- MCP 不在 pip 官方源，必须 `git clone https://github.com/WhiteNightShadow/camoufox-reverse-mcp.git <dir>` 后 `python -m pip install -e .`，仓库路径需用户提供或确认。
+- **L1 纯算不依赖 MCP**：纯静态分析（curl 下载 JS + Grep）或纯 Node 复现即可独立完成。MCP 只是 L1/L2/L3 动态取证的增强项。
+- 用户选择 "Camoufox + camoufox-reverse-mcp" 但 MCP 缺失时，不得静默降级为仅 Camoufox；先让用户安装 / 提供项目目录，或明确回复 "降级为仅 Camoufox"。
+
+### GitHub 网络不通 → 镜像站代理
+
+camoufox 浏览器本体、camoufox-reverse-mcp 仓库、trace 内核均来自 GitHub。代理 / 透明网关 / 自签 CA 环境下直接访问会失败。降级顺序：
+
+1. **SSL 自签 CA 兜底**：合并出口代理 CA 到独立证书包，导出 `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`（仅取证用，不进交付代码）。
+2. **Releases / 大文件用 ghproxy 镜像前缀**：
+   - `https://ghproxy.net/https://github.com/...` 或 `https://mirror.ghproxy.com/https://github.com/...`，或把 `github.com` 换成 `kgithub.com`。
+   - `camoufox fetch` 走 GitHub Releases API、不可直接换源时，用镜像 URL 以 `curl -kL --retry 8 -C - -o camoufox.zip` 断点续传，再手工解压到 `python -m camoufox path` 缓存目录并写 `version.json`（`{"version":"X.Y.Z","release":"..."}`）。
+3. **git clone 用镜像**：`git config --global url."https://ghproxy.net/https://github.com/".insteadOf "https://github.com/"`，或直接 `git clone https://kgithub.com/WhiteNightShadow/camoufox-reverse-mcp.git <dir>`。
+4. **raw 文件用镜像**：`https://raw.githubusercontent.com/...` → `https://raw.gitmirror.com/...` 或 `https://cdn.jsdelivr.net/gh/...`。
+5. **playwright 版本匹配**：camoufox 浏览器与 playwright 协议强耦合（如 camoufox 135 需 playwright≈1.44）；CDP `setDefaultViewport` 报 `isMobile` 等协议不匹配时，固定 playwright 版本重试。
+
 带代理且用户授权时，可在 MCP 参数中加入 `--proxy`、`--geoip`、`--humanize`、`--block-webrtc`。不要修改 AiMaMi 或其他本地代理配置；只输出用户可自行应用的配置建议。
 
 ## 启动硬约束
