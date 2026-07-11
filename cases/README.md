@@ -14,6 +14,8 @@
 | [l2-vm-sandbox-custom-algo.md](l2-vm-sandbox-custom-algo.md) | 自定义 MD5/混淆算法，vm 沙箱执行（骨架模板） | ★★★ | vm.createContext + 最小 sandbox | 无/轻检测 |
 | [l2-vm-sandbox-chameleon-iwencai.md](l2-vm-sandbox-chameleon-iwencai.md) | chameleon.js 混淆 + cookie"v"=hexin-v + try-catch 静默吞错 + 中等量环境 stub | ★★★ | vm.createContext + 中等量浏览器环境 stub(Element/Document/XHR) | 无/轻检测 |
 | [l1-sm2-sm4-sm3-guomi-jobonline.md](l1-sm2-sm4-sm3-guomi-jobonline.md) | SM2/SM4/SM3 国密三参数签名 + 随机密钥下发 | ★★ | 纯 Node 复现(sm-crypto) | 无(标准国密) |
+| [l1-sha1-sort-params-zhitongcaijing.md](l1-sha1-sort-params-zhitongcaijing.md) | 标准 SHA1 + 参数字母序排序 + encodeURIComponent 序列化；无混淆 | ★ | 纯 Node 复现(crypto.sha1) | 无(标准签名) |
+| [l3-jsvmp-bundle-bdms-a_bogus-douyin.md](l3-jsvmp-bundle-bdms-a_bogus-douyin.md) | JSVMP + bundle.js 常驻 + bdms.init + XHR patch + uncaughtException 兜底 | ★★★★ | vm + 手写环境补丁 + XHR patch 只真发 mssdk 请求 | 行为型 |
 
 ## 使用方式
 
@@ -37,6 +39,8 @@ CHECK-2 速查:
 | `E-CONTENT-PATH` / `E-SIGN` / `businessData` + SM2/SM4/SM3 | l1-sm2-sm4-sm3-guomi-jobonline | 高(国密L1) |
 | 自定义 MD5(非标准输出) / 混淆算法不可静态还原 / eval 包裹算法 | l2-vm-sandbox-custom-algo | 中(自定义算法 L2) |
 | `chameleon` / `hexin-v` / `TOKEN_SERVER_TIME` + try-catch 静默吞错 | l2-vm-sandbox-chameleon-iwencai | 高(同花顺 L2) |
+| `hex_sha1` / `token` 40 位 hex + `Object.keys().sort()` + `encodeURIComponent` | l1-sha1-sort-params-zhitongcaijing | 高(标准 SHA1 L1) |
+| `bdms.init` / `signUrl` / `bundle.js` 常驻 + `a_bogus` + `mssdk.bytedance.com` | l3-jsvmp-bundle-bdms-a_bogus-douyin | 高(抖音 L3 常驻) |
 
 ## 新增案例
 
