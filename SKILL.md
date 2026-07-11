@@ -1,12 +1,14 @@
 ---
 name: js-reverse-skill
 description: >
-  通用网页端 JS 逆向工程技能：统一通过 ruyipage + RuyiTrace 采集运行时日志，
-  基于日志证据逆向还原加密参数。融合黑盒补环境（JS 层 NativeProtect）与纯算还原，
-  支持 Node.js / Python 双语言交付，集成 AST 反混淆、TLS 指纹、Session 请求链、
-  指纹基线一致性、代码变更记忆等完整工程化能力。
-  不处理 App 内 JS/小程序容器/Windows/Native 逆向；默认不主动分析 JSVMP 字节码源码。
-argument-hint: "<目标URL> [需要分析的加密参数名, 如 sign, a_bogus, token]"
+  网页端 JS 逆向工程技能：逆向还原浏览器请求中的加密参数、签名、token、cookie 与设备指纹。
+  适用于 sign/a_bogus/X-Bogus/acw_sc__v2/hexin-v/FSSBBIl1UgzbN7N/_token 等各类动态参数的生成逻辑分析，
+  覆盖标准算法(md5/sha/aes/hmac/SM2/SM4/SM3)、自定义混淆、obfuscator.io、JSVMP 黑盒补环境、WASM 加密、
+  TLS 指纹模拟、Session 请求链、反爬风控对抗等场景。
+  统一通过 ruyipage + RuyiTrace 采集运行时日志，基于日志证据逆向，支持 Node.js / Python 双语言纯协议交付。
+  适用范围：浏览器网页 JS（含移动端 H5、微信/X5/QQB 内置浏览器）。
+  不处理：App 内 JS/小程序容器/Windows/Native 逆向；默认不反编译 JSVMP 字节码源码。
+argument-hint: "<目标网站URL> <要还原的参数名> [目标接口URL]"
 ---
 
 # 通用网页端 JS 逆向技能
