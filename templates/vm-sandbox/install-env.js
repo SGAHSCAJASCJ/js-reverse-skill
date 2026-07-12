@@ -35,6 +35,7 @@
 'use strict';
 
 const { createSandbox } = require('./vm-context');
+const { webcrypto } = require('crypto');
 
 // ============================================================
 // NativeProtect（JS 级 toString/descriptor 保护）
@@ -234,17 +235,19 @@ function installPerformance(protect) {
 function installCrypto(protect) {
   return {
     getRandomValues: protect.nativeFunction((arr) => {
-      for (let i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 256);
+      try {
+        if (arr && typeof arr === 'object' && 'length' in arr) webcrypto.getRandomValues(arr);
+      } catch (e) {
+        for (let i = 0; i < (arr && arr.length) || 0; i++) arr[i] = Math.floor(Math.random() * 256);
+      }
       return arr;
     }, 'getRandomValues'),
-    randomUUID: protect.nativeFunction(() => {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = Math.random() * 16 | 0;
-        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-      });
-    }, 'randomUUID'),
+    randomUUID: protect.nativeFunction(() => webcrypto.randomUUID(), 'randomUUID'),
     subtle: {
-      digest: protect.nativeFunction(async () => new ArrayBuffer(32), 'digest'),
+      digest: protect.nativeFunction(async (algorithm, data) => {
+        const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+        return await webcrypto.subtle.digest(algorithm, input);
+      }, 'digest'),
     },
   };
 }

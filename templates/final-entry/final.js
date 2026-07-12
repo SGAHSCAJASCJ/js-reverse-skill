@@ -185,11 +185,12 @@ async function main() {
         // 合并新 Cookie
         jar.merge(res.headers['set-cookie']);
 
-        if (res.status === 200) {
+        if (res.status === 200 && body) {
           successCount++;
         } else {
           failCount++;
-          console.log(`  [WARN] 状态码非 200`);
+          if (res.status !== 200) console.log(`  [WARN] 状态码非 200`);
+          if (!body) console.log(`  [WARN] 响应体为空，视为验证失败`);
         }
       } catch (e) {
         failCount++;
