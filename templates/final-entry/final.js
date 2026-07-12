@@ -16,15 +16,13 @@
  * 不要跨线程/进程共享同一 signer。详见 references/workflow/common-pitfalls.md 反模式 7。
  *
  * 使用方式：
- *   node result/final.js                          # 默认：发真实 API 请求，验证 1 次
+ *   node result/final.js                          # 默认：发真实 API 请求，交叉验证 5 次
  *   node result/final.js --verify 5               # 发真实 API 请求，交叉验证 5 次
  *   node result/final.js --sign-only              # 仅输出签名，不发真实请求（需用户明确指定）
  *   node result/final.js --cookie "name=value"    # 注入用户 cookie
  */
 
 'use strict';
-
-const path = require('path');
 
 // ============================================================
 // 模块引用（最终项目结构 result/src/...，从 templates/ 复制或自行实现）
@@ -94,7 +92,7 @@ const CONFIG = {
 function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
-    verify: 1,
+    verify: 5,
     noRealRequest: false,
     userCookie: '',
   };
@@ -181,7 +179,7 @@ async function main() {
         });
 
         console.log(`  状态码: ${res.status}`);
-        const body = typeof res.body === 'string' ? res.body : JSON.stringify(res.body);
+        const body = res.body == null ? '' : (typeof res.body === 'string' ? res.body : JSON.stringify(res.body));
         console.log(`  响应: ${body.slice(0, 200)}`);
 
         // 合并新 Cookie
@@ -251,16 +249,22 @@ function mergeCookie(deviceCookie, userCookie) {
   if (!userCookie) return deviceCookie;
   if (!deviceCookie) return userCookie;
 
+  const setPair = (map, pair) => {
+    const eq = pair.indexOf('=');
+    if (eq < 0) return;
+    const k = pair.slice(0, eq).trim();
+    const v = pair.slice(eq + 1).trim();
+    if (k) map.set(k, v);
+  };
+
   const merged = new Map();
   // 设备 Cookie 先加入
   for (const pair of deviceCookie.split(';').map(s => s.trim()).filter(Boolean)) {
-    const [k, v] = pair.split('=');
-    if (k) merged.set(k.trim(), v?.trim());
+    setPair(merged, pair);
   }
   // 用户 Cookie 覆盖同名项
   for (const pair of userCookie.split(';').map(s => s.trim()).filter(Boolean)) {
-    const [k, v] = pair.split('=');
-    if (k) merged.set(k.trim(), v?.trim());
+    setPair(merged, pair);
   }
   return Array.from(merged.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
 }
@@ -276,12 +280,14 @@ function sleep(ms) {
 // 异常处理
 // ============================================================
 process.on('uncaughtException', (err) => {
-  // 捕获 bundle.js 异步执行异常（如 JSVMP crash），不影响 signer 同步执行
-  console.error(`[uncaughtException] ${err.message}`);
+  // 致命异常：记录并退出，避免处于不确定状态（JSVMP crash 应在主流程 try/catch 中捕获，不会落到此处）
+  console.error(`[uncaughtException] ${err && err.message ? err.message : err}`);
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error(`[unhandledRejection] ${reason}`);
+  process.exit(1);
 });
 
 // ============================================================
