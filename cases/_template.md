@@ -48,7 +48,7 @@ case/
 
 ## 取证
 - 取证模式：ruyiPage + RuyiTrace / 仅 ruyiPage / 用户手动取证 / AI 自行决定
-- 最终请求 TLS 客户端：Node.js CycleTLS / impers / curl-cffi / Python curl_cffi / cffi_curl / cyCronet / 不发真实请求
+- 最终请求 TLS 客户端：Node.js CycleTLS（需手动实现，client.js 未内置）/ impers / curl-cffi / Python curl_cffi / cffi_curl / cyCronet / 不发真实请求
 
 ## 指纹基线
 - baselineId：
@@ -73,7 +73,7 @@ case/
 
 - 路径:A 纯算还原 / B vm 沙箱执行 / C WASM 加载 / D 环境伪装
 - 框架:不使用 / vm / jsdom
-- TLS 客户端:CycleTLS / curl-cffi-node / impers / curl-cffi / curl_cffi / cyCronet / 不发真实请求
+- TLS 客户端:CycleTLS（需手动实现，client.js 未内置）/ curl-cffi-node / impers / curl-cffi / curl_cffi / cyCronet / 不发真实请求
 - 核心思路:（一句话）
 
 ## 踩坑记录

@@ -15,6 +15,7 @@
 | [vm-sandbox-chameleon-iwencai.md](vm-sandbox-chameleon-iwencai.md) | chameleon.js 混淆 + cookie"v"=hexin-v + try-catch 静默吞错 + 中等量环境 stub | ★★★ | vm.createContext + 中等量浏览器环境 stub(Element/Document/XHR) | 无/轻检测 |
 | [sm2-sm4-sm3-guomi-jobonline.md](sm2-sm4-sm3-guomi-jobonline.md) | SM2/SM4/SM3 国密三参数签名 + 随机密钥下发 | ★★ | 纯 Node 复现(sm-crypto) | 无(标准国密) |
 | [jsvmp-bundle-bdms-a_bogus-douyin.md](jsvmp-bundle-bdms-a_bogus-douyin.md) | JSVMP + bundle.js 常驻 + bdms.init + XHR patch + uncaughtException 兜底 | ★★★★ | vm + 手写环境补丁 + XHR patch 只真发 mssdk 请求 | 行为型 |
+| [jsvmp-dual-sign-purealgo-vm-xiaohongshu.md](jsvmp-dual-sign-purealgo-vm-xiaohongshu.md) | JSVMP + X-s/X-s-common 双轨（纯算 + vm 沙箱）+ 修改版 CRC32 + 自定义 Base64 | ★★★★ | A 纯算（X-S-Common）+ B vm 沙箱（X-s）双轨 | 签名型 |
 | [browser-extract-modified-md5-yuanrenxue.md](browser-extract-modified-md5-yuanrenxue.md) | obfuscator.io + 修改版 MD5(T常量含动态时间戳) + WAF cookie + charCode反hook | ★★★ | puppeteer 提取 m/f/完整cookie + Node.js https 请求 | 签名型 |
 
 > 同质化案例（不进速查表，按需读取）：[sha1-sort-params-zhitongcaijing.md](sha1-sort-params-zhitongcaijing.md) — 标准 SHA1 签名，与 simple-sign-md5 同路径，供同站升级参考
@@ -42,6 +43,7 @@ CHECK-2 速查:
 | 自定义 MD5(非标准输出) / 混淆算法不可静态还原 / eval 包裹算法 | vm-sandbox-custom-algo | 中(自定义算法) |
 | `chameleon` / `hexin-v` / `TOKEN_SERVER_TIME` + try-catch 静默吞错 | vm-sandbox-chameleon-iwencai | 高(同花顺) |
 | `bdms.init` / `signUrl` / `bundle.js` 常驻 + `a_bogus` + `mssdk.bytedance.com` | jsvmp-bundle-bdms-a_bogus-douyin | 高(抖音常驻) |
+| `X-s` / `X-s-common` / `XYS_` + `as-v2-ds.js` + 修改版 CRC32 + 自定义 Base64 | jsvmp-dual-sign-purealgo-vm-xiaohongshu | 高(小红书双轨) |
 | `RM4hZBv0dDon443M` / 修改版 MD5(T常量含动态时间戳) + `$_zw` 指纹数组 + charCode 反hook | browser-extract-modified-md5-yuanrenxue | 高(猿人学浏览器提取) |
 
 ## 新增案例
