@@ -217,7 +217,7 @@ function countDispatcherWrappers(ast) {
 }
 
 function collectMetrics(text) {
-  let opcodeIfChainCount = countMatches(text, /if\s*\(\s*(?:0x[\da-f]+|\d+|["'][^"'\\]*(?:\\.[^"'\\]*)*["'])\s*={2,3}\s*[A-Za-z_$][\w$]*\s*\)/gi);
+  let opcodeIfChainCount = countMatches(text, /if\s*\(\s*(?:0x[\da-f]+|\d+|["'](?:[^"'\\]|\\.)*["'])\s*={2,3}\s*[A-Za-z_$][\w$]*\s*\)/gi);
   let dispatcherWrapperCount = countMatches(text, /:\s*function\s*\([^)]*\)\s*\{\s*return\b/g);
 
   try {
