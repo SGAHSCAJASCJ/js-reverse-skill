@@ -22,14 +22,15 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
-    if (a === '--url') args.url = argv[++i] || '';
-    else if (a === '--case-dir' || a === '--dir') args.caseDir = argv[++i] || '';
-    else if (a === '--out-dir') args.outDir = argv[++i] || '';
-    else if (a === '--profile-dir') args.profileDir = argv[++i] || '';
-    else if (a === '--ruyitrace-home') args.ruyitraceHome = argv[++i] || '';
-    else if (a === '--ruyitrace-exe') args.ruyitraceExe = argv[++i] || '';
-    else if (a === '--duration') args.duration = Number(argv[++i] || '60');
-    else if (a === '--limit') args.limit = Number(argv[++i] || '200000');
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--url') args.url = nextVal('');
+    else if (a === '--case-dir' || a === '--dir') args.caseDir = nextVal('');
+    else if (a === '--out-dir') args.outDir = nextVal('');
+    else if (a === '--profile-dir') args.profileDir = nextVal('');
+    else if (a === '--ruyitrace-home') args.ruyitraceHome = nextVal('');
+    else if (a === '--ruyitrace-exe') args.ruyitraceExe = nextVal('');
+    else if (a === '--duration') args.duration = Number(nextVal('60'));
+    else if (a === '--limit') args.limit = Number(nextVal('200000'));
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--import-after') args.importAfter = true;
     else if (a === '--json') args.json = true;
@@ -186,6 +187,11 @@ async function capture(args, plan) {
   };
   child.on('error', (err) => { result.launchError = err.message || String(err); });
   await wait(args.duration * 1000);
+  if (result.launchError) {
+    result.exit = { exited: false, code: null, signal: null };
+    result.logs = [];
+    return result;
+  }
   const exitBeforeKill = await waitForExit(child, 200);
   if (!exitBeforeKill.exited) {
     result.killAttempted = true;
@@ -196,7 +202,7 @@ async function capture(args, plan) {
   }
   result.logs = listNdjsonFiles(plan.outDir, startedAt);
   if (args.importAfter && result.logs.length) {
-    result.importResult = importLog(plan.caseDir, result.logs[0], args.markdown);
+    result.importResults = result.logs.map(file => importLog(plan.caseDir, file, args.markdown));
   }
   return result;
 }
@@ -239,11 +245,14 @@ function renderMarkdown(obj) {
   if (!result.logs.length) {
     lines.push('- 未发现 NDJSON：应检查 RuyiTrace trace Firefox 是否能写入日志、目标页面是否触发了环境访问、是否需要登录/验证码/权限交互；自动捕获失败后才要求用户手动协助采集。');
   }
-  if (result.importResult) {
+  if (result.importResults && result.importResults.length) {
     lines.push('', '## 导入结果');
-    lines.push(`- 导入是否成功：${result.importResult.ok ? '是' : '否'}`);
-    if (result.importResult.stdout.trim()) lines.push('', '```text', result.importResult.stdout.trim(), '```');
-    if (result.importResult.stderr.trim()) lines.push('', '```text', result.importResult.stderr.trim(), '```');
+    result.importResults.forEach((imp, idx) => {
+      const label = result.logs && result.logs[idx] ? path.basename(result.logs[idx]) : `#${idx + 1}`;
+      lines.push(`- ${label} 导入是否成功：${imp.ok ? '是' : '否'}`);
+      if (imp.stdout.trim()) lines.push('', '```text', imp.stdout.trim(), '```');
+      if (imp.stderr.trim()) lines.push('', '```text', imp.stderr.trim(), '```');
+    });
   }
   return lines.join('\n') + '\n';
 }
