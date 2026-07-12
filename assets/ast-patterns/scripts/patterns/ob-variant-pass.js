@@ -217,6 +217,8 @@ function bootstrapDynamicDecoderSandbox(ast) {
     return null;
   }
 
+  const startedAt = Date.now();
+  const PX_BUDGET_MS = 30000;
   const pxCandidates = [];
   for (let pxValue = 256; pxValue <= 512; pxValue += 1) {
     pxCandidates.push(pxValue);
@@ -226,6 +228,9 @@ function bootstrapDynamicDecoderSandbox(ast) {
   }
 
   for (const pxValue of pxCandidates) {
+    if (Date.now() - startedAt > PX_BUDGET_MS) {
+      break;
+    }
     const sandbox = buildDynamicDecoderSandbox(preludeCode, rotationCode, pxSetterName, pxValue);
     if (!validateDynamicDecoderSandbox(sandbox, decoderName, targets)) {
       continue;
@@ -256,7 +261,7 @@ function obVariantPass(ast) {
           if (!path.get("callee").isIdentifier({ name: decoderName })) {
             return;
           }
-          const result = evaluateExpression(path.toString(), sandbox);
+          const result = evaluateExpression(generateCode(path.node), sandbox);
           if (!result.ok) {
             return;
           }

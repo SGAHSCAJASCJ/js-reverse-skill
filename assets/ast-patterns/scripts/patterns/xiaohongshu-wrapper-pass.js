@@ -1,12 +1,12 @@
 const { clone } = require("../shared");
 const { runPatternPass } = require("./shared-pattern-pass");
-const { createSandbox, evaluateExpression, evaluateNodes, foldWrapperObjects, traverse, t } = require("./pattern-utils");
+const { createSandbox, evaluateExpression, evaluateNodes, foldWrapperObjects, generateCode, traverse, t } = require("./pattern-utils");
 
 function getOpcodeTestInfo(testNode) {
   if (!t.isBinaryExpression(testNode)) {
     return null;
   }
-  if (!["===", "=="].includes(testNode.operator)) {
+  if (testNode.operator !== "===") {
     return null;
   }
 
@@ -176,7 +176,7 @@ function xiaohongshuWrapperPass(ast) {
             if (!path.get("callee").isIdentifier() || !aliasNames.has(path.node.callee.name) || path.node.arguments.length !== 1) {
               return;
             }
-            const result = evaluateExpression(`${decoderName}(${path.get("arguments.0").toString()})`, sandbox);
+            const result = evaluateExpression(`${decoderName}(${generateCode(path.get("arguments.0").node)})`, sandbox);
             if (!result.ok) {
               return;
             }

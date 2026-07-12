@@ -121,7 +121,7 @@ function yidunDispatcherPass(ast) {
           if (!path.get("callee").isIdentifier({ name: decoderName }) || path.node.arguments.length !== 1 || !path.get("arguments.0").isNumericLiteral()) {
             return;
           }
-          const result = evaluateExpression(path.toString(), sandbox);
+          const result = evaluateExpression(generateCode(path.node), sandbox);
           if (!result.ok) {
             return;
           }

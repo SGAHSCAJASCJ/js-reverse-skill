@@ -10,7 +10,7 @@ function normalizeCode(node) {
 }
 
 function getCaseInfo(testNode) {
-  if (!t.isBinaryExpression(testNode) || !["==", "==="].includes(testNode.operator)) {
+  if (!t.isBinaryExpression(testNode) || testNode.operator !== "===") {
     return null;
   }
 
