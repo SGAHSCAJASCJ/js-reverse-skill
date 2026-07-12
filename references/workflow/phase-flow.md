@@ -234,4 +234,9 @@ RuyiTrace NDJSON 狙击式采集:
 - 临时 hook/trace/日志/缓存立即清理，不等项目结束
 
 ### 5.5 经验沉淀
-主动询问用户是否沉淀到 `cases/`（按 `_template.md` 格式）
+
+> **写入位置 = `result/`，不是 skill 内的 `cases/`**：skill 目录在运行期通常只读（部署后不可写），**agent 不得尝试写入 skill 内的 `cases/`**。把内化后的案例经验作为本次交付物写到 `result/`。
+
+- 主动询问用户是否沉淀本次经验（**按 `cases/_template.md` 格式**，文件名如 `result/经验沉淀-<站点>.md`）
+- 内容：题型 / 反爬类型 / 关键踩坑 / 已内化为的编码约束 / 验证结论
+- **开发者周期回写**：skill 维护者定期把 `result/` 中质量高的经验按 `_template.md` 合并进 skill 的 `cases/` 库；agent 运行期只产出、不回写 skill 目录

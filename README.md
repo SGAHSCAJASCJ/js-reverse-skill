@@ -32,7 +32,7 @@ js-reverse-skill/
 └── scripts/              工具脚本（27 个 7 类）
 ```
 
-**调用关系**：`SKILL.md`（流程）→ `references/`（按需知识）→ `scripts/`（执行检查）→ `assets/`（补环境/反混淆）→ `templates/`（交付入口）→ `cases/`（经验回写）
+**调用关系**：`SKILL.md`（流程）→ `references/`（按需知识）→ `scripts/`（执行检查）→ `assets/`（补环境/反混淆）→ `templates/`（交付入口）→ `cases/`（经验库，只读参考；**新经验沉淀写入 `result/`，由开发者周期回写 `cases/`**）
 
 ## 如何使用
 

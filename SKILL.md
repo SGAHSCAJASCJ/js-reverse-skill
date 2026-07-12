@@ -38,7 +38,7 @@ js-reverse-skill/
 └── scripts/              ← 工具脚本（ruyipage+RuyiTrace 采集/导入/检查）
 ```
 
-**调用关系**：`SKILL.md`（流程）→ `references/`（按需知识）→ `scripts/`（执行检查）→ `assets/`（补环境/反混淆）→ `templates/`（交付入口）→ `cases/`（经验回写）
+**调用关系**：`SKILL.md`（流程）→ `references/`（按需知识）→ `scripts/`（执行检查）→ `assets/`（补环境/反混淆）→ `templates/`（交付入口）→ `cases/`（经验库，只读参考；**新经验沉淀写入 `result/`，由开发者周期回写 `cases/`**）
 
 ---
 
@@ -108,7 +108,7 @@ js-reverse-skill/
   命中结果:
     - 命中案例 = ______ (case 文件名 or "未命中")
     - 命中 → 读取 case 文件，踩坑记录内化为约束，Phase 1-5 仍正常走
-    - 未命中 → 走标准 Phase 0-5，结束时沉淀新 case 到 cases/
+    - 未命中 → 走标准 Phase 0-5，结束时把新经验沉淀到 `result/`（不写 skill 的 `cases/`）
 
 [CHECK-3] 最终方案意图声明 + 用户确认
   本次目标: ______ (一句话)
@@ -121,7 +121,7 @@ js-reverse-skill/
 ```
 
 - [CHECK-1] 失败 → 运行 `node scripts/install_all.js --markdown` 输出安装计划，用户确认后 `--yes` 自动安装缺失组件到 `<项目根>/tools/`
-- [CHECK-2] 命中 → 读 case 文件内化约束；未命中 → 走标准流程，结束时沉淀新 case
+- [CHECK-2] 命中 → 读 case 文件内化约束；未命中 → 走标准流程，结束时把新经验沉淀到 **`result/`**（不写 skill 的 `cases/`）
 - [CHECK-3] 意图声明明确 + 用户确认方案后，才进入 Phase 0
 
 ---
@@ -414,7 +414,7 @@ result/
 - 确保 case 根目录只有 `case/` 和 `result/` 两个子目录
 - 详见 `references/quality/cleanup.md`
 
-**5.5 经验沉淀**：详见 `references/workflow/phase-flow.md`（经验回写 cases/）
+**5.5 经验沉淀**：详见 `references/workflow/phase-flow.md`（**写到 `result/`，不写 skill 的 `cases/`**——运行期 skill 目录只读）
 
 ---
 
