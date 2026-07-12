@@ -199,13 +199,16 @@ function normalize(ast) {
   return { ast, changed };
 }
 
+const MAX_NORMALIZE_ITERATIONS = 20;
 const { inputPath, outputPath } = parseArgs();
 let ast = parseFile(inputPath);
 let changed = false;
+let iterations = 0;
 do {
   ({ ast, changed } = normalize(ast));
   if (changed) {
     ast = reparse(ast);
   }
-} while (changed);
+  iterations += 1;
+} while (changed && iterations < MAX_NORMALIZE_ITERATIONS);
 saveAst(ast, outputPath);
