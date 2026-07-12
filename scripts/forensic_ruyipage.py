@@ -105,7 +105,6 @@ def apply_smart_fingerprint(opts, args: argparse.Namespace):
     if args.no_fp:
         logger.info("已禁用 smart_fingerprint（--no-fp）。")
         return None
-    import ruyipage
 
     kwargs: Dict[str, Any] = {
         "userdir": args.profile_dir,
@@ -154,11 +153,27 @@ def is_js_packet(pkt: Dict[str, Any]) -> bool:
     return "javascript" in ct.lower() or "ecmascript" in ct.lower()
 
 
+def _match_text(pkt: Dict[str, Any]) -> str:
+    # 仅对标识性元数据做匹配：URL / method / 请求头 / 响应头。
+    # 不纳入 request_body / response_body —— 一来它们可能是 bytes（json.dumps 会崩），
+    # 二来把响应体纳入会导致目标关键词只出现在正文时被误命中。
+    parts: List[str] = [
+        pkt.get("url", "") or "",
+        pkt.get("method", "") or "",
+    ]
+    for hk in ("request_headers", "response_headers"):
+        h = pkt.get(hk) or {}
+        if isinstance(h, dict):
+            for k, v in h.items():
+                parts.append(f"{k}: {v}")
+    return "\n".join(str(p) for p in parts)
+
+
 def match_targets(pkt: Dict[str, Any], substrings: List[str], regexes: List[re.Pattern]) -> bool:
     if not substrings and not regexes:
         return True
     url = pkt.get("url", "") or ""
-    text = json.dumps(pkt, ensure_ascii=False)
+    text = _match_text(pkt)
     for s in substrings:
         if s and (s in url or s in text):
             return True
@@ -234,7 +249,6 @@ def _trigger_actions(page, args: argparse.Namespace, human: str) -> None:
 # 主流程
 # ============================================================
 def build_options(args: argparse.Namespace, browser_path: str):
-    import ruyipage
     from ruyipage import FirefoxOptions
 
     opts = FirefoxOptions()
@@ -248,7 +262,6 @@ def build_options(args: argparse.Namespace, browser_path: str):
 
 
 def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
-    import ruyipage
     from ruyipage import FirefoxPage
 
     opts = build_options(args, browser_path)
