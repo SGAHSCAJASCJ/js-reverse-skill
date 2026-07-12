@@ -48,7 +48,7 @@ const CAPABILITY_SECTIONS = [
 ];
 
 function parseArgs(argv) {
-  const args = { caseDir: '', requiredStages: [], requireDynamicFields: false, requireCapabilityReport: false, json: false, markdown: false };
+  const args = { caseDir: 'case', requiredStages: [], requireDynamicFields: false, requireCapabilityReport: false, json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
@@ -128,8 +128,7 @@ function isDynamicCandidate(name, text) {
   return sectionHits >= 4;
 }
 function check(args) {
-  if (!args.caseDir) throw new Error('必须提供 --case-dir');
-  const caseDir = path.resolve(args.caseDir);
+  const caseDir = path.resolve(args.caseDir || 'case');
   const stageDir = path.join(caseDir, '阶段报告');
   const reports = listMarkdown(stageDir);
   const problems = [];
