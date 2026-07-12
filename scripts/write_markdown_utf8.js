@@ -112,9 +112,9 @@ function hasReplacementQuestionMarks(text) {
 
   const questionCharCount = runs.reduce((n, item) => n + item.length, 0);
 
-  const hasChinese = /[\u4e00-\u9fff]/.test(text);
+  const hasCJK = /[\u4e00-\u9fff]/.test(text);
 
-  return questionCharCount >= 8 && !hasChinese;
+  return questionCharCount >= 8 && !hasCJK;
 
 }
 
