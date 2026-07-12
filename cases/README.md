@@ -19,6 +19,7 @@
 | [jsvmp-bundle-bdms-a_bogus-douyin.md](jsvmp-bundle-bdms-a_bogus-douyin.md) | JSVMP + bundle.js 常驻 + bdms.init + XHR patch + uncaughtException 兜底 | ★★★★ | vm + 手写环境补丁 + XHR patch 只真发 mssdk 请求 | 行为型 |
 | [jsvmp-dual-sign-purealgo-vm-xiaohongshu.md](jsvmp-dual-sign-purealgo-vm-xiaohongshu.md) | JSVMP + X-s/X-s-common 双轨（纯算 + vm 沙箱）+ 修改版 CRC32 + 自定义 Base64 | ★★★★ | A 纯算（X-S-Common）+ B vm 沙箱（X-s）双轨 | 签名型 |
 | [browser-extract-modified-md5-yuanrenxue.md](browser-extract-modified-md5-yuanrenxue.md) | obfuscator.io + 修改版 MD5(T常量含动态时间戳) + WAF cookie + charCode反hook | ★★★ | puppeteer 提取 m/f/完整cookie + Node.js https 请求 | 签名型 |
+| [kuaishou-hxfalcon-kww-reverse.md](kuaishou-hxfalcon-kww-reverse.md) | __NS_hxfalcon + kww + Jose 模块 + kwpsec JSVMP | ★★★★ | A 纯算（__NS_hxfalcon/kww SSR fallback）+ D 黑盒（kww 浏览器端） | 签名型 |
 
 > 同质化案例（不进速查表，按需读取）：[sha1-sort-params-zhitongcaijing.md](sha1-sort-params-zhitongcaijing.md) — 标准 SHA1 签名，与 simple-sign-md5 同路径，供同站升级参考
 
