@@ -1,4 +1,4 @@
-# JSVMP 双签名 + XHR/fetch 拦截器 + cacheOpts 初始化 + jsdom Firefox 环境伪装
+# Case：JSVMP 双签名 + XHR/fetch 拦截器 + cacheOpts 初始化 + jsdom Firefox 环境伪装
 
 > 难度：★★★★★
 > 还原方案：D: jsdom 环境伪装

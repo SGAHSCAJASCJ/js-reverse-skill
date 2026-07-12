@@ -1,4 +1,4 @@
-# JSVMP-RS6+Cookie生成+412挑战+sdenv补环境
+# Case：JSVMP RS6 + Cookie 生成 + 412 挑战 + sdenv 补环境
 
 > 难度：★★★★★
 > 还原方案：D: sdenv 纯 Node.js（sdenv 魔改 jsdom + C++ V8 扩展）
