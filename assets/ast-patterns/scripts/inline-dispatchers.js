@@ -49,7 +49,10 @@ function inlineDispatchers(ast) {
         }
         supportedPropertyCount += 1;
         const keyNode = propertyPath.node.key;
-        const key = t.isIdentifier(keyNode) ? keyNode.name : keyNode.value;
+        let key;
+        if (t.isIdentifier(keyNode)) key = keyNode.name;
+        else if (t.isStringLiteral(keyNode) || t.isNumericLiteral(keyNode)) key = keyNode.value;
+        else return; // 跳过非字面量 computed key，避免以 undefined 作为表键误命中
         const value = collectDispatcherValue(propertyPath.node.value, dispatcherMap);
         if (value) {
           collected[key] = value;
@@ -109,13 +112,27 @@ function inlineDispatchers(ast) {
 
   if (changed) {
     removableEntries.forEach(({ path, removable }) => {
-      if (removable && !path.removed) {
-        path.remove();
-      }
+      if (!removable || path.removed) return;
+      const name = path.node.id && path.node.id.name;
+      if (name && hasRemainingDispatcherReferences(ast, name)) return; // 仍有调用点未内联，保留声明
+      path.remove();
     });
   }
 
   return { ast, changed };
+}
+
+function hasRemainingDispatcherReferences(ast, name) {
+  let found = false;
+  traverse(ast, {
+    MemberExpression(p) {
+      if (p.node.object && p.node.object.type === 'Identifier' && p.node.object.name === name) {
+        found = true;
+        p.stop();
+      }
+    },
+  });
+  return found;
 }
 
 const { inputPath, outputPath } = parseArgs();
