@@ -1,10 +1,11 @@
 /**
  * Node.js TLS 指纹兼容客户端模板
  *
- * 支持三种客户端（按优先级）：
+ * 支持两种客户端（按优先级）：
  *   1. curl-cffi-node（impersonate Chrome/Firefox，JA3/JA4/Akamai 对齐最完善）
  *   2. impers（Node.js 原生 TLS 指纹伪装）
- *   3. CycleTLS（轻量级 TLS 指纹伪装）
+ *
+ * 注：CycleTLS 因请求 API（ja3Request/strongRequest）与统一 request 包装不兼容，已不再作为可选客户端。
  *
  * 硬性要求：
  *   - Session 模式：同一 session 复用 Cookie jar / TLS 上下文 / HTTP2 连接
@@ -14,8 +15,6 @@
  */
 
 'use strict';
-
-const path = require('path');
 
 // ============================================================
 // 客户端检测：按优先级选择可用的 TLS 兼容客户端
@@ -33,17 +32,10 @@ function detectAvailableClient() {
     return { name: 'impers', Client: impers.Session };
   } catch (e) {}
 
-  // 3. CycleTLS（需异步初始化，当前模板仅支持 curl-cffi-node 和 impers 作为同步客户端）
-  try {
-    const initCycleTLS = require('cycletls');
-    return { name: 'CycleTLS', Client: initCycleTLS };
-  } catch (e) {}
-
   throw new Error(
     '未检测到 TLS 指纹兼容客户端，请安装其一：\n' +
     '  npm i curl-cffi-node   # 推荐\n' +
-    '  npm i impers\n' +
-    '  npm i cycletls'
+    '  npm i impers'
   );
 }
 
@@ -92,15 +84,10 @@ async function createRequestSession(options = {}) {
       followRedirects,
     });
   } else {
-    // CycleTLS：需异步初始化（initCycleTLS 返回 Promise）
-    // CycleTLS 请求 API 不同（ja3Request / strongRequest），需额外适配，下方统一 request 包装不适用
-    session = await Client();
-    session._cycleHeaders = finalHeaders;
-    session._cycleProxy = proxy;
+    throw new Error(`不支持的客户端：${name}`);
   }
 
-  // 统一包装 request 方法
-  // 注意：CycleTLS 请求 API 不同，需额外适配，此包装主要针对 curl-cffi-node 和 impers
+  // 统一包装 request 方法（适配 curl-cffi-node / impers）
   const rawRequest = session.request ? session.request.bind(session) : null;
   if (rawRequest) {
     session.request = async function (method, url, opts = {}) {
@@ -111,7 +98,7 @@ async function createRequestSession(options = {}) {
         body: opts.body,
         proxy: opts.proxy || proxy,
         followRedirects: opts.followRedirects ?? followRedirects,
-        timeout: opts.timeout || 30000,
+        timeout: opts.timeout || 30, // 单位：秒（curl-cffi-node / impers）
       };
       const res = await rawRequest(merged);
       return {
@@ -158,8 +145,11 @@ class CookieJar {
     const list = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
     for (const item of list) {
       const pair = item.split(';')[0];
-      const [name, value] = pair.split('=');
-      if (name && value) this.set(name.trim(), value.trim(), domain);
+      const eq = pair.indexOf('=');
+      if (eq < 0) continue;
+      const name = pair.slice(0, eq).trim();
+      const value = pair.slice(eq + 1).trim();
+      if (name) this.set(name, value, domain);
     }
   }
 }
