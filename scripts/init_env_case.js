@@ -59,9 +59,11 @@ function initCase(args) {
   const caseDir = path.resolve(args.caseDir);
   if (isDangerousDir(caseDir)) throw new Error(`拒绝在危险目录中初始化：${caseDir}`);
   const actions = [];
-  const dirs = ['js/original', 'js/pretty', 'js/extracted', 'requests', 'fixtures', 'notes', 'hooks', 'env', 'ruyi-trace/logs', 'browser/ruyipage', 'result', 'tmp'];
+  const caseSubDir = path.join(caseDir, 'case');
+  const dirs = ['js/original', 'js/pretty', 'js/extracted', 'requests', 'fixtures', 'notes', 'hooks', 'env', 'ruyi-trace/logs', 'browser/ruyipage', 'tmp'];
   ensureDir(caseDir, actions);
-  for (const d of dirs) ensureDir(path.join(caseDir, d), actions);
+  ensureDir(path.join(caseDir, 'result'), actions);
+  for (const d of dirs) ensureDir(path.join(caseSubDir, d), actions);
 
   const fixture = {
     name: 'sample-001',
@@ -91,7 +93,7 @@ function initCase(args) {
     expected: args.param ? { [args.param]: '' } : {},
   };
 
-  writeFileIfNeeded(path.join(caseDir, 'fixtures', 'sample.fixture.json'), JSON.stringify(fixture, null, 2) + '\n', args.force, actions);
+  writeFileIfNeeded(path.join(caseSubDir, 'fixtures', 'sample.fixture.json'), JSON.stringify(fixture, null, 2) + '\n', args.force, actions);
 
   const fingerprintFixture = {
     version: 1,
@@ -102,7 +104,7 @@ function initCase(args) {
     audio: { startRendering: [], getChannelData: [] },
     domGeometry: { getBoundingClientRect: [], getClientRects: [], offset: [] },
   };
-  writeFileIfNeeded(path.join(caseDir, 'fixtures', 'fingerprint.fixture.json'), JSON.stringify(fingerprintFixture, null, 2) + '\n', args.force, actions);
+  writeFileIfNeeded(path.join(caseSubDir, 'fixtures', 'fingerprint.fixture.json'), JSON.stringify(fingerprintFixture, null, 2) + '\n', args.force, actions);
 
   const notes = `# Node.js 补环境任务笔记
 
@@ -198,7 +200,7 @@ function initCase(args) {
 - [ ] 已删除失败 runner
 - [ ] 已保留必要 fixtures 和 notes
 `;
-  writeFileIfNeeded(path.join(caseDir, 'notes', 'env-task.md'), notes, args.force, actions);
+  writeFileIfNeeded(path.join(caseSubDir, 'notes', 'env-task.md'), notes, args.force, actions);
 
   const codeChangeMemory = `# 代码变更记忆
 
@@ -260,7 +262,7 @@ function initCase(args) {
 
 待填写。
 `;
-  writeFileIfNeeded(path.join(caseDir, 'notes', '代码变更记忆.md'), codeChangeMemory, args.force, actions);
+  writeFileIfNeeded(path.join(caseSubDir, 'notes', '代码变更记忆.md'), codeChangeMemory, args.force, actions);
 
   const entryChain = `# 加密入口链路记录
 
@@ -306,7 +308,7 @@ function initCase(args) {
 - 是否可进入补环境：否
 - 阻塞点：
 `;
-  writeFileIfNeeded(path.join(caseDir, 'notes', 'entry-chain.md'), entryChain, args.force, actions);
+  writeFileIfNeeded(path.join(caseSubDir, 'notes', 'entry-chain.md'), entryChain, args.force, actions);
 
   const silentChecklist = `# 静默失败排查清单
 
@@ -325,7 +327,7 @@ function initCase(args) {
 - [ ] document.all 等特殊对象已处理或确认未触发
 - [ ] Worker / WASM / postMessage 已排查
 `;
-  writeFileIfNeeded(path.join(caseDir, 'notes', 'silent-failure-checklist.md'), silentChecklist, args.force, actions);
+  writeFileIfNeeded(path.join(caseSubDir, 'notes', 'silent-failure-checklist.md'), silentChecklist, args.force, actions);
 
   const trustMatrix = `# 证据可信度矩阵
 
@@ -337,7 +339,7 @@ function initCase(args) {
 | JS 文件 | ${args.target || ''} | 用户输入 / 待验证 | C |  |
 | Cookie / token | 仅记录键名和脱敏摘要 | fixture | A/B |  |
 `;
-  writeFileIfNeeded(path.join(caseDir, 'notes', 'trust-matrix.md'), trustMatrix, args.force, actions);
+  writeFileIfNeeded(path.join(caseSubDir, 'notes', 'trust-matrix.md'), trustMatrix, args.force, actions);
   return { caseDir, actions };
 }
 

@@ -8,55 +8,38 @@
 
 - **测试完成立即清理**：每次脚本测试、功能验证、浏览器取证小步骤完成后，第一时间清理本步骤产生的测试文件、临时文件、缓存文件、中间产物和空目录，不要等整个项目结束。
 - **产物先沉淀再删除**：删除前先把有价值结论写入 `notes/`、`result/` 或最终报告；确认无价值的原始临时文件再清理。
-- **临时内容集中存放**：测试文件必须放入系统临时目录或 `case/tmp/` / `case/.tmp/` / `case/cache/` 等可清理目录；不要把 throwaway 文件散落在项目根目录。
+- **临时内容集中存放**：测试文件必须放入 `case/tmp/`；禁止在 case 根目录散落 `test_debug.js`、`capture_network.py`、`extract_xxx.py` 等脚本。
+- **取证脚本优先通用**：抓包/trace/提取优先使用 skill 的 `scripts/` 通用脚本；如需临时脚本放 `case/tmp/`，用完清理。
 - **脚本测试使用 finally**：编写测试命令时使用 `try/finally` 或等价逻辑，确保失败时也删除临时目录。
 - **每次交付前复查**：最终回复用户前，必须执行一次清理 dry-run 或说明未执行原因；若 dry-run 发现普通临时产物，应立即 `--force` 清理并再次 dry-run。最终交付还必须运行 `check_fingerprint_fixture.js` 与 `check_final_artifact.js`，并手动复核 NativeProtect 保护证据。
 - **敏感材料例外**：登录态 Profile、Cookie、localStorage、IndexedDB、Authorization 等敏感材料不自动删除或交付；删除前必须确认用户意图。
 
 ## 目录约定
 
-建议 case 结构：
+case 根目录只允许两个子目录：
 
 ```text
-case/
-├── js/
-│   ├── original/
-│   ├── pretty/
-│   └── extracted/
-├── requests/
-├── fixtures/
-├── notes/
-└── tmp/
+<case 根>/
+├── case/              # 取证材料
+│   ├── js/
+│   │   ├── original/  # 原始 JS
+│   │   └── pretty/    # 格式化 JS
+│   ├── fixtures/      # 采样 fixture
+│   ├── notes/         # 分析笔记
+│   └── tmp/           # 临时脚本（调试/抓包/提取），用完清理
+└── result/            # 交付物
+    ├── final.js       # 唯一执行入口
+    ├── 最终项目总结.md  # 必选
+    └── src/           # 源码模块
 ```
 
-默认 `tmp/`、`.tmp/`、`temp/`、`.temp/`、`cache/`、`.cache/`、`browser-temp/`、`downloads/failed/`、`__pycache__/`、`.pytest_cache/` 等都是可清理目录。最终产物应尽量简洁，只保留必要内容。
-
-最终 `result/` 目录应是规范项目目录，可以包含必要源码模块和配置模板，但只能有一个执行入口：
-
-```text
-result/
-├── final.js
-├── package.json
-├── config.example.json
-└── src/
-```
-
-或用户明确选择 Python 请求客户端时：
-
-```text
-result/
-├── final.py
-├── requirements.txt
-├── config.example.json
-└── src/
-```
-
-不要把临时 runner、测试脚本、trace、HAR、hook、截图、浏览器 Profile、`server.js`、`bridge.py` 留在最终交付目录。
+默认 `tmp/`、`.tmp/`、`temp/`、`.temp/`、`cache/`、`.cache/`、`__pycache__/`、`.pytest_cache/` 等都是可清理目录。
 
 ## 应清理的临时文件
 
 | 类型 | 清理时机 |
 |---|---|
+| case 根目录散落的脚本（`test_debug.js`、`capture_network.py`、`extract_xxx.py` 等） | 立即移入 `case/tmp/` 或删除 |
 | 测试用输入 / 输出文件 | 单个测试命令完成后立即清理 |
 | 失败的 JS 下载文件 | JS 文件收集阶段结束后立即清理 |
 | 临时格式化文件 | 正式 pretty 文件生成后立即清理 |

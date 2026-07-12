@@ -371,7 +371,7 @@ grep -c "WeixinJSBridge\|window\.wx\|__wxjs_environment" env-patch.js
 # 必须 > 0
 
 # UA 中应含 MicroMessenger
-grep "MicroMessenger" config/headers.json
+grep "MicroMessenger" case/notes/headers.json
 ```
 
 ## 相关参考

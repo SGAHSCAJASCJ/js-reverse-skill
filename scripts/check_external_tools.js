@@ -54,6 +54,26 @@ function isDir(p) {
   try { return !!p && fs.statSync(p).isDirectory(); } catch { return false; }
 }
 
+function findProjectRoot() {
+  // 脚本位于 <项目根>/scripts/ 下，优先用 __dirname 向上查找 SKILL.md
+  let cur = path.dirname(__dirname);
+  for (let i = 0; i < 5; i++) {
+    if (exists(path.join(cur, 'SKILL.md'))) return cur;
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  // fallback: 从 cwd 查找
+  cur = process.cwd();
+  for (let i = 0; i < 10; i++) {
+    if (exists(path.join(cur, 'SKILL.md'))) return cur;
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  return process.cwd();
+}
+
 function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); } catch (err) { return { __parseError: err.message || String(err) }; }
 }
@@ -166,6 +186,8 @@ function getDefaultRuyiBrowsersDirs(explicitInstallDir) {
   const dirs = [];
   if (explicitInstallDir) dirs.push(path.resolve(explicitInstallDir));
   if (process.env.RUYIPAGE_BROWSERS_PATH) dirs.push(path.resolve(process.env.RUYIPAGE_BROWSERS_PATH));
+  // install_all.js 默认安装到 <项目根>/tools/ruyipage-browsers/
+  dirs.push(path.join(findProjectRoot(), 'tools', 'ruyipage-browsers'));
   if (process.platform === 'win32') {
     const base = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
     dirs.push(path.join(base, 'ruyipage', 'browsers'));
@@ -456,6 +478,9 @@ function normalizeTraceHome(args) {
   if (args.ruyitraceExe) return path.dirname(path.resolve(args.ruyitraceExe));
   if (process.env.RUYI_TRACE_HOME) return path.resolve(process.env.RUYI_TRACE_HOME);
   if (process.env.RUYITRACE_HOME) return path.resolve(process.env.RUYITRACE_HOME);
+  // install_all.js 默认安装到 <项目根>/tools/RuyiTrace/
+  const projectTrace = path.join(findProjectRoot(), 'tools', 'RuyiTrace');
+  if (isDir(projectTrace)) return projectTrace;
   const found = whereCommand(process.platform === 'win32' ? 'RuyiTrace.exe' : 'RuyiTrace');
   if (found.length) return path.dirname(found[0]);
   return '';

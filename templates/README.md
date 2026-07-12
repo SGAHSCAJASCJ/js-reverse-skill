@@ -6,7 +6,7 @@
 
 | 模板 | 入口文件 | 解法模式 | 用途 |
 |------|---------|---------|------|
-| `final-entry/` | `final.js` | 所有模式 | **Node.js 最终入口**：Session 模式 + 签名/请求分离 + 动态资源刷新 |
+| `final-entry/` | `final.js` | 所有模式 | **Node.js 最终入口**：默认发真实 API 请求验证（≥5 次），Session 模式 + 签名/请求分离 + 动态资源刷新 |
 | `node-request/` | `client.js` | A/B/C/D | **Node.js TLS 客户端**：curl-cffi-node → impers → CycleTLS 优先级检测 |
 | `python-request/` | `client.py` | A/B/C/D | **Python TLS 客户端**：curl_cffi → cffi_curl → cyCronet 优先级检测 |
 | `vm-sandbox/` | `install-env.js` | B/D | **补环境安装**：JS 层 NativeProtect 保护（快速验证版） |

@@ -104,7 +104,7 @@ sandbox.CryptoJS = require('crypto-js');
 vm.createContext(sandbox);
 
 // 加载算法 JS
-const algorithmCode = require('fs').readFileSync('./config/sign_algorithm.js', 'utf8');
+const algorithmCode = require('fs').readFileSync('./case/js/extracted/sign_algorithm.js', 'utf8');
 vm.runInContext(algorithmCode, sandbox);
 
 // 调用签名函数

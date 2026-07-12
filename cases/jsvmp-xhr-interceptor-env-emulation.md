@@ -171,7 +171,7 @@ grep -c "userAgentData\|navigator\.connection\|getBattery\|window\.chrome\|perfo
 
 ## 各 Phase 加速指引
 
-- **Phase 1**: `search_code(keyword="_SdkGlueInit")` 定位配置；`scripts(action='save')` 保存三件套（webmssdk.es5.js / bdms.js / sdk-glue.js）到 `config/`
+- **Phase 1**: `search_code(keyword="_SdkGlueInit")` 定位配置；`scripts(action='save')` 保存三件套（webmssdk.es5.js / bdms.js / sdk-glue.js）到 `case/js/`
 - **Phase 2**: 加载顺序 webmssdk → bdms → sdk-glue → `_SdkGlueInit`；签名在 XHR send 阶段追加
 - **Phase 3**: 用 trace 取证 `compare_env` + `evaluate_js` 分批采集真实环境，与 jsdom 逐项 diff，**确认需要补的环境项范围后再写补丁**
 - **Phase 4**: jsdom 配置需 `resources:'usable'`；XHR Hook 必须在 SDK 加载前安装；`scanPrototypeChain` 的 `Object.prototype` 边界不能突破

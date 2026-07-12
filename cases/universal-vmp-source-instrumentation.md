@@ -168,7 +168,7 @@ def gen_sign(params, ts, fingerprint):
 const vm = require('vm');
 const fs = require('fs');
 
-const sandboxCode = fs.readFileSync('./config/sign_extracted.js', 'utf8');
+const sandboxCode = fs.readFileSync('./case/js/extracted/sign_extracted.js', 'utf8');
 
 const sandbox = {
   // 最小环境：把 hot_keys 里出现的全部属性放进来

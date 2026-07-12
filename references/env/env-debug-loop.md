@@ -118,7 +118,7 @@ case/
 使用脚本创建：
 
 ```bash
-node scripts/init_env_case.js --case-dir case --target app.js --entry window.makeSign --param sign --api https://example.com/api/search
+node scripts/init_env_case.js --case-dir <项目名> --target app.js --entry window.makeSign --param sign --api https://example.com/api/search
 ```
 
 目录含义：

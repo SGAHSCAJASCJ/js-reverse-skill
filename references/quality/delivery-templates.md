@@ -7,13 +7,13 @@
 ## 硬性要求
 
 1. **最终项目必须干净**
-   最终交付目录不得包含临时文件、测试文件、trace、HAR、hook、指纹采样 Hook、截图、缓存、浏览器 Profile、失败响应、调试日志或空目录。可以保留必要源码模块、配置模板和依赖清单。
+   最终交付目录（`result/`）不得包含临时文件、测试文件、trace、HAR、hook、截图、缓存、浏览器 Profile、调试日志或空目录。case 根目录不得散落调试/抓包/提取脚本（如 `test_debug.js`、`capture_network.py`、`extract_xxx.py`）。取证/调试脚本优先使用 skill 的 `scripts/` 通用脚本；临时脚本放 `case/tmp/`，用完清理。
 
 2. **最终项目必须是规范目录结构**
    允许把补环境、目标入口、请求客户端、配置、工具函数拆成模块，避免把所有代码硬塞进一个超大文件。
 
 3. **最终项目只能有一个执行入口**
-   默认入口为 `case/result/final.js`。如果用户明确选择 Python 请求客户端，可以使用 `case/result/final.py`。
+   默认入口为 `result/final.js`。如果用户明确选择 Python 请求客户端，可以使用 `result/final.py`。
 
    入口执行后必须完成：安装/加载补环境 → 调用目标 JS 入口生成加密参数 → 组装请求 → 用 Node.js / Python TLS 指纹兼容 Session 客户端发送模拟请求 → 输出验证结果 → 销毁 session。
 
@@ -27,13 +27,13 @@
 5. **最终加密参数必须由补环境生成，禁止复用样本值**
    cURL / HAR / fixture 中已有的 sign、token、a_bogus、h5st、x-s、x-t、mtgsig、w_rid 等值只能作为浏览器真实样本和 expected fixture。最终项目不得把这些值硬编码到 `final.js`、请求模块、配置文件或 signer 模块中。入口必须调用补环境后的目标 JS 入口 / signer 重新生成加密参数，再组装请求。
 
-6. **最终请求必须由前置阶段已确认的 Node.js 或 Python Session 客户端完成**
+6. **最终请求必须由前置阶段已确认的 Node.js 或 Python Session 客户端完成（默认行为）**
    最终验证流程必须是：创建 session → 生成加密参数 → 用已确认的 TLS 指纹兼容客户端在同一 session 中组装请求 → 发起少量授权验证请求 → 销毁 session。
 
-   可选客户端为 Node.js CycleTLS / impers / curl-cffi-node，或 Python curl_cffi / cffi_curl / cyCronet；如果用户选择"不发真实请求"，入口只输出本地 sign / 参数和组装后的脱敏请求信息。即使只有一个目标 API，也必须使用 Session 模式，动态资源刷新、Cookie / challenge 生成链路和目标 API 复用同一 Cookie jar / Header / UA / Client Hints / TLS 指纹 / fingerprint baseline。
+   可选客户端为 Node.js CycleTLS / impers / curl-cffi-node，或 Python curl_cffi / cffi_curl / cyCronet。**默认必须发真实 API 请求验证**；仅当用户明确说"只输出参数不验证"时，入口才用 `--sign-only` 跳过 HTTP 请求，只输出本地 sign / 参数和组装后的脱敏请求信息。即使只有一个目标 API，也必须使用 Session 模式，动态资源刷新、Cookie / challenge 生成链路和目标 API 复用同一 Cookie jar / Header / UA / Client Hints / TLS 指纹 / fingerprint baseline。
 
 7. **项目完成后默认生成最终总结**
-   最终交付前必须生成 `case/result/最终项目总结.md`。总结必须读取 `final-summary.md` 的模板要求，使用 `scripts/write_markdown_utf8.js` 以 UTF-8 写入。
+   最终交付前必须生成 `result/最终项目总结.md`。总结必须使用 `scripts/write_markdown_utf8.js` 以 UTF-8 写入，模板见 `references/quality/final-summary.md`。
 
 8. **最终代码必须简洁可读并带中文注释**
    最终补环境代码必须按职责拆分模块，禁止压缩、堆叠、过长函数、过深嵌套和无意义命名。所有手写源码必须有文件头中文职责注释，关键 WebAPI、getter / setter、NativeProtect 保护、fallback、指纹回放和加密入口必须有中文说明。中文注释必须 UTF-8 正常显示，不得包含问号、连续问号或乱码。
@@ -48,7 +48,7 @@
     交付前运行：
 
     ```bash
-    node scripts/write_markdown_utf8.js --input case/tmp/最终项目总结草稿.md --out case/result/最终项目总结.md --require-chinese-name --markdown
+    node scripts/write_markdown_utf8.js --input case/tmp/最终项目总结草稿.md --out result/最终项目总结.md --require-chinese-name --markdown
     node scripts/check_final_artifact.js --case-dir case --markdown
     node scripts/clean_case.js --case-dir case --dry-run --json
     ```
@@ -60,7 +60,7 @@
 目录结构详见 `references/quality/code-style.md` 的"按职责拆模块"段。补充要求：
 
 - `final.js` 是唯一可以直接运行的入口。
-- `package.json` 的 `scripts.start` 只能指向 `node final.js`。
+- [ ] `result/final.js` 无外部依赖文件（有依赖需放 `result/src/` 下）。
 - `src/` 中模块不能直接启动浏览器、启动服务或发起额外批量请求。
 - 不交付 `test/`、`tests/`、`__tests__/`、`tmp/`、`logs/`、`hooks/`、`screenshots/`、`ruyi-trace/`、`browser-profile/`。
 
@@ -69,9 +69,9 @@
 仅当用户明确选择 Python 请求客户端时使用：
 
 ```text
-case/result/
+result/
 ├── final.py                 # 唯一执行入口：python final.py
-├── 最终项目总结.md           # 项目完成后默认生成的 UTF-8 中文命名最终总结
+├── 最终项目总结.md           # 必选：项目总结报告
 ├── requirements.txt         # 可选，仅列运行依赖
 ├── config.example.json      # 可选，脱敏配置模板
 └── src/
@@ -185,19 +185,22 @@ if __name__ == "__main__":
 
 ## 交付前检查清单
 
-- [ ] `case/result/` 是规范项目目录，而不是临时文件堆。
+- [ ] `result/` 是规范项目目录，而不是临时文件堆。
+- [ ] `result/最终项目总结.md` 已生成（必选，不生成 = 任务未完成）。
+- [ ] case 根目录只有 `case/` 和 `result/` 两个子目录，无散落脚本。
 - [ ] 只有一个执行入口：`final.js` 或 `final.py`。
 - [ ] 执行入口可直接运行，并会生成加密参数、使用 Session 发送模拟请求、输出请求结果并销毁 session。
 - [ ] 模块拆分合理，必要源码位于 `src/`。
 - [ ] 补环境代码已运行 `check_code_quality.js`，中文注释 UTF-8 正常、无问号、无连续问号、无乱码。
 - [ ] 项目内任何源码都不包含 ruyiPage / RuyiTrace / Playwright / Puppeteer / Selenium / CDP / WebDriver 自动化代码。
 - [ ] 如涉及 Canvas / WebGL / WebGPU / Audio / 字体 / DOM 几何指纹，最终项目使用真实浏览器采样 fixture + 终端 API 值回放，不依赖 node-canvas / headless-gl / 自动化浏览器。
-- [ ] 最终请求由前置阶段已确认的 Node.js / Python TLS 指纹兼容 Session 客户端发起，或用户明确选择不发真实请求；同一请求链复用 session，结束后销毁。
+- [ ] 最终请求由前置阶段已确认的 Node.js / Python TLS 指纹兼容 Session 客户端发起（默认行为）；仅用户明确说"只输出参数不验证"时才用 `--sign-only` 跳过；同一请求链复用 session，结束后销毁。
 - [ ] fixtures 已通过；动态参数建议三组以上。
 - [ ] 如存在动态 HTML / JS / challenge，已生成 `case/notes/resource-manifest.json`，并运行 `check_dynamic_resources.js --require-runtime-refresh` 通过。
 - [ ] 动态快照未复制进 `result/`；最终入口会运行时刷新当前资源。
 - [ ] Cookie、token、Authorization、localStorage 等敏感值已脱敏或仅由用户本地配置，不明文写入报告。
 - [ ] 临时 trace、hook、日志、HAR、截图、Profile、缓存和测试文件已清理。
+- [ ] `case/tmp/` 下的调试/抓包/提取脚本已清理。
 - [ ] 已运行 `check_code_quality.js`、`check_fingerprint_fixture.js`，已生成 UTF-8 `result/最终项目总结.md`，并运行 `check_final_artifact.js` 和 `clean_case.js --dry-run`，且已手动复核 NativeProtect 保护证据。
 
 ## 补环境真实性交付检查

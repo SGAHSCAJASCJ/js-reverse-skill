@@ -11,6 +11,7 @@ Python TLS 指纹兼容客户端模板
     - final.py 中必须使用 create_request_session + try-finally close
     - 不得使用普通 requests / httpx / urllib3 发送最终业务请求
     - 仅用于授权范围内的少量最终验证请求，不用于批量访问
+    - 【默认强制】默认向真实 API 发请求验证（≥5 次交叉验证），仅当用户明确说"只输出参数"时才用 --sign-only 跳过
 """
 
 from __future__ import annotations

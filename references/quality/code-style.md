@@ -13,77 +13,21 @@
    不要把所有补环境逻辑塞进一个 `env.js`。推荐结构：
 
    ```text
-   case/result/
-   ├── final.js
-   ├── 最终项目总结.md
+   result/
+   ├── final.js                 # 唯一执行入口
+   ├── 最终项目总结.md           # 必选：项目总结报告
    └── src/
-       ├── env/
+       ├── signer.js            # 签名生成
+       ├── env/                 # 补环境模块（路径 D 时，按需拆分子文件）
        │   ├── install-env.js
-       │   ├── native-api.js
-       │   ├── manifest.js
-       │   ├── core/
-       │   │   ├── descriptors.js
-       │   │   └── cookie-store.js
-       │   ├── browser-objects/
-       │   │   ├── window.js
-       │   │   ├── navigator.js
-       │   │   ├── document.js
-       │   │   ├── location.js
-       │   │   ├── screen.js
-       │   │   ├── xhr.js
-       │   │   └── storage.js
-       │   └── fingerprint/
-       │       ├── canvas.js
-       │       ├── webgl.js
-       │       └── dom-geometry.js
-       ├── target/
-       │   └── entry.js
-       ├── request/
-       │   └── client.js
-       └── utils/
-           └── normalize.js
+       │   ├── navigator.js
+       │   ├── document.js
+       │   └── ...
+       └── request/             # 请求客户端
+           └── client.js
    ```
 
-   如果需要 Node 诊断执行器、runtime probe 或高强度检测的本地执行器，应继续拆成下列职责：
-
-   ```text
-   case/result/src/
-   ├── signer/
-   │   ├── runtime_signer.py
-   │   └── akamai_runtime_probe.js      # 只做入口和编排，建议少于 150 行
-   └── node-runtime/
-       ├── bootstrap/
-       │   ├── read-stdin.js
-       │   ├── execute-script.js
-       │   └── result-recorder.js
-       ├── utils/
-       │   ├── hash.js
-       │   ├── sanitize-url.js
-       │   └── body-summary.js
-       └── env/
-           ├── install-env.js
-           ├── native-api.js
-           ├── node-leakage.js
-           ├── browser-objects/
-           │   ├── window.js
-           │   ├── navigator.js
-           │   ├── document.js
-           │   ├── location.js
-           │   ├── history.js
-           │   ├── screen.js
-           │   ├── storage.js
-           │   ├── performance.js
-           │   └── events.js
-           ├── fingerprint/
-           │   ├── canvas.js
-           │   ├── webgl.js
-           │   ├── audio.js
-           │   └── dom-geometry.js
-           └── network/
-               ├── xhr.js
-               ├── fetch.js
-               └── beacon.js
-   ```
+   生产级交付时可进一步拆分（如 `env/fingerprint/`、`env/browser-objects/` 等），快速解题保持简洁即可。
 
 3. **signer / probe 不得承载补环境主体**
    `src/signer/`、`src/request/`、`src/resources/`、`runtime_probe.js`、`probe.js`、`runner.js`、`diagnostic.js` 等文件只允许做编排、进程入口、请求封装、资源刷新或安全摘要输出；只要文件内实现了 `navigator`、`document`、`window`、`screen`、`Storage`、`XMLHttpRequest`、`fetch`、`Canvas`、`WebGL`、`Audio`、`performance`、DOM 构造链、事件系统等浏览器 WebAPI 主体，就必须拆入 `src/env/` 或 `src/node-runtime/env/` 下的真实模块。不得因为文件名叫 probe、runtime、signer 或 diagnostic 就豁免模块化要求。

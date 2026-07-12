@@ -1,10 +1,22 @@
-# trace 流程：ruyipage 取证 + RuyiTrace 采集 + 日志逆向
+# trace 流程：ruyipage 网络取证（Step 1）+ RuyiTrace 日志采集（Step 2）
 
-> **触发条件**：执行 Phase 1-3 取证/采集/分析时读。本文档是统一流程的展开，所有 case 一律走此路径。
+> **触发条件**：执行 Phase 1-2 取证/采集时读。本文档是两步取证流程的展开，所有 case 一律走此路径。
 
-## 适用条件
+## 总览
 
-所有网页端 JS 逆向任务一律通过 ruyipage + RuyiTrace 采集运行时日志，基于日志证据逆向还原。不再区分场景级别——标准算法签名、自定义算法、JSVMP 强风控都走同一条路径。
+```
+Step 1: ruyipage 网络取证（Phase 1）
+  → 抓网络包（HAR）+ 下载 JS 文件 + Cookie + 指纹基线
+  → 建立网站轮廓，识别反爬类型，定位加密参数
+
+Step 2: RuyiTrace 日志采集（Phase 2）
+  → 采集 NDJSON 运行时 DOM/JS API 调用日志
+  → 环境指纹采集，调用链追踪，补环境证据
+```
+
+这两步是 ruyiTrace 官方提示词模板的标准流程，两者互补：
+- ruyipage 提供网络包和 JS 文件（"网站轮廓"）
+- RuyiTrace 提供运行时日志（"DOM/JS API 调用细节"）
 
 ## ruyipage 取证流程
 
@@ -174,9 +186,9 @@ node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir case --tr
 
 摘要中出现 `## 长字段截断风险` 时，后续分析要先处理完整值补采问题，再判断参数长度、结构、hash、编码或是否可复现。
 
-## 根据 RuyiTrace 日志逆向分析
+## 根据 RuyiTrace 日志逆向分析（Phase 3）
 
-日志导入后按以下顺序分析。所有 case 必须先完成本节，再进入 Node.js 缺失环境追踪：
+日志导入后按以下顺序分析。所有 case 必须先完成 Step 1（ruyipage 网络包）+ Step 2（RuyiTrace NDJSON），再进入 Node.js 缺失环境追踪：
 
 1. 统计 `api` 调用频率，优先处理高频或和目标参数生成邻近的 API。
 2. 按 `stack.file / line / col` 聚合，定位具体 JS 文件和函数。
@@ -210,7 +222,7 @@ node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir case --tr
 
 ## RuyiTrace 优先诊断原则
 
-RuyiTrace NDJSON 不是可选参考，而是逆向分析的优先证据源：
+> RuyiTrace NDJSON 不是可选参考，而是逆向分析的优先证据源。必须先完成 Step 1（ruyipage 网络取证）拿到 JS 文件和网络包，再进行 Step 2（RuyiTrace 日志采集）。
 
 1. 进入 Node.js 补环境前，必须先确认是否已经采集并导入 RuyiTrace NDJSON。
 2. 如果已有 NDJSON，先运行 `import_ruyitrace_log.js` 生成 `notes/ruyitrace-summary.md`，再阅读摘要和必要的原始日志片段。

@@ -8,15 +8,17 @@
  *   4. signer 与 request 分离
  *   5. Session 模式：同一 session 复用 Cookie / TLS 上下文
  *   6. 仅用于授权范围内的少量最终验证请求
+ *   7. 【默认强制】默认向真实 API 发请求验证（≥5 次交叉验证），仅当用户明确说"只输出参数"时
+ *      才用 --sign-only 跳过 HTTP 请求。不得以"签名生成了"作为交付完成的判定标准。
  *
  * 并发注意：本模板为单次签名设计。signer 通常持有 vm context / WASM 实例 / Cookie 状态，
  * 非无状态。高并发场景需调用方自行池化 signer 实例（多个独立 vm context），
  * 不要跨线程/进程共享同一 signer。详见 references/workflow/common-pitfalls.md 反模式 7。
  *
  * 使用方式：
- *   node result/final.js                          # 默认运行一次
- *   node result/final.js --verify 5               # 交叉验证 5 次
- *   node result/final.js --no-real-request        # 不发真实请求，只输出 sign
+ *   node result/final.js                          # 默认：发真实 API 请求，验证 1 次
+ *   node result/final.js --verify 5               # 发真实 API 请求，交叉验证 5 次
+ *   node result/final.js --sign-only              # 仅输出签名，不发真实请求（需用户明确指定）
  *   node result/final.js --cookie "name=value"    # 注入用户 cookie
  */
 
@@ -100,7 +102,7 @@ function parseArgs() {
     if (args[i] === '--verify' && args[i + 1]) {
       opts.verify = parseInt(args[i + 1], 10);
       i++;
-    } else if (args[i] === '--no-real-request') {
+    } else if (args[i] === '--sign-only' || args[i] === '--no-real-request') {
       opts.noRealRequest = true;
     } else if (args[i] === '--cookie' && args[i + 1]) {
       opts.userCookie = args[i + 1];
@@ -121,7 +123,7 @@ async function main() {
   console.log(`UA: ${CONFIG.USER_AGENT}`);
   console.log(`TLS 客户端: ${CONFIG.IMPERSONATE}`);
   console.log(`验证次数: ${opts.verify}`);
-  console.log(`发送真实请求: ${!opts.noRealRequest}`);
+  console.log(`发送真实请求: ${opts.noRealRequest ? '否（--sign-only）' : '是（默认）'}`);
 
   // ----- 1. 安装补环境 -----
   const env = installEnv({
@@ -131,9 +133,9 @@ async function main() {
   });
   console.log(`补环境来源: ${env.source}`);
 
-  // ----- 2. 不发真实请求模式 -----
+  // ----- 2. 仅输出签名模式（需用户明确指定 --sign-only）-----
   if (opts.noRealRequest) {
-    console.log('\n--- 仅输出签名（不发真实请求）---');
+    console.log('\n--- 仅输出签名（--sign-only，不发真实请求）---');
     for (let i = 0; i < opts.verify; i++) {
       const params = buildParams();
       const sign = generateSign(params, env);
