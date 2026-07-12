@@ -14,13 +14,14 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--types') args.types = argv[++i] || args.types;
-    else if (a === '--out') args.out = argv[++i] || '';
-    else if (a === '--api-pattern') args.apiPattern = argv[++i] || '';
-    else if (a === '--chunk-size') args.chunkSize = Number(argv[++i] || args.chunkSize);
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--types') args.types = nextVal(undefined) || args.types;
+    else if (a === '--out') args.out = nextVal('');
+    else if (a === '--api-pattern') args.apiPattern = nextVal('');
+    else if (a === '--chunk-size') args.chunkSize = Number(nextVal(undefined) || args.chunkSize);
     else if (a === '--max-data-url-length') {
       // 兼容旧参数名：历史版本用它裁剪 dataURL；当前版本严禁裁剪，只把它当作“分片大小”。
-      args.deprecatedMaxDataUrlLength = Number(argv[++i] || args.chunkSize);
+      args.deprecatedMaxDataUrlLength = Number(nextVal(undefined) || args.chunkSize);
       args.chunkSize = args.deprecatedMaxDataUrlLength;
     }
     else if (a === '--help' || a === '-h') args.help = true;

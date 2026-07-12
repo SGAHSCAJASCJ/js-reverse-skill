@@ -9,8 +9,9 @@ function parseArgs(argv) {
   const args = { python: 'python', installDir: '', install: false, installPackage: false, json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--python') args.python = argv[++i] || 'python';
-    else if (a === '--install-dir') args.installDir = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--python') args.python = nextVal('python');
+    else if (a === '--install-dir') args.installDir = nextVal('');
     else if (a === '--install') args.install = true;
     else if (a === '--install-package') args.installPackage = true;
     else if (a === '--json') args.json = true;

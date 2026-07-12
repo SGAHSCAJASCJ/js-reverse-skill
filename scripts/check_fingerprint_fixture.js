@@ -8,10 +8,11 @@ function parseArgs(argv) {
   const args = { caseDir: '', fixture: '', envFile: '', require: '', json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = argv[++i] || '';
-    else if (a === '--fixture') args.fixture = argv[++i] || '';
-    else if (a === '--env-file') args.envFile = argv[++i] || '';
-    else if (a === '--require') args.require = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = nextVal('');
+    else if (a === '--fixture') args.fixture = nextVal('');
+    else if (a === '--env-file') args.envFile = nextVal('');
+    else if (a === '--require') args.require = nextVal('');
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;

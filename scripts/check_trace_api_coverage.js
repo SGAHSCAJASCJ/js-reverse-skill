@@ -28,9 +28,10 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = argv[++i] || '';
-    else if (a === '--inventory') args.inventory = argv[++i] || '';
-    else if (a === '--matrix') args.matrix = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = nextVal('');
+    else if (a === '--inventory') args.inventory = nextVal('');
+    else if (a === '--matrix') args.matrix = nextVal('');
     else if (a === '--require-stage-audit') args.requireStageAudit = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;

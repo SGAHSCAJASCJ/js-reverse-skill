@@ -8,11 +8,12 @@ function parseArgs(argv) {
   const args = { caseDir: '', target: '', entry: '', param: '', api: '', force: false, json: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = argv[++i] || '';
-    else if (a === '--target') args.target = argv[++i] || '';
-    else if (a === '--entry') args.entry = argv[++i] || '';
-    else if (a === '--param') args.param = argv[++i] || '';
-    else if (a === '--api') args.api = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = nextVal('');
+    else if (a === '--target') args.target = nextVal('');
+    else if (a === '--entry') args.entry = nextVal('');
+    else if (a === '--param') args.param = nextVal('');
+    else if (a === '--api') args.api = nextVal('');
     else if (a === '--force') args.force = true;
     else if (a === '--json') args.json = true;
     else if (a === '--help' || a === '-h') args.help = true;

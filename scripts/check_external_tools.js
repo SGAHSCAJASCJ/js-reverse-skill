@@ -19,11 +19,12 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--python') args.python = argv[++i] || '';
-    else if (a === '--ruyitrace-home') args.ruyitraceHome = argv[++i] || '';
-    else if (a === '--ruyitrace-exe') args.ruyitraceExe = argv[++i] || '';
-    else if (a === '--ruyipage-install-dir') args.ruyiPageInstallDir = argv[++i] || '';
-    else if (a === '--ruyipage-browser-path') args.ruyiPageBrowserPath = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--python') args.python = nextVal('');
+    else if (a === '--ruyitrace-home') args.ruyitraceHome = nextVal('');
+    else if (a === '--ruyitrace-exe') args.ruyitraceExe = nextVal('');
+    else if (a === '--ruyipage-install-dir') args.ruyiPageInstallDir = nextVal('');
+    else if (a === '--ruyipage-browser-path') args.ruyiPageBrowserPath = nextVal('');
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--quick') args.quick = true;

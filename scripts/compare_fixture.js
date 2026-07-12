@@ -7,11 +7,12 @@ function parseArgs(argv) {
   const args = { fixture: '', actual: '', field: '', expectedPath: '', actualPath: '', json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--fixture') args.fixture = argv[++i] || '';
-    else if (a === '--actual') args.actual = argv[++i] || '';
-    else if (a === '--field') args.field = argv[++i] || '';
-    else if (a === '--expected-path') args.expectedPath = argv[++i] || '';
-    else if (a === '--actual-path') args.actualPath = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--fixture') args.fixture = nextVal('');
+    else if (a === '--actual') args.actual = nextVal('');
+    else if (a === '--field') args.field = nextVal('');
+    else if (a === '--expected-path') args.expectedPath = nextVal('');
+    else if (a === '--actual-path') args.actualPath = nextVal('');
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
