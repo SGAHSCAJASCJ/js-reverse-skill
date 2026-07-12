@@ -1,8 +1,29 @@
 const { runPatternPass } = require("./shared-pattern-pass");
 const { inlineStringMethodCalls, traverse, t } = require("./pattern-utils");
 
+function hasDynamicAccess(ast) {
+  let found = false;
+  traverse(ast, {
+    MemberExpression(p) {
+      if (p.node.computed && !p.get("property").isLiteral()) { found = true; p.stop(); }
+    },
+    WithStatement(p) { found = true; p.stop(); },
+    "CallExpression|NewExpression"(p) {
+      const callee = p.node.callee;
+      if (callee && callee.type === "Identifier" && (callee.name === "eval" || callee.name === "Function")) {
+        found = true; p.stop();
+      }
+    },
+  });
+  return found;
+}
+
 function pruneUnusedTopLevel(ast) {
   let changed = false;
+
+  // 保守策略：只要代码里存在动态属性访问（computed 非字面量键）、with、或 eval/Function，
+  // 就可能无法静态判定顶层声明是否被引用，此时保留全部声明，避免误删破坏产物。
+  if (hasDynamicAccess(ast)) return false;
 
   traverse(ast, {
     Program(path) {
