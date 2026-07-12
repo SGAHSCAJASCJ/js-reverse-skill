@@ -15,8 +15,9 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = argv[++i];
-    else if (a === '--file' || a === '-f') args.file = argv[++i];
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = nextVal(undefined);
+    else if (a === '--file' || a === '-f') args.file = nextVal(undefined);
     else if (a === '--no-require-final-summary' || a === '--allow-no-final-summary') {
       args.requireFinalSummary = false;
       args.finalSummaryOptOut = true;
@@ -295,11 +296,17 @@ function collectSampleCryptoValues(caseDir) {
 
 function inspectReusedSampleCryptoValues(caseDir, resultFiles, textFiles) {
   const sampleValues = collectSampleCryptoValues(caseDir);
+  const textCache = new Map();
+  for (const f of textFiles) {
+    let text = '';
+    try { text = readText(f); } catch (_) { text = ''; }
+    textCache.set(f, text);
+  }
   const reused = [];
   for (const sample of sampleValues) {
     for (const f of textFiles) {
-      const text = readText(f);
-      if (text.includes(sample.value)) reused.push({ file: rel(caseDir, f), name: sample.name, value: sample.masked, source: sample.sourceFile, sourcePath: sample.sourcePath });
+      const text = textCache.get(f);
+      if (text && text.includes(sample.value)) reused.push({ file: rel(caseDir, f), name: sample.name, value: sample.masked, source: sample.sourceFile, sourcePath: sample.sourcePath });
     }
   }
   const hardcoded = [];
