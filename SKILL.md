@@ -209,7 +209,7 @@ js-reverse-skill/
 
 ### 识别标准动作
 ```text
-第一步：ruyipage navigate(url) → 读 redirect_chain + final_status + 下载 JS 文件
+第一步：用 `scripts/forensic_ruyipage.py` 通用脚本抓包 → 读 redirect_chain + final_status + JS 落盘 case/js/original/
 第二步：按特征判断（412循环=签名型 / webmssdk=行为型 / _0x=纯混淆 / WebAssembly.instantiate=WASM）
 第三步：JSVMP 类型不确定时，对照 RuyiTrace NDJSON 的 api 调用频率和 stack 分布
 ```
@@ -268,12 +268,20 @@ case 根目录只允许两个子目录：
 
 > 用户提供 cURL/HAR + JS 文件时，跳过 1.1 抓包，从 1.2 开始。
 
-**1.1 ruyipage 抓包**（一次抓完，不复抓）：
-1. ruyipage `page.capture.start(targets="<接口关键词>", collect_bodies=True)` → `page.get(URL)` → 等待加载
-2. 收集：网络包（HAR）、Cookie、JS 文件 URL、响应状态码
-3. 下载目标 JS 文件到 `case/js/original/`
-4. 写入指纹基线 `case/notes/fingerprint-baseline.json`
-5. 抓包结果复用到 Phase 2 RuyiTrace 采集 + Phase 3 日志分析，**不重抓**
+**1.1 ruyipage 抓包**（一次抓完，不复抓；必须用通用脚本，禁止手写）：
+
+> 直接运行通用脚本 `scripts/forensic_ruyipage.py`，它会自动满足所有启动硬约束、用 `targets=True` 抓全部包（事后从 `steps` 过滤，避免漏抓 JS 文件）、把 JS 落盘到 `case/js/original/`、并写出 `case/notes/fingerprint-baseline.json`。**不要为每个 case 手写取证脚本**——历史已证明会踩 `get_all` / `wait(count=1)` 返回单对象 / `targets="<接口关键词>"` 子串过滤等 API 坑，且会漏抓 JS 文件。
+> ```bash
+> python scripts/forensic_ruyipage.py --url <目标页> --targets "feed/hot" --browser-path <定制Firefox> --markdown
+> # 仅检测环境并打印计划（不启动浏览器）：
+> python scripts/forensic_ruyipage.py --url <目标页> --dry-run --markdown
+> ```
+> 输出：`case/forensic/capture.json`（全部包元数据）、`case/forensic/target-hits.json`（目标命中，含响应体截断）、`case/js/original/`（JS 文件）、`case/notes/fingerprint-baseline.json`。
+1. 运行上述通用脚本完成抓包（一次抓完，不复抓）。
+2. 收集：网络包（HAR）、Cookie、JS 文件 URL、响应状态码——均来自脚本输出。
+3. 目标 JS 文件已由脚本落盘到 `case/js/original/`，无需再用 `requests` 重新下载（会丢失指纹上下文）。
+4. 指纹基线已由脚本写入 `case/notes/fingerprint-baseline.json`。
+5. 抓包结果复用到 Phase 2 RuyiTrace 采集 + Phase 3 日志分析，**不重抓**。
 
 **1.2 反爬类型识别**（基于抓包结果）：
 - 响应码 412 循环 → 签名型 → 补环境
