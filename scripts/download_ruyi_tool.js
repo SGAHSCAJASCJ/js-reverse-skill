@@ -11,6 +11,11 @@ const REPOS = {
   'ruyipage-firefox': { owner: 'LoseNine', repo: 'ruyipage', asset: null },
 };
 
+// 透明代理自签 CA 场景可显式开启（默认关闭，强制 TLS 校验）
+const TLS_OPTS = process.env.RUYI_INSECURE_TLS === '1'
+  ? { rejectUnauthorized: false }
+  : {};
+
 function parseArgs(argv) {
   const args = { tool: '', dest: '', extract: false, dryRun: false, json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
@@ -38,12 +43,113 @@ function usage() {
 说明：仅在用户确认后下载。--extract 自动解压 zip 到 dest 目录（Windows 用 Expand-Archive）。`;
 }
 
+// ----- URL 安全校验（SSRF / file:// / 明文 防御）-----
+function isPrivateHost(host) {
+  const h = host.toLowerCase();
+  if (h === 'localhost' || h.endsWith('.localhost') || h === '[::1]' || h === '::1') return true;
+  if (/^127\./.test(h) || h === '0.0.0.0') return true;
+  if (/^10\./.test(h)) return true;
+  if (/^192\.168\./.test(h)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+  if (/^169\.254\./.test(h)) return true; // 含云元数据 169.254.169.254
+  return false;
+}
+
+function assertSafeUrl(url) {
+  let u;
+  try { u = new URL(url); } catch { throw new Error(`非法 URL：${url}`); }
+  if (u.protocol !== 'https:') throw new Error(`仅允许 https（拒绝明文/文件协议）：${url}`);
+  if (isPrivateHost(u.hostname)) throw new Error(`拒绝访问内网 / 云元数据地址：${url}`);
+  return u;
+}
+
+function httpsGet(url, options = {}) {
+  const u = assertSafeUrl(url);
+  return new Promise((resolve, reject) => {
+    const req = https.get(u, Object.assign({ headers: { 'User-Agent': 'web-js-env-patcher-skill' }, timeout: options.timeout || 60000 }, TLS_OPTS), (res) => {
+      const { statusCode, headers } = res;
+      if (statusCode >= 300 && statusCode < 400 && headers.location) {
+        res.resume();
+        if ((options.redirects || 0) >= 5) return reject(new Error('重定向次数过多，拒绝继续'));
+        const next = new URL(headers.location, u).href;
+        return resolve(httpsGet(next, Object.assign({}, options, { redirects: (options.redirects || 0) + 1 })));
+      }
+      if (statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${statusCode}：${url}`));
+      }
+      resolve(res);
+    });
+    req.on('timeout', () => req.destroy(new Error('请求超时')));
+    req.on('error', reject);
+  });
+}
+
+function getJson(url) {
+  return httpsGet(url, { timeout: 60000 }).then(res => new Promise((resolve, reject) => {
+    let data = '';
+    res.setEncoding('utf8');
+    res.on('data', c => { data += c; });
+    res.on('end', () => {
+      try { resolve(JSON.parse(data)); } catch (err) { reject(new Error(`JSON 解析失败：${err.message}`)); }
+    });
+    res.on('error', reject);
+  }));
+}
+
+function downloadFile(url, file) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  return httpsGet(url, { timeout: 1800000 }).then(res => new Promise((resolve, reject) => {
+    const ws = fs.createWriteStream(file);
+    res.pipe(ws);
+    ws.on('finish', () => resolve(file));
+    ws.on('error', reject);
+  }));
+}
+
+// ----- 资产名净化（防 Zip Slip / 路径穿越）-----
+function sanitizeAssetName(name) {
+  const base = path.basename(String(name || ''));
+  if (!base || base === '.' || base === '..') throw new Error(`非法资产名：${name}`);
+  if (/[\\/]/.test(base)) throw new Error(`资产名含路径分隔符：${name}`);
+  if (!/^[A-Za-z0-9._-]+$/.test(base)) throw new Error(`资产名含非法字符：${name}`);
+  return base;
+}
+
+// ----- 解压 + Zip Slip 校验 -----
+function assertTreeInside(root) {
+  const rootReal = fs.realpathSync(root);
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries = [];
+    try { entries = fs.readdirSync(dir); } catch { continue; }
+    for (const name of entries) {
+      const p = path.join(dir, name);
+      const real = fs.realpathSync(p);
+      if (real !== rootReal && !real.startsWith(rootReal + path.sep)) {
+        throw new Error(`Zip Slip：条目越界：${p} -> ${real}`);
+      }
+      let st;
+      try { st = fs.lstatSync(p); } catch { continue; }
+      if (st.isDirectory() && !st.isSymbolicLink()) stack.push(p);
+    }
+  }
+}
+
 function extractZip(zipFile, destDir) {
+  if (/[\0]/.test(zipFile) || /[\0]/.test(destDir)) throw new Error('路径含非法字符（空字节）');
   fs.mkdirSync(destDir, { recursive: true });
-  const ret = spawnSync('powershell', [
-    '-NoProfile', '-NonInteractive', '-Command',
-    `Expand-Archive -Path '${zipFile}' -DestinationPath '${destDir}' -Force`,
-  ], { encoding: 'utf8', timeout: 120000, windowsHide: true });
+
+  let ret;
+  if (process.platform === 'win32') {
+    // 使用 PowerShell here-string（@'...'@）嵌入路径，内容不被解析，杜绝单引号注入
+    const cmd = `Expand-Archive -LiteralPath @'\n${zipFile}\n'@ -DestinationPath @'\n${destDir}\n'@ -Force`;
+    ret = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', cmd], { encoding: 'utf8', timeout: 120000, windowsHide: true });
+  } else {
+    ret = spawnSync('unzip', ['-o', zipFile, '-d', destDir], { encoding: 'utf8', timeout: 120000, windowsHide: true });
+  }
+
   if (ret.status !== 0) {
     return {
       ok: false,
@@ -52,6 +158,10 @@ function extractZip(zipFile, destDir) {
       error: ret.error ? ret.error.message : '',
     };
   }
+
+  // Zip Slip 兜底：解压后校验所有条目真实路径均落在 destDir 内
+  assertTreeInside(destDir);
+
   // 修复嵌套目录：zip 内部可能有一个与 destDir 同名的根目录（如 RuyiTrace.zip → RuyiTrace/）
   const entries = fs.readdirSync(destDir);
   const dirName = path.basename(destDir);
@@ -62,19 +172,7 @@ function extractZip(zipFile, destDir) {
     }
     fs.rmdirSync(nestedDir);
   }
-  return {
-    ok: true,
-    stdout: (ret.stdout || '').trim(),
-    stderr: (ret.stderr || '').trim(),
-    error: '',
-  };
-}
-
-function getJson(url) {
-  // 用 curl 代替 Node.js https.get，避免透明代理自签 CA 导致的 TLS 校验失败
-  const ret = spawnSync('curl', ['-sk', '-L', '--max-time', '60', '-H', 'User-Agent: web-js-env-patcher-skill', url], { encoding: 'utf8', timeout: 90000, windowsHide: true });
-  if (ret.status !== 0 || !ret.stdout) throw new Error(`请求失败：${ret.stderr || ret.error || ret.stdout || ''}`);
-  try { return JSON.parse(ret.stdout); } catch (err) { throw new Error(`JSON 解析失败：${err.message}`); }
+  return { ok: true, stdout: (ret.stdout || '').trim(), stderr: (ret.stderr || '').trim(), error: '' };
 }
 
 function pickRuyiPageAsset(assets) {
@@ -92,34 +190,28 @@ function selectAsset(tool, assets) {
 function mirrorUrl(url) {
   const mirror = process.env.GITHUB_MIRROR || '';
   if (!mirror) return url;
-  // 只代理 github.com 的下载 URL（release asset），不代理 api.github.com
-  // 原因：ghproxy 等镜像只转发 releases/download 路径，api.github.com 返回 403
+  // 仅代理 github.com 的下载 URL（release asset），不代理 api.github.com
   if (url.startsWith('https://github.com/') || url.startsWith('http://github.com/')) {
-    return mirror.replace(/\/$/, '') + '/' + url;
+    const prefixed = mirror.replace(/\/$/, '') + '/' + url;
+    try { assertSafeUrl(prefixed); } catch { return url; } // 镜像不合规则回退直连
+    return prefixed;
   }
   return url;
 }
 
-function downloadFile(url, file) {
-  // 用 curl 代替 Node.js https.get，避免透明代理自签 CA 导致的 TLS 校验失败
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const ret = spawnSync('curl', ['-sk', '-L', '--max-time', '1800', '-o', file, url], { encoding: 'utf8', timeout: 1800000, windowsHide: true });
-  if (ret.status !== 0 || !fs.existsSync(file)) throw new Error(`下载失败：${ret.stderr || ret.error || ''}`);
-  return file;
-}
-
-function plan(args) {
+async function plan(args) {
   if (!args.tool || !REPOS[args.tool]) throw new Error(`必须提供 --tool，可选：${Object.keys(REPOS).join(', ')}`);
   if (!args.dest) throw new Error('必须提供 --dest');
   const repo = REPOS[args.tool];
   const apiUrl = mirrorUrl(`https://api.github.com/repos/${repo.owner}/${repo.repo}/releases/latest`);
-  const release = getJson(apiUrl);
+  const release = await getJson(apiUrl);
   const asset = selectAsset(args.tool, release.assets || []);
   if (!asset) throw new Error(`未找到适合当前工具 / 平台的 release asset：${args.tool}`);
+  const safeName = sanitizeAssetName(asset.name);
   const destDir = path.resolve(args.dest);
-  const file = path.join(destDir, asset.name);
-  const isZip = /\.zip$/i.test(asset.name);
-  const extractDir = isZip ? path.join(destDir, asset.name.replace(/\.zip$/i, '')) : '';
+  const file = path.join(destDir, safeName);
+  const isZip = /\.zip$/i.test(safeName);
+  const extractDir = isZip ? path.join(destDir, safeName.replace(/\.zip$/i, '')) : '';
   const downloadUrl = mirrorUrl(asset.browser_download_url);
   const result = {
     tool: args.tool,
@@ -127,7 +219,7 @@ function plan(args) {
     releaseName: release.name || '',
     tagName: release.tag_name || '',
     releaseUrl: release.html_url || '',
-    assetName: asset.name,
+    assetName: safeName,
     assetSize: asset.size,
     downloadUrl,
     mirror: process.env.GITHUB_MIRROR || '',
@@ -138,7 +230,7 @@ function plan(args) {
     extracted: false,
   };
   if (!args.dryRun) {
-    downloadFile(downloadUrl, file);
+    await downloadFile(downloadUrl, file);
     result.downloaded = true;
     if (args.extract && isZip) {
       const ex = extractZip(file, extractDir);
@@ -164,16 +256,23 @@ function renderMarkdown(result) {
   return lines.join('\n') + '\n';
 }
 
-function main() {
+async function main() {
+  if (process.env.RUYI_INSECURE_TLS === '1') {
+    console.error('[警告] RUYI_INSECURE_TLS=1：已关闭 TLS 证书校验，仅限可信内网透明代理场景。');
+  }
   const args = parseArgs(process.argv);
   if (args.help) { console.log(usage()); return; }
-  const result = plan(args);
+  const result = await plan(args);
   if (args.json) console.log(JSON.stringify(result, null, 2));
   if (args.markdown) process.stdout.write(renderMarkdown(result));
 }
 
 try {
-  main();
+  main().catch((err) => {
+    console.error(err.message || String(err));
+    console.error(usage());
+    process.exit(1);
+  });
 } catch (err) {
   console.error(err.message || String(err));
   console.error(usage());
