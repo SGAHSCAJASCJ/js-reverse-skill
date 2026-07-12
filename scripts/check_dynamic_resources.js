@@ -16,8 +16,9 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--case-dir' || a === '--case' || a === '-d') args.caseDir = argv[++i] || 'case';
-    else if (a === '--manifest') args.manifest = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--case-dir' || a === '--case' || a === '-d') args.caseDir = nextVal('case');
+    else if (a === '--manifest') args.manifest = nextVal('');
     else if (a === '--require-runtime-refresh') args.requireRuntimeRefresh = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
@@ -248,7 +249,7 @@ function inspect(caseDir, args) {
       const refreshNames = report.resources
         .filter(r => r.dynamic && r.requiredForFinal && r.refreshEntry)
         .map(r => path.basename(r.refreshEntry).replace(/\.[^.]+$/, ''))
-        .filter(Boolean);
+        .filter(Boolean); // 空 basename（如 refreshEntry 指向目录）会产生 new RegExp('') 恒匹配，需剔除
       const hasRefreshSignal = /fetchRuntimeResources|refreshRuntimeResources|loadRuntimeResources|resourceManifest|运行时刷新|动态资源/.test(finalText)
         || refreshNames.some(name => new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(finalText));
       if (!hasRefreshSignal) {
