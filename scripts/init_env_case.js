@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 function parseArgs(argv) {
-  const args = { caseDir: '', target: '', entry: '', param: '', api: '', force: false, json: false };
+  const args = { caseDir: '', target: '', entry: '', param: '', api: '', force: false, json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
@@ -14,11 +14,13 @@ function parseArgs(argv) {
     else if (a === '--entry') args.entry = nextVal('');
     else if (a === '--param') args.param = nextVal('');
     else if (a === '--api') args.api = nextVal('');
-    else if (a === '--force') args.force = true;
+    else     if (a === '--force') args.force = true;
     else if (a === '--json') args.json = true;
+    else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
     else throw new Error(`未知参数：${a}`);
   }
+  if (!args.json && !args.markdown) args.markdown = true;
   return args;
 }
 
@@ -356,7 +358,7 @@ try {
   if (args.help) { console.log(usage()); process.exit(0); }
   const result = initCase(args);
   if (args.json) console.log(JSON.stringify(result, null, 2));
-  else process.stdout.write(render(result));
+  if (args.markdown) process.stdout.write(render(result));
 } catch (err) {
   console.error(err.message || String(err));
   console.error(usage());
