@@ -228,8 +228,10 @@ def _eval_js(page, expr: str) -> Tuple[Any, Optional[str]]:
 def _trigger_actions(page, args: argparse.Namespace, human: str) -> None:
     if args.scroll:
         try:
-            page.scroll(0, int(args.scroll))
-            logger.info("已滚动 %s px", args.scroll)
+            amt = int(args.scroll)
+            # page.scroll 是 PageScroller 属性（非方法）；向下滚动 amt 像素
+            page.scroll.down(amt)
+            logger.info("已向下滚动 %s px", amt)
         except Exception as e:
             logger.warning("scroll 失败：%s", e)
     if args.click:
@@ -261,7 +263,124 @@ def build_options(args: argparse.Namespace, browser_path: str):
     return opts
 
 
+def _classify_packets(steps, args, substrings, regexes):
+    """遍历抓包 steps，分离三类产物。
+
+    - records_meta：每包 to_dict(include_bodies=False)，用于 capture.json（不含正文，安全可序列化）
+    - js_records：识别为 JS 的包，response_body 落盘到 case/js/original/
+    - target_hits：命中 --targets/--targets-regex 的包，body 转字符串并按阈值截断
+
+    返回 (records_meta, js_records, target_hits, js_dir)。
+    """
+    records_meta = [p.to_dict(include_bodies=False) for p in steps]
+    js_records = []
+    target_hits = []
+    js_dir = os.path.join(args.case_dir, "js", "original")
+    os.makedirs(js_dir, exist_ok=True)
+    for p in steps:
+        d = p.to_dict(include_bodies=True)
+        if is_js_packet(d):
+            body = _safe_body(d.get("response_body"))
+            fname = sanitize_filename(d.get("url", ""))
+            fpath = os.path.join(js_dir, fname)
+            with open(fpath, "wb") as f:
+                f.write(body)
+            js_records.append({
+                "url": d.get("url"),
+                "status": d.get("response_status"),
+                "saved_to": os.path.relpath(fpath, args.out_dir),
+                "size": len(body),
+                "source_mapping_url": extract_sourcemap(body),
+            })
+        if match_targets(d, substrings, regexes):
+            body = _safe_body(d.get("response_body"))
+            if len(body) > args.max_body_bytes:
+                d["response_body"] = body[:args.max_body_bytes].decode("utf-8", "replace") + (
+                    f"\n...[truncated, total {len(body)} bytes]"
+                )
+                d["response_body_truncated"] = True
+            else:
+                d["response_body"] = body.decode("utf-8", "replace") if body else ""
+            rb = _safe_body(d.get("request_body"))
+            d["request_body"] = rb.decode("utf-8", "replace") if rb else ""
+            target_hits.append(d)
+    return records_meta, js_records, target_hits, js_dir
+
+
+def _split_acceptance(target_hits):
+    """按验收规则拆分命中包：非 OPTIONS 的 2xx 为 accepted；仅 OPTIONS 预检为 only_options。"""
+    accepted = [
+        h for h in target_hits
+        if (h.get("response_status") or 0) // 100 == 2 and (h.get("method") or "").upper() != "OPTIONS"
+    ]
+    only_options = [
+        h for h in target_hits
+        if (h.get("method") or "").upper() == "OPTIONS" and not accepted
+    ]
+    return accepted, only_options
+
+
+def _build_result(args, browser_path, baseline_id, fingerprint, cookies,
+                  records_meta, js_records, target_hits, accepted, only_options,
+                  webdriver_flag, wd_err, has_filter):
+    """汇总取证结果为报告字典。has_filter 表示是否指定了 --targets/--targets-regex。"""
+    return {
+        "url": args.url,
+        "browserPath": browser_path,
+        "profileDir": args.profile_dir,
+        "fpDir": args.fp_dir,
+        "baselineId": baseline_id,
+        "packetCount": len(records_meta),
+        "jsFileCount": len(js_records),
+        "targetHitCount": len(target_hits),
+        "acceptedTargetCount": len(accepted),
+        "webdriverTrue": bool(webdriver_flag) if webdriver_flag is not None else None,
+        "webdriverCheckError": wd_err,
+        "navigatorWebdriverSelfCheck": "FAIL" if webdriver_flag is True else ("PASS" if webdriver_flag is False else "UNKNOWN"),
+        "acceptance": "PASS" if (not has_filter) or accepted else ("PARTIAL" if target_hits and not accepted else "NO_TARGET"),
+        "fingerprint": fingerprint,
+        "cookies": cookies,
+        "jsFiles": js_records,
+        "targetHitsSummary": [
+            {"url": h.get("url"), "method": h.get("method"), "status": h.get("response_status"), "isFailed": h.get("is_failed")}
+            for h in target_hits
+        ],
+        "onlyOptionsWarning": [h.get("url") for h in only_options],
+    }
+
+
+def _write_outputs(args, browser_path, records_meta, target_hits, fingerprint, baseline_id, js_dir):
+    """落盘 capture.json / target-hits.json / fingerprint-baseline.json，返回输出路径字典。"""
+    os.makedirs(args.out_dir, exist_ok=True)
+    with open(os.path.join(args.out_dir, "capture.json"), "w", encoding="utf-8") as f:
+        json.dump(records_meta, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(args.out_dir, "target-hits.json"), "w", encoding="utf-8") as f:
+        json.dump(target_hits, f, ensure_ascii=False, indent=2)
+
+    notes_dir = os.path.join(args.case_dir, "notes")
+    os.makedirs(notes_dir, exist_ok=True)
+    fp_path = None
+    if fingerprint is not None:
+        fp_path = os.path.join(notes_dir, "fingerprint-baseline.json")
+        with open(fp_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "baselineId": baseline_id,
+                "browserPath": browser_path,
+                "profileDir": args.profile_dir,
+                "fpDir": args.fp_dir,
+                "createdAt": _now(),
+                "fingerprint": fingerprint,
+            }, f, ensure_ascii=False, indent=2)
+    return {
+        "captureJson": os.path.join(args.out_dir, "capture.json"),
+        "targetHitsJson": os.path.join(args.out_dir, "target-hits.json"),
+        "jsDir": js_dir,
+        "fingerprintBaseline": fp_path,
+    }
+
+
 def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
+    """ruyiPage 取证主流程：启动浏览器 → 抓全部包 → 分类（元数据/JS/目标）→ JS 落盘 → 报告。"""
     from ruyipage import FirefoxPage
 
     opts = build_options(args, browser_path)
@@ -279,7 +398,6 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
             r = r.strip()
             if r:
                 regexes.append(re.compile(r))
-
     substrings = [s.strip() for s in (args.targets or "").split(",") if s.strip()]
 
     # 硬约束：capture.start 必须在 get 之前
@@ -307,42 +425,9 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
     page.capture.stop()
     steps = page.capture.steps
 
-    records_meta: List[Dict[str, Any]] = [p.to_dict(include_bodies=False) for p in steps]
-    js_records: List[Dict[str, Any]] = []
-    target_hits: List[Dict[str, Any]] = []
-
-    os.makedirs(args.out_dir, exist_ok=True)
-    js_dir = os.path.join(args.case_dir, "js", "original")
-    os.makedirs(js_dir, exist_ok=True)
-
-    for p in steps:
-        d = p.to_dict(include_bodies=True)
-        if is_js_packet(d):
-            body = _safe_body(d.get("response_body"))
-            fname = sanitize_filename(d.get("url", ""))
-            fpath = os.path.join(js_dir, fname)
-            with open(fpath, "wb") as f:
-                f.write(body)
-            sm = extract_sourcemap(body)
-            js_records.append({
-                "url": d.get("url"),
-                "status": d.get("response_status"),
-                "saved_to": os.path.relpath(fpath, args.out_dir),
-                "size": len(body),
-                "source_mapping_url": sm,
-            })
-        if match_targets(d, substrings, regexes):
-            body = _safe_body(d.get("response_body"))
-            if len(body) > args.max_body_bytes:
-                d["response_body"] = body[:args.max_body_bytes].decode("utf-8", "replace") + (
-                    f"\n...[truncated, total {len(body)} bytes]"
-                )
-                d["response_body_truncated"] = True
-            else:
-                d["response_body"] = body.decode("utf-8", "replace") if body else ""
-            rb = _safe_body(d.get("request_body"))
-            d["request_body"] = rb.decode("utf-8", "replace") if rb else ""
-            target_hits.append(d)
+    records_meta, js_records, target_hits, js_dir = _classify_packets(
+        steps, args, substrings, regexes
+    )
 
     webdriver_flag, wd_err = _eval_js(page, "return navigator.webdriver === true")
     cookies = []
@@ -351,15 +436,7 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
     except Exception as e:
         logger.warning("读取 Cookie 失败：%s", e)
 
-    # 验收：目标接口非 OPTIONS 的 2xx
-    accepted = [
-        h for h in target_hits
-        if (h.get("response_status") or 0) // 100 == 2 and (h.get("method") or "").upper() != "OPTIONS"
-    ]
-    only_options = [
-        h for h in target_hits
-        if (h.get("method") or "").upper() == "OPTIONS" and not accepted
-    ]
+    accepted, only_options = _split_acceptance(target_hits)
 
     baseline_id = args.baseline_id or uuid.uuid5(
         uuid.NAMESPACE_URL, os.path.abspath(args.case_dir)
@@ -372,55 +449,15 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
         except Exception as e:
             logger.warning("指纹 to_dict 失败：%s", e)
 
-    result = {
-        "url": args.url,
-        "browserPath": browser_path,
-        "profileDir": args.profile_dir,
-        "fpDir": args.fp_dir,
-        "baselineId": baseline_id,
-        "packetCount": len(records_meta),
-        "jsFileCount": len(js_records),
-        "targetHitCount": len(target_hits),
-        "acceptedTargetCount": len(accepted),
-        "webdriverTrue": bool(webdriver_flag) if webdriver_flag is not None else None,
-        "webdriverCheckError": wd_err,
-        "navigatorWebdriverSelfCheck": "FAIL" if webdriver_flag is True else ("PASS" if webdriver_flag is False else "UNKNOWN"),
-        "acceptance": "PASS" if (not substrings and not regexes) or accepted else ("PARTIAL" if target_hits and not accepted else "NO_TARGET"),
-        "fingerprint": fingerprint,
-        "cookies": cookies,
-        "jsFiles": js_records,
-        "targetHitsSummary": [
-            {"url": h.get("url"), "method": h.get("method"), "status": h.get("response_status"), "isFailed": h.get("is_failed")}
-            for h in target_hits
-        ],
-        "onlyOptionsWarning": [h.get("url") for h in only_options],
-    }
-
-    # 落盘
-    with open(os.path.join(args.out_dir, "capture.json"), "w", encoding="utf-8") as f:
-        json.dump(records_meta, f, ensure_ascii=False, indent=2)
-    with open(os.path.join(args.out_dir, "target-hits.json"), "w", encoding="utf-8") as f:
-        json.dump(target_hits, f, ensure_ascii=False, indent=2)
-
-    notes_dir = os.path.join(args.case_dir, "notes")
-    os.makedirs(notes_dir, exist_ok=True)
-    if fingerprint is not None:
-        with open(os.path.join(notes_dir, "fingerprint-baseline.json"), "w", encoding="utf-8") as f:
-            json.dump({
-                "baselineId": baseline_id,
-                "browserPath": browser_path,
-                "profileDir": args.profile_dir,
-                "fpDir": args.fp_dir,
-                "createdAt": _now(),
-                "fingerprint": fingerprint,
-            }, f, ensure_ascii=False, indent=2)
-
-    result["outputs"] = {
-        "captureJson": os.path.join(args.out_dir, "capture.json"),
-        "targetHitsJson": os.path.join(args.out_dir, "target-hits.json"),
-        "jsDir": js_dir,
-        "fingerprintBaseline": os.path.join(notes_dir, "fingerprint-baseline.json") if fingerprint is not None else None,
-    }
+    has_filter = bool(substrings) or bool(regexes)
+    result = _build_result(
+        args, browser_path, baseline_id, fingerprint, cookies,
+        records_meta, js_records, target_hits, accepted, only_options,
+        webdriver_flag, wd_err, has_filter,
+    )
+    result["outputs"] = _write_outputs(
+        args, browser_path, records_meta, target_hits, fingerprint, baseline_id, js_dir
+    )
     try:
         page.close()
     except Exception:
