@@ -99,6 +99,79 @@ class NativeProtect {
         this.#objMap.set(obj, name);
     }
 
+    /**
+     * 在给定 vm 上下文内 patch（而非污染宿主 Node.js 全局）。
+     * @param {Object} context - vm.createContext 返回的上下文全局对象
+     */
+    applyToContext(context) {
+        if (!context || !context.Function || !context.Object) return;
+        const instance = this;
+        const ctxFunction = context.Function;
+        const ctxObject = context.Object;
+
+        const _toString = ctxFunction.prototype.toString;
+        const patchedToString = function () {
+            if (instance.#map.has(this)) {
+                const name = instance.#map.get(this);
+                return `function ${name || this.name}() { [native code] }`;
+            }
+            return _toString.call(this);
+        };
+        Object.defineProperty(ctxFunction.prototype, "toString", {
+            value: patchedToString,
+            writable: true,
+            enumerable: false,
+            configurable: true,
+        });
+        instance.#map.set(ctxFunction.prototype.toString, "toString");
+
+        const _objToString = ctxObject.prototype.toString;
+        const patchedObjToString = function () {
+            if (instance.#objMap.has(this)) {
+                const name = instance.#objMap.get(this);
+                return `[object ${name}]`;
+            }
+            return _objToString.call(this);
+        };
+        Object.defineProperty(ctxObject.prototype, "toString", {
+            value: patchedObjToString,
+            writable: true,
+            enumerable: false,
+            configurable: true,
+        });
+        instance.#map.set(ctxObject.prototype.toString, "toString");
+
+        if (typeof context.structuredClone === "function") {
+            const raw = context.structuredClone;
+            const self = this;
+            function structuredClone(value, options) {
+                try {
+                    return raw.apply(this, arguments);
+                } catch (err) {
+                    self.#rewriteDataCloneError(err, value);
+                }
+            }
+            this.#copyFunctionMeta(structuredClone, raw, "structuredClone");
+            context.structuredClone = structuredClone;
+            this.setNativeFunc(structuredClone, "structuredClone");
+        }
+
+        if (context.MessagePort && context.MessagePort.prototype && typeof context.MessagePort.prototype.postMessage === "function") {
+            const raw = context.MessagePort.prototype.postMessage;
+            const self = this;
+            function postMessage(value, transferList) {
+                try {
+                    return raw.apply(this, arguments);
+                } catch (err) {
+                    self.#rewriteDataCloneError(err, value);
+                }
+            }
+            this.#copyFunctionMeta(postMessage, raw, "postMessage");
+            context.MessagePort.prototype.postMessage = postMessage;
+            this.setNativeFunc(postMessage, "postMessage");
+        }
+    }
+
     #patchCloneErrorLeak() {
         if (this.#clonePatched) return;
         this.#clonePatched = true;

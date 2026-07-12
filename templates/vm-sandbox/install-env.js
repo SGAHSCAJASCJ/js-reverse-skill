@@ -34,6 +34,8 @@
 
 'use strict';
 
+const { createSandbox } = require('./vm-context');
+
 // ============================================================
 // NativeProtect（JS 级 toString/descriptor 保护）
 // ============================================================
@@ -342,13 +344,21 @@ function installEnv(options = {}) {
     Object.defineProperty(win, 'WebGLRenderingContext', { value: canvasWebgl.WebGLRenderingContext, configurable: true });
   }
 
-  // ----- 10. Node 泄露阻断 -----
-  // 在 vm 中运行时，process/Buffer/require/module/global 必须为 undefined
-  // 这里只是声明目标，实际阻断由 vm sandbox context 控制
-  // 见 vm-sandbox.js 中的 context 创建逻辑
+  // ----- 10. Node 泄露阻断 + vm 沙箱隔离 -----
+  // 以 win 作为 vm 上下文全局对象；createSandbox 会删除宿主全局
+  //（process/Buffer/require/module/global/fetch/...）并在上下文内应用 NativeProtect，
+  // 真正阻断 Node 能力泄露（而非仅文档声明）。
+  let sandbox = null;
+  try {
+    sandbox = createSandbox(win, { name: 'js-reverse-env', timeout: 5000 });
+  } catch (err) {
+    sandbox = null;
+  }
 
   return {
     global: win,
+    context: sandbox ? sandbox.context : win,
+    run: sandbox ? sandbox.run : null,
     nativeProtect: NativeProtect,
     navigator,
     document,
@@ -357,7 +367,7 @@ function installEnv(options = {}) {
     performance,
     crypto,
     // 环境来源标识：用于 final.js 调试输出和门禁校验
-    source: 'install-env.js (quick-verify, prototype-chain-lite)',
+    source: sandbox ? 'install-env.js (vm-sandbox, node-leak-blocked)' : 'install-env.js (quick-verify, NO vm-sandbox)',
   };
 }
 
