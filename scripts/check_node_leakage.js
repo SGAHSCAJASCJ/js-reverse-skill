@@ -206,6 +206,11 @@ function renderMarkdown(result) {
     lines.push(`- timerify：${result.performance.hasTimerify ? '可见' : '不可见'}`);
     lines.push(`- markResourceTiming：${result.performance.hasMarkResourceTiming ? '可见' : '不可见'}`);
   }
+  lines.push('', '## storage 宿主信号');
+  for (const s of result.storage) {
+    if (!s.visible) lines.push(`- ${s.name}：宿主不可见`);
+    else lines.push(`- ${s.name}：${s.type}${s.constructorName ? `（${s.constructorName}）` : ''}${s.descriptor && typeof s.descriptor.configurable === 'boolean' ? `（configurable=${s.descriptor.configurable}）` : ''}`);
+  }
   if (result.hostSignals.length) {
     lines.push('', '## 已发现宿主特征信号');
     for (const item of result.hostSignals) lines.push(`- ${item}`);
