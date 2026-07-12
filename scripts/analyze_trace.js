@@ -7,8 +7,9 @@ function parseArgs(argv) {
   const args = { trace: '', summary: '', json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--trace') args.trace = argv[++i] || '';
-    else if (a === '--summary') args.summary = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--trace') args.trace = nextVal('');
+    else if (a === '--summary') args.summary = nextVal('');
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
@@ -31,7 +32,7 @@ function readJsonMaybe(file, fallback) {
 
 function readTrace(file) {
   if (!file) return [];
-  const text = fs.readFileSync(file, 'utf8');
+  const text = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
   return text.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map((line, idx) => {
     try { return JSON.parse(line); }
     catch (err) { return { type: 'parse-error', path: `line:${idx + 1}`, message: err.message }; }
