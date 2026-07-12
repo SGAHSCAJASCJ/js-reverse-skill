@@ -197,6 +197,7 @@ def create_request_session(
     else:  # cyCronet
         import cyCronet
 
+        # cyCronet 基于 Chromium Cronet，不支持 impersonate 参数，使用其内置指纹
         session = cyCronet.Session(
             headers=final_headers,
             proxy=proxy,
