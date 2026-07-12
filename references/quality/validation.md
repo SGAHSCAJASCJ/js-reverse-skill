@@ -507,7 +507,7 @@ node scripts/precheck_runtime.js --markdown
 
 JD `pc_home_feed` 步骤：
 1. 用 ruyiPage 定制 Firefox + `smart_fingerprint()` 打开 `https://www.jd.com/`。
-2. 导航前启动 `page.capture.start(targets="pc_home_feed", collect_bodies=True)`。
+2. 运行 `python scripts/forensic_ruyipage.py --url https://www.jd.com/ --targets "pc_home_feed" --browser-path <定制Firefox>`（脚本内部用 `targets=True` 抓全部包，事后过滤 `pc_home_feed`，避免只抓单接口漏掉 JS）。
 3. 等待并最少量滚动触发首页 feed。
 
 期望：`navigator.webdriver === false`；捕获到 `pc_home_feed` 的 2xx 响应；请求 URL 中能观察到 `h5st` 等动态参数。

@@ -259,7 +259,7 @@ case 根目录只允许两个子目录：
 └── result/        # 交付物（final.js + 最终项目总结.md + src/）
 ```
 
-- **取证/调试脚本**：优先使用 skill 的 `scripts/` 通用脚本（如 `capture_ruyitrace_log.js`、`run_with_trace.js`）
+- **取证/调试脚本**：优先使用 skill 的 `scripts/` 通用脚本（如 `forensic_ruyipage.py`、`capture_ruyitrace_log.js`、`run_with_trace.js`）；ruyiPage 取证不要每 case 手写
 - **临时脚本**：必须放 `case/tmp/`，用完清理。禁止在 case 根目录散落 `test_debug.js`、`capture_network.py`、`extract_xxx.py` 等脚本
 - **原始 JS**：放 `case/js/original/`
 - 详见 `templates/` 下的模板
@@ -295,7 +295,7 @@ case 根目录只允许两个子目录：
 
 ### Phase 2：RuyiTrace 日志采集 + 源码分析（Step 2）
 
-> 基于 Phase 1 ruyipage 抓包结果（JS 文件 + 网络包），RuyiTrace 采集运行时日志。
+> 基于 Phase 1 ruyipage 抓包结果（JS 文件 + 网络包；优先用 `scripts/forensic_ruyipage.py` 通用脚本取证，不要每 case 手写），RuyiTrace 采集运行时日志。
 
 **2.1 RuyiTrace NDJSON 采集**（核心证据源）：
 - 自动捕获优先：`scripts/capture_ruyitrace_log.js` 自动启动 trace Firefox 采集 NDJSON

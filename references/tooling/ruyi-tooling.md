@@ -205,6 +205,17 @@ node scripts/download_ruyi_tool.js --tool ruyipage-firefox --dest <download-dir>
 
 ## ruyiPage 取证流程
 
+> **首选：通用取证脚本，不要每个 case 手写。**
+> 直接运行 `python scripts/forensic_ruyipage.py`：它会自动满足下方所有启动硬约束、用 `targets=True` 抓全部包（事后从 `steps` 过滤，避免漏掉 JS 文件）、把 JS 文件落盘到 `case/js/original/`、并写出 `case/notes/fingerprint-baseline.json`。仅在脚本参数无法覆盖的极复杂多步交互时才走“逃生舱”手写（见文末），且手写也必须遵守同样的约束与正确 API。
+>
+> 典型用法：
+> ```bash
+> python scripts/forensic_ruyipage.py --url <目标页> --targets "feed/hot" --browser-path <定制Firefox> --markdown
+> # 仅检测环境并打印计划（不启动浏览器）：
+> python scripts/forensic_ruyipage.py --url <目标页> --dry-run --markdown
+> ```
+> 输出：`<case-dir>/forensic/capture.json`（全部包元数据）、`target-hits.json`（目标命中，含响应体截断）、`js/original/`（JS 文件）、`notes/fingerprint-baseline.json`。
+
 用户选择 ruyiPage 后：
 
 1. 检查 ruyiPage 包、`requests` 依赖和 Firefox runtime，并确认 runtime 是 ruyiPage 定制 Firefox。
@@ -271,33 +282,18 @@ new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 3, clien
 
 普通 `dispatchEvent(new MouseEvent(...))`、`new KeyboardEvent(...)` 不得作为验证码或高风控交互主路径。无法保证可信输入时，暂停并让用户手动完成或切换工具。
 
-示例骨架：
+### 逃生舱：何时仍需手写（极少数）
 
-```python
-from ruyipage import FirefoxOptions, FirefoxPage
+通用脚本已覆盖绝大多数场景（打开页面、抓全部包、过滤目标、落盘 JS、指纹基线、登录前暂停、单点拟人点击 / 滚动）。仅在脚本参数无法覆盖的**复杂多步业务交互**时才手写，且必须遵守：
 
-opts = FirefoxOptions()
-opts.set_browser_path("<verified-ruyipage-managed-firefox>")
-opts.set_user_dir("<case-browser-profile>")
-opts.headless(False)
-opts.set_window_size(1366, 900)
-opts.set_human_algorithm("windmouse")
-
-ctx = opts.smart_fingerprint(
-    require_country=None,
-    # 同一 case 固定该目录，避免每次随机生成不同指纹。
-    base_dir="<case-tmp-fingerprint-dir>",
-    # 同一 case 固定该 profile，后续 RuyiTrace / Hook / 指纹采样复用同一基线。
-    userdir="<case-browser-profile>",
-)
-
-page = FirefoxPage(opts)
-ctx.apply_emulation(page)
-page.capture.start(targets="<target-api-keyword>", collect_bodies=True)
-page.get("<target-page-url>")
-assert page.run_js("return navigator.webdriver") is False
-packets = page.capture.wait(timeout=30, count=1)
-```
+1. 复用通用脚本同一套启动硬约束（定制 Firefox、有头、独立 profile、smart_fingerprint + apply_emulation、capture.start 在 get 之前、navigator.webdriver 自检）。
+2. **正确 API（基于 ruyipage 1.2.45 内省确认，避免重蹈覆辙）**：
+   - `page.capture.start(targets=True, collect_bodies=True)`：`targets=True` 抓**全部**请求；用字符串 / `list` 只做子串过滤，会漏掉 JS 文件。
+   - `page.capture.wait(timeout=, count=1)` 返回**单个** `CapturePacket` 或 `None`；`count>1` 才返回列表。
+   - 全部已抓包用 `page.capture.steps`（**不是** `get_all`）读取。
+   - `CapturePacket.to_dict(include_bodies=True)` 含 `url / method / request_headers / response_status / response_headers / request_body / response_body / is_failed`。
+   - `ctx = opts.smart_fingerprint(...)` → `ctx.apply_emulation(page)`；`ctx.to_dict()` 持久化基线。
+3. 抓包完成后 `page.capture.stop()` 会确保响应体加载；JS 文件优先从 `response_body` 落盘，不要改用普通 `requests` 重新下载（会丢失指纹上下文）。
 
 只有当 `node scripts/check_external_tools.js --markdown` 显示“默认解析路径是否为定制 Firefox：是”时，才可直接 `FirefoxPage()` 或 `launch(headless=False)`。否则必须显式指定已验证的定制 Firefox 路径。
 

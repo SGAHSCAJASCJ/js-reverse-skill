@@ -51,7 +51,7 @@ case 根目录只允许两个子目录：
 > 用户提供 cURL/HAR + JS 文件时，跳过 1.1 抓包，从 1.2 开始。
 
 ### 1.1 ruyipage 抓包（一次抓完，不复抓）
-1. ruyipage `page.capture.start(targets="<接口关键词>", collect_bodies=True)` → `page.get(url)` → 等待加载
+1. 运行通用脚本 `python scripts/forensic_ruyipage.py --url <目标页> --targets "<接口关键词>" --browser-path <定制Firefox>`（内部已用 `targets=True` 抓全部包并落盘 JS 到 `case/js/original/`，不必手写 `page.capture.start`）
 2. 收集：网络包（HAR）、Cookie、JS 文件 URL、响应状态码
 3. 下载目标 JS 文件到 `case/js/original/`
 4. 写入指纹基线 `case/notes/fingerprint-baseline.json`

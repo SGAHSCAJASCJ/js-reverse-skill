@@ -53,31 +53,15 @@ Step 2: RuyiTrace 日志采集（Phase 2）
    - source / entry / builder / writer 链路证据。
 7. 单个取证动作完成并沉淀必要结论后，立即清理临时截图、失败下载、临时日志和无登录态 profile；登录态 profile 单独询问用户是否保留。
 
-### 启动示例骨架
+### 取证：首选通用脚本（不要手写）
 
-```python
-from ruyipage import FirefoxOptions, FirefoxPage
+直接运行 skill 通用脚本 `scripts/forensic_ruyipage.py`，它会自动满足下方所有硬约束，并用 `targets=True` 抓全部包（事后从 `steps` 过滤，避免漏掉 JS 文件）：
 
-opts = FirefoxOptions()
-opts.set_browser_path("<verified-ruyipage-managed-firefox>")
-opts.set_user_dir("<case-browser-profile>")
-opts.headless(False)
-opts.set_window_size(1366, 900)
-opts.set_human_algorithm("windmouse")
-
-ctx = opts.smart_fingerprint(
-    require_country=None,
-    base_dir="<case-tmp-fingerprint-dir>",
-    userdir="<case-browser-profile>",
-)
-
-page = FirefoxPage(opts)
-ctx.apply_emulation(page)
-page.capture.start(targets="<target-api-keyword>", collect_bodies=True)
-page.get("<target-page-url>")
-assert page.run_js("return navigator.webdriver") is False
-packets = page.capture.wait(timeout=30, count=1)
+```bash
+python scripts/forensic_ruyipage.py --url <目标页> --targets "pc_home_feed" --browser-path <定制Firefox> --markdown
 ```
+
+仅在复杂多步交互超出脚本参数（`--click` / `--scroll` / `--manual-pause`）能力时才手写，且必须：用 `targets=True` 抓全部包、`page.capture.wait(count=1)` 取单包、`page.capture.steps` 读全部包、`CapturePacket.to_dict()` 取响应体。详见 `references/tooling/ruyi-tooling.md` 的“逃生舱”小节。
 
 只有当 `node scripts/check_external_tools.js --markdown` 显示"默认解析路径是否为定制 Firefox：是"时，才可直接 `FirefoxPage()` 或 `launch(headless=False)`。否则必须显式指定已验证的定制 Firefox 路径。
 

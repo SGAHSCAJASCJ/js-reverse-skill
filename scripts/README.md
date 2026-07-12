@@ -1,6 +1,6 @@
 # 脚本索引
 
-本目录包含 27 个脚本，按功能分为 7 类。SKILL.md 和 references/ 通过文件名引用，无需记忆路径。
+本目录包含 28 个脚本，按功能分为 7 类。SKILL.md 和 references/ 通过文件名引用，无需记忆路径。
 
 ## 环境检测（5 个）
 
@@ -39,12 +39,13 @@
 |------|------|---------|
 | `generate_fingerprint_hook.js` | 生成浏览器侧指纹终端 API 采样 Hook（仅取证） | `node generate_fingerprint_hook.js --types canvas,webgl,dom-geometry --out case/hooks/fingerprint-hook.js` |
 
-## 运行工具（2 个）
+## 运行工具（3 个）
 
 | 脚本 | 功能 | 典型用法 |
 |------|------|---------|
 | `run_with_trace.js` | 探测模式运行：vm 上下文内定义浏览器桩，阻断宿主泄露 | `node run_with_trace.js --target case/js/original/app.js --entry window.makeSign --fixture case/fixtures/sample.fixture.json` |
 | `capture_ruyitrace_log.js` | 自动捕获 RuyiTrace NDJSON 日志（trace Firefox + MOZ_DOM_TRACE） | `node capture_ruyitrace_log.js --url <url> --case-dir case --ruyitrace-home <RuyiTrace-dir> --markdown` |
+| `forensic_ruyipage.py` | ruyiPage 通用取证：抓全部包（targets=True）+ JS 落盘 + 指纹基线，严格有头/定制内核/独立 profile | `python forensic_ruyipage.py --url <url> --targets "feed/hot" --browser-path <定制Firefox> --markdown` |
 
 ## 安装工具（3 个）
 
