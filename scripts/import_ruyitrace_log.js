@@ -19,12 +19,13 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--input') args.input = argv[++i] || '';
-    else if (a === '--case-dir' || a === '--dir') args.caseDir = argv[++i] || '';
-    else if (a === '--name') args.name = argv[++i] || '';
-    else if (a === '--max-examples') args.maxExamples = Number(argv[++i] || '10');
-    else if (a === '--truncation-threshold') args.truncationThreshold = Number(argv[++i] || '3900');
-    else if (a === '--max-truncation-examples') args.maxTruncationExamples = Number(argv[++i] || '50');
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--input') args.input = nextVal('');
+    else if (a === '--case-dir' || a === '--dir') args.caseDir = nextVal('');
+    else if (a === '--name') args.name = nextVal('');
+    else if (a === '--max-examples') args.maxExamples = Number(nextVal('10'));
+    else if (a === '--truncation-threshold') args.truncationThreshold = Number(nextVal('3900'));
+    else if (a === '--max-truncation-examples') args.maxTruncationExamples = Number(nextVal('50'));
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
@@ -96,18 +97,22 @@ function stackBrief(evt) {
 }
 
 function walkStrings(value, visitor, currentPath = '') {
-  if (typeof value === 'string') {
-    visitor(currentPath || '$', value);
-    return;
-  }
-  if (!value || typeof value !== 'object') return;
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) walkStrings(value[i], visitor, `${currentPath}[${i}]`);
-    return;
-  }
-  for (const [key, child] of Object.entries(value)) {
-    const nextPath = currentPath ? `${currentPath}.${key}` : key;
-    walkStrings(child, visitor, nextPath);
+  const stack = [{ value, path: currentPath }];
+  while (stack.length) {
+    const { value: v, path: p } = stack.pop();
+    if (typeof v === 'string') {
+      visitor(p || '$', v);
+      continue;
+    }
+    if (!v || typeof v !== 'object') continue;
+    if (Array.isArray(v)) {
+      for (let i = 0; i < v.length; i++) stack.push({ value: v[i], path: `${p}[${i}]` });
+    } else {
+      for (const [k, child] of Object.entries(v)) {
+        const nextPath = p ? `${p}.${k}` : k;
+        stack.push({ value: child, path: nextPath });
+      }
+    }
   }
 }
 
@@ -138,28 +143,49 @@ function collectTruncationSignals(evt, lineNo, threshold, maxExamples, state) {
 }
 
 function sanitizeLongStrings(value, threshold, currentPath = '') {
-  if (typeof value === 'string') {
-    if (value.length < threshold) return value;
-    return {
-      __ruyiTraceLongString__: true,
-      fieldPath: currentPath || '$',
-      visibleLength: value.length,
-      minLength: value.length,
-      actualLength: 'unknown',
-      truncationSuspected: true,
-      visibleSha256: visibleHash(value),
-      visiblePreview: preview(value),
-      note: '该字符串接近或超过 RuyiTrace 截断阈值，示例中不保留完整可见内容，真实长度未知。',
-    };
+  const root = { value, path: currentPath, out: undefined, children: null, idx: 0 };
+  const stack = [root];
+  while (stack.length) {
+    const frame = stack[stack.length - 1];
+    if (frame.children === null) {
+      const v = frame.value;
+      if (typeof v === 'string') {
+        frame.out = v.length < threshold ? v : {
+          __ruyiTraceLongString__: true,
+          fieldPath: frame.path || '$',
+          visibleLength: v.length,
+          minLength: v.length,
+          actualLength: 'unknown',
+          truncationSuspected: true,
+          visibleSha256: visibleHash(v),
+          visiblePreview: preview(v),
+          note: '该字符串接近或超过 RuyiTrace 截断阈值，示例中不保留完整可见内容，真实长度未知。',
+        };
+        stack.pop();
+        continue;
+      }
+      if (!v || typeof v !== 'object') { frame.out = v; stack.pop(); continue; }
+      const entries = Array.isArray(v) ? v.map((item, index) => [index, item]) : Object.entries(v);
+      frame.children = entries.map(([key, child]) => {
+        const nextPath = frame.path ? `${frame.path}.${key}` : key;
+        return { key, value: child, path: nextPath, out: undefined, children: null, idx: 0 };
+      });
+      frame.idx = 0;
+      continue;
+    }
+    if (frame.idx < frame.children.length) {
+      const child = frame.children[frame.idx];
+      frame.idx += 1;
+      stack.push(child);
+      continue;
+    }
+    const v = frame.value;
+    const out = Array.isArray(v) ? [] : {};
+    for (const child of frame.children) out[child.key] = child.out;
+    frame.out = out;
+    stack.pop();
   }
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map((item, index) => sanitizeLongStrings(item, threshold, `${currentPath}[${index}]`));
-  const out = {};
-  for (const [key, child] of Object.entries(value)) {
-    const nextPath = currentPath ? `${currentPath}.${key}` : key;
-    out[key] = sanitizeLongStrings(child, threshold, nextPath);
-  }
-  return out;
+  return root.out;
 }
 
 async function summarizeNdjson(file, options) {
