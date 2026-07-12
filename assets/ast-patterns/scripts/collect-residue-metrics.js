@@ -239,7 +239,7 @@ function collectMetrics(text) {
 }
 
 function collectMetricsFromFile(filePath) {
-  const text = fs.readFileSync(filePath, "utf8");
+  const text = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
   return {
     filePath: path.resolve(filePath),
     ...collectMetrics(text)

@@ -9,7 +9,7 @@ function main() {
     process.exit(1);
   }
 
-  const sourceText = fs.readFileSync(inputPath, "utf8");
+  const sourceText = fs.readFileSync(inputPath, "utf8").replace(/^\uFEFF/, "");
   const result = detectPatterns({
     inputPath: path.resolve(inputPath),
     hint,

@@ -52,7 +52,7 @@ function main() {
   const absoluteOutputDir = path.resolve(outputDir);
   ensureDir(absoluteOutputDir);
 
-  const sourceText = fs.readFileSync(absoluteInput, "utf8");
+  const sourceText = fs.readFileSync(absoluteInput, "utf8").replace(/^\uFEFF/, "");
   const detection = detectPatterns({
     inputPath: absoluteInput,
     hint,

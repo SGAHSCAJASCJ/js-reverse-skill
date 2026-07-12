@@ -5,7 +5,9 @@ const generator = require("@babel/generator").default;
 const t = require("@babel/types");
 
 function parseFile(filePath) {
-  return parser.parse(fs.readFileSync(filePath, "utf8"), {
+  // 去除 Windows 保存文件可能带的前导 UTF-8 BOM，避免 babel 解析异常
+  const source = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+  return parser.parse(source, {
     sourceType: "unambiguous",
     plugins: ["jsx"]
   });
