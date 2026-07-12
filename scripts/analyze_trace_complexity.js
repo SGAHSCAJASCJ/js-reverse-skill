@@ -14,9 +14,10 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--case-dir' || arg === '--case' || arg === '-d') args.caseDir = argv[++i] || '';
-    else if (arg === '--trace' || arg === '--input' || arg === '-i') args.traces.push(argv[++i] || '');
-    else if (arg === '--max-lines') args.maxLines = Number(argv[++i] || args.maxLines);
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (arg === '--case-dir' || arg === '--case' || arg === '-d') args.caseDir = nextVal('');
+    else if (arg === '--trace' || arg === '--input' || arg === '-i') args.traces.push(nextVal(''));
+    else if (arg === '--max-lines') args.maxLines = Number(nextVal(undefined) || args.maxLines);
     else if (arg === '--json') args.json = true;
     else if (arg === '--markdown') args.markdown = true;
     else if (arg === '--help' || arg === '-h') args.help = true;
@@ -165,7 +166,7 @@ function inspectLine(text, summary) {
     summary.async[name] += countMatches(text, pattern);
   }
 
-  const stackMatches = text.match(/(?:stack\.file|filename|file|url)["']?\s*[:=]\s*["']?([^"',\s)]+)/ig);
+  const stackMatches = text.match(/(?:stack\.file|filename|\bfile\b|\burl\b)["']?\s*[:=]\s*["']?([^"',\s)]+)/ig);
   if (stackMatches) {
     for (const raw of stackMatches.slice(0, 20)) summary.stackSignals.add(raw.slice(0, 160));
   }
