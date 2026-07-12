@@ -20,8 +20,9 @@ function parseArgs(argv) {
   const args = { tool: '', dest: '', extract: false, dryRun: false, json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--tool') args.tool = argv[++i] || '';
-    else if (a === '--dest') args.dest = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--tool') args.tool = nextVal('');
+    else if (a === '--dest') args.dest = nextVal('');
     else if (a === '--extract') args.extract = true;
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--json') args.json = true;

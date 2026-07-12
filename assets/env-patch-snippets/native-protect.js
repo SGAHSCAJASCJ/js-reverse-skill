@@ -288,7 +288,7 @@ class NativeProtect {
         if (seen.has(value)) return null;
         seen.add(value);
 
-        if (value instanceof Map) {
+        if (Object.prototype.toString.call(value) === '[object Map]') {
             for (const [k, v] of value) {
                 const fk = this.#findFunction(k, seen);
                 if (fk) return fk;
@@ -298,7 +298,7 @@ class NativeProtect {
             }
         }
 
-        if (value instanceof Set) {
+        if (Object.prototype.toString.call(value) === '[object Set]') {
             for (const v of value) {
                 const fv = this.#findFunction(v, seen);
                 if (fv) return fv;

@@ -36,13 +36,14 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = argv[++i] || '';
-    else if (a === '--stage' || a === '-s') args.stage = argv[++i] || '';
-    else if (a === '--index') args.index = argv[++i] || '';
-    else if (a === '--template') args.template = argv[++i] || '';
-    else if (a === '--input' || a === '-i') args.input = argv[++i] || '';
-    else if (a === '--data') args.data = argv[++i] || '';
-    else if (a === '--out' || a === '-o') args.out = argv[++i] || '';
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = nextVal('');
+    else if (a === '--stage' || a === '-s') args.stage = nextVal('');
+    else if (a === '--index') args.index = nextVal('');
+    else if (a === '--template') args.template = nextVal('');
+    else if (a === '--input' || a === '-i') args.input = nextVal('');
+    else if (a === '--data') args.data = nextVal('');
+    else if (a === '--out' || a === '-o') args.out = nextVal('');
     else if (a === '--append') args.append = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;

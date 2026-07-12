@@ -15,12 +15,13 @@ function parseArgs(argv) {
   const args = { input: '', out: '', stdout: false, append: false, requireChineseName: false, json: false, markdown: false };
 
   for (let i = 2; i < argv.length; i++) {
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
 
     const a = argv[i];
 
-    if (a === '--input' || a === '-i') args.input = argv[++i] || '';
+    if (a === '--input' || a === '-i') args.input = nextVal('');
 
-    else if (a === '--out' || a === '-o') args.out = argv[++i] || '';
+    else if (a === '--out' || a === '-o') args.out = nextVal('');
 
     else if (a === '--stdout') args.stdout = true;
 

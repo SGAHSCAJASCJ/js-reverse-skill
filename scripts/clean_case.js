@@ -21,7 +21,8 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = argv[++i];
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--case-dir' || a === '--dir' || a === '-d') args.caseDir = nextVal('');
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--force') args.force = true;
     else if (a === '--include-profiles') args.includeProfiles = true;
@@ -167,7 +168,7 @@ function isDisposableFileName(name) {
   if (/\.(tmp|temp|bak|old|orig|retry|partial|download|crdownload|cache)$/i.test(n)) return true;
   if (/^(env-trace\.jsonl|missing-env\.json|node-output\.json|run-output\.json)$/i.test(n)) return true;
   if (/^(fingerprint-hook|.*-fingerprint-hook|hook-fingerprint).*\.(js|mjs|cjs)$/i.test(n)) return true;
-  if (/^(test-|tmp-|temp-|debug-|scratch-|capture-|extract-).+\.(js|mjs|cjs|py|json|jsonl|log|txt|md|html|png|jpg|jpeg|webp|har)$/i.test(n)) return true;
+  if (/^(test-|tmp-|temp-|debug-|scratch-|capture[-_]|extract[-_]).+\.(js|mjs|cjs|py|json|jsonl|log|txt|md|html|png|jpg|jpeg|webp|har)$/i.test(n)) return true;
   if (/(\.test-output|\.debug-output|\.tmp-output)\./i.test(n)) return true;
   return false;
 }
