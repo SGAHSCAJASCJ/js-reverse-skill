@@ -68,6 +68,22 @@ function readText(file) { return fs.readFileSync(file, 'utf8').replace(/^\uFEFF/
 function readStdin() { try { return fs.readFileSync(0, 'utf8').replace(/^\uFEFF/, ''); } catch { return ''; } }
 function hasChinese(s) { return /[\u4e00-\u9fff]/.test(String(s || '')); }
 function ensureParent(file) { fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true }); }
+function isInside(child, parent) {
+  const norm = (p) => process.platform === 'win32' ? p.toLowerCase() : p;
+  const c = norm(path.resolve(child));
+  const p = norm(path.resolve(parent));
+  if (c === p) return true;
+  return c.startsWith(p + path.sep);
+}
+function sanitizeFileNameComponent(name) {
+  return String(name || '')
+    .replace(/[\0/\\]/g, '')
+    .replace(/\.\.+/g, '')
+    .replace(/^\.+/, '')
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .trim()
+    .slice(0, 120) || '未命名阶段';
+}
 function hasBadQuestionMarks(text) {
   const runs = text.match(/\?{3,}/g) || [];
   const count = runs.reduce((n, x) => n + x.length, 0);
@@ -93,7 +109,8 @@ function normalizeStage(stage, index) {
   return { index: normalizedIndex || '自定义', title: s };
 }
 function defaultOut(caseDir, stage) {
-  const file = stage.index === '自定义' ? `${stage.title}.md` : `${stage.index}-${stage.title}.md`;
+  const safeTitle = sanitizeFileNameComponent(stage.title);
+  const file = stage.index === '自定义' ? `${safeTitle}.md` : `${stage.index}-${safeTitle}.md`;
   return path.join(caseDir, '阶段报告', file);
 }
 function maskSensitiveString(s) {
@@ -317,6 +334,7 @@ function main() {
   const caseDir = path.resolve(args.caseDir);
   const stage = normalizeStage(args.stage, args.index);
   const out = path.resolve(args.out || defaultOut(caseDir, stage));
+  if (!isInside(out, caseDir)) throw new Error(`阶段报告输出路径越界（必须位于用例目录内）：${out}`);
   if (!hasChinese(path.basename(out))) throw new Error(`阶段报告文件名必须包含中文：${out}`);
   let content = '';
   if (args.input) content = readText(args.input);

@@ -84,6 +84,24 @@ function hasChinese(text) {
 
 }
 
+function isInside(child, parent) {
+  const norm = (p) => process.platform === 'win32' ? p.toLowerCase() : p;
+  const c = norm(path.resolve(child));
+  const p = norm(path.resolve(parent));
+  if (c === p) return true;
+  return c.startsWith(p + path.sep);
+}
+
+function findRepoRoot(start) {
+  let dir = path.resolve(start);
+  while (true) {
+    if (fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, 'SKILL.md')) || fs.existsSync(path.join(dir, 'package.json'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return path.resolve(start);
+    dir = parent;
+  }
+}
+
 
 
 function hasReplacementQuestionMarks(text) {
@@ -129,6 +147,9 @@ function main() {
   if (args.out) {
 
     if (args.requireChineseName && !hasChinese(path.basename(args.out))) throw new Error(`输出 Markdown 文件名必须包含中文：${args.out}`);
+
+    const allowedRoot = findRepoRoot(process.cwd());
+    if (!isInside(args.out, allowedRoot)) throw new Error(`输出路径越界（必须位于项目根目录内）：${args.out}`);
 
     ensureParent(args.out);
 
