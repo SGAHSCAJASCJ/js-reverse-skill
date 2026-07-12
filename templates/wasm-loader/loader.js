@@ -29,9 +29,36 @@ const fs = require('fs');
 const path = require('path');
 
 // ============================================================
+// 统一堆分配器（bump allocator）
+// 供 env.malloc、_malloc、writeString/writeBytes 共用，避免多分配器指针冲突
+// ============================================================
+function createHeapAllocator(memory, startPtr = 4096) {
+  let ptr = startPtr;
+  return {
+    alloc(size) {
+      size = size >>> 0;
+      if (size === 0) return 0;
+      // 8 字节对齐
+      ptr = (ptr + 7) & ~7;
+      const out = ptr;
+      ptr += size;
+      while (ptr > memory.buffer.byteLength) {
+        try {
+          memory.grow(Math.max(1, Math.ceil((ptr - memory.buffer.byteLength) / 65536)));
+        } catch (e) {
+          return 0;
+        }
+      }
+      return out;
+    },
+    reset() { ptr = startPtr; },
+  };
+}
+
+// ============================================================
 // 默认 importObject（模拟浏览器 env）
 // ============================================================
-function createDefaultImports(memory) {
+function createDefaultImports(memory, allocator) {
   return {
     env: {
       // 内存
@@ -74,9 +101,9 @@ function createDefaultImports(memory) {
         while (view[ptr + len] !== 0) len++;
         return len;
       },
-      // 内存分配（Emscripten）
-      malloc: (size) => 0, // 需要实际实现
-      free: (ptr) => {},
+      // 内存分配（Emscripten 风格：由统一堆分配器实现；模块若自带 malloc/free 会在 deepMerge 时覆盖）
+      malloc: (size) => (allocator ? allocator.alloc(size) : 0),
+      free: () => {}, // bump allocator 不回收；如需释放请改用模块自带 free
       // 文件 IO（通常不使用，桩函数）
       fd_write: (fd, buf, count, nwritten) => 0,
       fd_read: (fd, buf, count, nread) => 0,
@@ -134,7 +161,8 @@ async function loadWasm(options = {}) {
 
   // 创建 imports
   const memory = externalMemory || new WebAssembly.Memory({ initial: 256, maximum: 4096 });
-  const defaultImports = createDefaultImports(memory);
+  const allocator = createHeapAllocator(memory);
+  const defaultImports = createDefaultImports(memory, allocator);
   const imports = deepMerge(defaultImports, customImports || {});
 
   // 实例化
@@ -152,7 +180,7 @@ async function loadWasm(options = {}) {
     }
   }
 
-  const wrapped = wrapExports(instance.exports, memory);
+  const wrapped = wrapExports(instance.exports, memory, allocator);
   const result = {
     instance,
     exports: wrapped,
@@ -168,14 +196,14 @@ async function loadWasm(options = {}) {
     // 通常不自动调用 _main，按需调用
   }
 
-  if (cache) wasmCache.set(absPath, result);
+  if (cache) wasmCacheSet(absPath, result);
   return result;
 }
 
 // ============================================================
 // 导出函数包装（提供类型转换和错误处理）
 // ============================================================
-function wrapExports(exports, memory) {
+function wrapExports(exports, memory, allocator) {
   const wrapped = {};
 
   for (const [name, value] of Object.entries(exports)) {
@@ -188,19 +216,11 @@ function wrapExports(exports, memory) {
 
   // 提供内存读写辅助
   wrapped._readString = (ptr) => readCString(memory, ptr);
-  wrapped._writeString = (str) => writeCString(memory, str);
+  wrapped._writeString = (str) => writeCString(memory, str, allocator);
   wrapped._readBytes = (ptr, len) => readBytes(memory, ptr, len);
-  wrapped._writeBytes = (bytes) => writeBytes(memory, bytes);
-  wrapped._malloc = exports.malloc || exports._malloc || ((size) => {
-    // 简易分配器：从 memory 末尾分配
-    if (!wrapped._heapPtr) wrapped._heapPtr = 1024;
-    const ptr = wrapped._heapPtr;
-    wrapped._heapPtr += size;
-    if (wrapped._heapPtr >= memory.buffer.byteLength) {
-      memory.grow(Math.ceil(size / 65536));
-    }
-    return ptr;
-  });
+  wrapped._writeBytes = (bytes) => writeBytes(memory, bytes, allocator);
+  // 统一使用堆分配器，避免与 env.malloc / writeString 各自维护指针导致冲突
+  wrapped._malloc = exports.malloc || exports._malloc || ((size) => allocator.alloc(size));
   wrapped._free = exports.free || exports._free || (() => {});
 
   return wrapped;
@@ -230,9 +250,9 @@ function readCString(memory, ptr) {
   return new TextDecoder('utf8').decode(view.subarray(ptr, end));
 }
 
-function writeCString(memory, str) {
+function writeCString(memory, str, allocator) {
   const buf = Buffer.from(str, 'utf8');
-  const ptr = allocateMemory(memory, buf.length + 1);
+  const ptr = allocator.alloc(buf.length + 1);
   const view = new Uint8Array(memory.buffer);
   for (let i = 0; i < buf.length; i++) view[ptr + i] = buf[i];
   view[ptr + buf.length] = 0;
@@ -244,22 +264,11 @@ function readBytes(memory, ptr, len) {
   return Buffer.from(view.subarray(ptr, ptr + len));
 }
 
-function writeBytes(memory, bytes) {
+function writeBytes(memory, bytes, allocator) {
   const buf = Buffer.from(bytes);
-  const ptr = allocateMemory(memory, buf.length);
+  const ptr = allocator.alloc(buf.length);
   const view = new Uint8Array(memory.buffer);
   for (let i = 0; i < buf.length; i++) view[ptr + i] = buf[i];
-  return ptr;
-}
-
-function allocateMemory(memory, size) {
-  // 简易分配：从固定位置开始
-  if (!allocateMemory._ptr) allocateMemory._ptr = 4096;
-  const ptr = allocateMemory._ptr;
-  allocateMemory._ptr += size;
-  while (allocateMemory._ptr >= memory.buffer.byteLength) {
-    memory.grow(1);
-  }
   return ptr;
 }
 
@@ -279,9 +288,18 @@ function deepMerge(target, source) {
 }
 
 // ============================================================
-// 缓存
+// 缓存（限制容量，避免内存泄漏）
 // ============================================================
 const wasmCache = new Map();
+const WASM_CACHE_MAX = 50;
+
+function wasmCacheSet(key, value) {
+  if (wasmCache.size >= WASM_CACHE_MAX) {
+    const oldest = wasmCache.keys().next().value;
+    if (oldest !== undefined) wasmCache.delete(oldest);
+  }
+  wasmCache.set(key, value);
+}
 
 function clearCache() {
   wasmCache.clear();
