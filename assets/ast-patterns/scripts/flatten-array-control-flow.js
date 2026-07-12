@@ -109,7 +109,7 @@ function getResolvedFunctionCallPath(functionPath) {
   return null;
 }
 
-function resolveObjectPropertyFromBinding(objectPath, propertyValue, seenBindings = new Set()) {
+function resolveObjectPropertyFromBinding(objectPath, propertyValue, seenBindings = new Set(), visited = new WeakSet()) {
   if (!objectPath || !objectPath.node || !objectPath.isIdentifier()) {
     return UNRESOLVED;
   }
@@ -133,7 +133,7 @@ function resolveObjectPropertyFromBinding(objectPath, propertyValue, seenBinding
   }
 
   if (initPath.isIdentifier()) {
-    const resolved = resolveObjectPropertyFromBinding(initPath, propertyValue, seenBindings);
+    const resolved = resolveObjectPropertyFromBinding(initPath, propertyValue, seenBindings, visited);
     seenBindings.delete(binding);
     return resolved;
   }
@@ -149,12 +149,12 @@ function resolveObjectPropertyFromBinding(objectPath, propertyValue, seenBinding
     }
 
     const keyPath = propertyPath.get("key");
-    const key = propertyPath.node.computed ? resolveStatic(keyPath, seenBindings) : keyPath.isIdentifier() ? keyPath.node.name : resolveStatic(keyPath, seenBindings);
+    const key = propertyPath.node.computed ? resolveStatic(keyPath, seenBindings, visited) : keyPath.isIdentifier() ? keyPath.node.name : resolveStatic(keyPath, seenBindings, visited);
     if (key === UNRESOLVED || String(key) !== String(propertyValue)) {
       continue;
     }
 
-    const resolved = resolveStatic(propertyPath.get("value"), seenBindings);
+    const resolved = resolveStatic(propertyPath.get("value"), seenBindings, visited);
     seenBindings.delete(binding);
     return resolved;
   }
@@ -163,10 +163,14 @@ function resolveObjectPropertyFromBinding(objectPath, propertyValue, seenBinding
   return UNRESOLVED;
 }
 
-function resolveStatic(path, seenBindings = new Set()) {
+function resolveStatic(path, seenBindings = new Set(), visited = new WeakSet()) {
   if (!path || !path.node) {
     return UNRESOLVED;
   }
+  if (visited.has(path.node)) {
+    return UNRESOLVED;
+  }
+  visited.add(path.node);
 
   if (path.isStringLiteral() || path.isNumericLiteral() || path.isBooleanLiteral()) {
     return path.node.value;
@@ -188,7 +192,7 @@ function resolveStatic(path, seenBindings = new Set()) {
         values.push(undefined);
         continue;
       }
-      const value = resolveStatic(elementPath, seenBindings);
+      const value = resolveStatic(elementPath, seenBindings, visited);
       if (value === UNRESOLVED) {
         return UNRESOLVED;
       }
@@ -204,11 +208,11 @@ function resolveStatic(path, seenBindings = new Set()) {
         return UNRESOLVED;
       }
       const keyPath = propPath.get("key");
-      const key = propPath.node.computed ? resolveStatic(keyPath, seenBindings) : keyPath.isIdentifier() ? keyPath.node.name : resolveStatic(keyPath, seenBindings);
+      const key = propPath.node.computed ? resolveStatic(keyPath, seenBindings, visited) : keyPath.isIdentifier() ? keyPath.node.name : resolveStatic(keyPath, seenBindings, visited);
       if (key === UNRESOLVED) {
         return UNRESOLVED;
       }
-      const value = resolveStatic(propPath.get("value"), seenBindings);
+      const value = resolveStatic(propPath.get("value"), seenBindings, visited);
       if (value === UNRESOLVED) {
         return UNRESOLVED;
       }
@@ -226,11 +230,11 @@ function resolveStatic(path, seenBindings = new Set()) {
 
     let resolved = UNRESOLVED;
     if (binding.path.parentPath && binding.path.parentPath.isVariableDeclarator()) {
-      resolved = resolveStatic(binding.path.parentPath.get("init"), seenBindings);
+      resolved = resolveStatic(binding.path.parentPath.get("init"), seenBindings, visited);
     } else if (binding.kind === "param" && binding.path.parentPath && binding.path.parentPath.isFunction()) {
       const callPath = getResolvedFunctionCallPath(binding.path.parentPath);
       if (callPath && typeof binding.path.key === "number") {
-        resolved = resolveStatic(callPath.get(`arguments.${binding.path.key}`), seenBindings);
+        resolved = resolveStatic(callPath.get(`arguments.${binding.path.key}`), seenBindings, visited);
       }
     }
 
@@ -242,20 +246,20 @@ function resolveStatic(path, seenBindings = new Set()) {
 
   if (path.isMemberExpression()) {
     const propertyValue = path.node.computed
-      ? resolveStatic(path.get("property"), seenBindings)
+      ? resolveStatic(path.get("property"), seenBindings, visited)
       : path.get("property").isIdentifier()
         ? path.node.property.name
-        : resolveStatic(path.get("property"), seenBindings);
+        : resolveStatic(path.get("property"), seenBindings, visited);
     if (propertyValue === UNRESOLVED) {
       return UNRESOLVED;
     }
 
-    const directPropertyValue = resolveObjectPropertyFromBinding(path.get("object"), propertyValue, seenBindings);
+    const directPropertyValue = resolveObjectPropertyFromBinding(path.get("object"), propertyValue, seenBindings, visited);
     if (directPropertyValue !== UNRESOLVED) {
       return directPropertyValue;
     }
 
-    const objectValue = resolveStatic(path.get("object"), seenBindings);
+    const objectValue = resolveStatic(path.get("object"), seenBindings, visited);
     if (objectValue === UNRESOLVED) {
       return UNRESOLVED;
     }
@@ -278,7 +282,7 @@ function resolveStatic(path, seenBindings = new Set()) {
     ) &&
     path.get("arguments.0").isStringLiteral()
   ) {
-    const source = resolveStatic(path.get("callee.object"), seenBindings);
+    const source = resolveStatic(path.get("callee.object"), seenBindings, visited);
     if (typeof source === "string") {
       return source.split(path.node.arguments[0].value);
     }
