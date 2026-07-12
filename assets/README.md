@@ -13,7 +13,7 @@
 ```
 assets/
 ├── README.md                              ← 本文件
-├── ast-patterns/                          ← AST 反混淆（8 站点规则 + 13 流水线脚本）
+├── ast-patterns/                          ← AST 反混淆（8 站点规则 + 14 流水线脚本，以 STEP_LIBRARY 为准）
 │   ├── README.md
 │   ├── patterns.md
 │   ├── scripts/
@@ -29,7 +29,7 @@ assets/
 
 ### native-protect.js
 
-补环境基础设施，覆盖多通道 toString + DataCloneError 保护。详见 `references/env/env-native-protection.md`。
+补环境基础设施，覆盖多通道 toString + DataCloneError 保护。详见 `references/env/env-native-protection.md`（外部依赖，不在 assets/ 内）。
 
 ```javascript
 const NativeProtect = require('./assets/env-patch-snippets/native-protect.js');
@@ -39,11 +39,11 @@ np.setNativeFunc(myFunc, 'myFunc');
 
 ### constructor-errors.fixture.json
 
-构造函数行为采样模板。复制到 `case/fixtures/constructor-errors.fixture.json` 后按真实浏览器采样填充。详见 `references/env/env-object-model.md` 的"构造函数行为采样"段。
+构造函数行为采样模板。复制到 `case/fixtures/constructor-errors.fixture.json` 后按真实浏览器采样填充。详见 `references/env/env-object-model.md`（外部依赖，不在 assets/ 内）的"构造函数行为采样"段。
 
 ### resource-manifest.json
 
-动态资源清单模板。复制到 `case/notes/resource-manifest.json` 后按实际填充。`scripts/check_dynamic_resources.js` 依赖本文件结构。详见 `references/network/dynamic-resource.md`。
+动态资源清单模板。复制到 `case/notes/resource-manifest.json` 后按实际填充。`scripts/check_dynamic_resources.js`（外部依赖，不在 assets/ 内）依赖本文件结构。详见 `references/network/dynamic-resource.md`（外部依赖，不在 assets/ 内）。
 
 ### ast-patterns/
 
