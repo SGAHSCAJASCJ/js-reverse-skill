@@ -9,13 +9,14 @@ function parseArgs(argv) {
   const args = { target: '', entry: '', fixture: '', trace: '', summary: '', output: '', timeout: 5000, json: false, markdown: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--target') args.target = argv[++i] || '';
-    else if (a === '--entry') args.entry = argv[++i] || '';
-    else if (a === '--fixture') args.fixture = argv[++i] || '';
-    else if (a === '--trace') args.trace = argv[++i] || '';
-    else if (a === '--summary') args.summary = argv[++i] || '';
-    else if (a === '--output') args.output = argv[++i] || '';
-    else if (a === '--timeout') args.timeout = Number(argv[++i] || '5000');
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--target') args.target = nextVal('');
+    else if (a === '--entry') args.entry = nextVal('');
+    else if (a === '--fixture') args.fixture = nextVal('');
+    else if (a === '--trace') args.trace = nextVal('');
+    else if (a === '--summary') args.summary = nextVal('');
+    else if (a === '--output') args.output = nextVal('');
+    else if (a === '--timeout') args.timeout = Number(nextVal('5000'));
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
@@ -48,6 +49,14 @@ function __safe(v) {
   if (typeof v === 'object') return '[Object ' + ((v.constructor && v.constructor.name) || 'Object') + ']';
   return '[' + typeof v + ']';
 }
+const SENSITIVE_KEY_RE = /cookie|token|authorization|password|secret|set-cookie|x-sign|sign|apikey|api-key|access[_-]?key|private[_-]?key|csrf|x-csrf|session/i;
+function maskIfSensitive(key, value) {
+  if (typeof key === 'string' && SENSITIVE_KEY_RE.test(key)) {
+    const s = String(value);
+    if (s) return '[已脱敏 长度=' + s.length + ']';
+  }
+  return __safe(value);
+}
 function __push(e) {
   try {
     e.ts = Date.now();
@@ -73,7 +82,7 @@ function traceProxy(name, options) {
       if (!cache[key]) cache[key] = traceProxy(name + '.' + key);
       return cache[key];
     },
-    set(t, prop, value) { const key = String(prop); __push({ type: 'set', path: name + '.' + key, value: __safe(value), valueType: typeof value }); cache[key] = value; return true; },
+    set(t, prop, value) { const key = String(prop); __push({ type: 'set', path: name + '.' + key, value: maskIfSensitive(key, value), valueType: typeof value }); cache[key] = value; return true; },
     has(t, prop) { __push({ type: 'has', path: name, prop: String(prop) }); return Object.prototype.hasOwnProperty.call(cache, String(prop)); },
     ownKeys() { __push({ type: 'ownKeys', path: name }); return Object.keys(cache); },
     getOwnPropertyDescriptor(t, prop) { __push({ type: 'getOwnPropertyDescriptor', path: name, prop: String(prop) }); return cache[String(prop)] ? { value: cache[String(prop)], enumerable: true, configurable: true, writable: true } : undefined; },
