@@ -195,7 +195,7 @@ def send_with_firefox_aligned_tls(session, method, url, **kwargs):
 
 ### Node.js CycleTLS 模板
 
-CycleTLS 的包名和导出在不同版本中可能不同，先用 `check_tls_clients.js` 确认。最终项目中建议封装成 `result/src/request/client.js`，只由 `result/final.js` 调用。
+CycleTLS 的包名和导出在不同版本中可能不同，先用 `check_tls_clients.js` 确认。注意：本仓库 `templates/node-request/client.js` 的自动检测**不包含** CycleTLS（其 `ja3Request`/`strongRequest` API 与统一 `request` 包装不兼容）；如需使用，请按下方示例手动封装为 `result/src/request/client.js`，不依赖自动检测，只由 `result/final.js` 调用。
 
 ```javascript
 'use strict';

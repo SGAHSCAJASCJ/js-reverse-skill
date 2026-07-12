@@ -30,7 +30,7 @@
 6. **最终请求必须由前置阶段已确认的 Node.js 或 Python Session 客户端完成（默认行为）**
    最终验证流程必须是：创建 session → 生成加密参数 → 用已确认的 TLS 指纹兼容客户端在同一 session 中组装请求 → 发起少量授权验证请求 → 销毁 session。
 
-   可选客户端为 Node.js CycleTLS / impers / curl-cffi-node，或 Python curl_cffi / cffi_curl / cyCronet。**默认必须发真实 API 请求验证**；仅当用户明确说"只输出参数不验证"时，入口才用 `--sign-only` 跳过 HTTP 请求，只输出本地 sign / 参数和组装后的脱敏请求信息。即使只有一个目标 API，也必须使用 Session 模式，动态资源刷新、Cookie / challenge 生成链路和目标 API 复用同一 Cookie jar / Header / UA / Client Hints / TLS 指纹 / fingerprint baseline。
+   可选客户端为 Node.js curl-cffi-node / impers（模板内置）/ Node.js CycleTLS（需手动实现，不与统一 request 包装兼容），或 Python curl_cffi / cffi_curl / cyCronet。**默认必须发真实 API 请求验证**；仅当用户明确说"只输出参数不验证"时，入口才用 `--sign-only` 跳过 HTTP 请求，只输出本地 sign / 参数和组装后的脱敏请求信息。即使只有一个目标 API，也必须使用 Session 模式，动态资源刷新、Cookie / challenge 生成链路和目标 API 复用同一 Cookie jar / Header / UA / Client Hints / TLS 指纹 / fingerprint baseline。
 
 7. **项目完成后默认生成最终总结**
    最终交付前必须生成 `result/最终项目总结.md`。总结必须使用 `scripts/write_markdown_utf8.js` 以 UTF-8 写入，模板见 `references/quality/final-summary.md`。
