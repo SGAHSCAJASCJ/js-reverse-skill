@@ -11,7 +11,16 @@ const RUYIPAGE_BROWSERS_DIR = path.join(TOOLS_DIR, 'ruyipage-browsers');
 const RUYITRACE_DIR = path.join(TOOLS_DIR, 'RuyiTrace');
 
 function findProjectRoot() {
-  let cur = process.cwd();
+  // 脚本位于 <项目根>/scripts/ 下，优先用 __dirname 向上查找 SKILL.md
+  let cur = path.dirname(__dirname);
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(cur, 'SKILL.md'))) return cur;
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  // fallback: 从 cwd 查找
+  cur = process.cwd();
   for (let i = 0; i < 10; i++) {
     if (fs.existsSync(path.join(cur, 'SKILL.md'))) return cur;
     const parent = path.dirname(cur);
