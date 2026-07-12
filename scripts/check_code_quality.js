@@ -17,12 +17,13 @@ function parseArgs(argv) {
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--case-dir' || a === '--case' || a === '-d') args.caseDir = argv[++i] || '';
-    else if (a === '--dir') args.dir = argv[++i] || '';
-    else if (a === '--file' || a === '-f') args.file = argv[++i] || '';
-    else if (a === '--max-line-length') args.maxLineLength = Number(argv[++i] || args.maxLineLength);
-    else if (a === '--max-file-lines') args.maxFileLines = Number(argv[++i] || args.maxFileLines);
-    else if (a === '--max-function-lines') args.maxFunctionLines = Number(argv[++i] || args.maxFunctionLines);
+    const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
+    if (a === '--case-dir' || a === '--case' || a === '-d') args.caseDir = nextVal('');
+    else if (a === '--dir') args.dir = nextVal('');
+    else if (a === '--file' || a === '-f') args.file = nextVal('');
+    else if (a === '--max-line-length') args.maxLineLength = Number(nextVal(undefined) || args.maxLineLength);
+    else if (a === '--max-file-lines') args.maxFileLines = Number(nextVal(undefined) || args.maxFileLines);
+    else if (a === '--max-function-lines') args.maxFunctionLines = Number(nextVal(undefined) || args.maxFunctionLines);
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
@@ -116,6 +117,42 @@ function stripJsLine(line) {
     .trim();
 }
 
+// 去除字符串与模板字面量内容，避免其中出现的 { } 干扰括号深度/函数长度统计
+function stripJsStringAndTemplate(line) {
+  let out = '';
+  let i = 0;
+  const n = line.length;
+  while (i < n) {
+    const c = line[i];
+    const prev = i > 0 ? line[i - 1] : '';
+    if ((c === '"' || c === "'") && prev !== '\\') {
+      out += c;
+      i += 1;
+      while (i < n) {
+        const cc = line[i];
+        const p2 = line[i - 1];
+        if (cc === c && p2 !== '\\') { i += 1; break; }
+        i += 1;
+      }
+      continue;
+    }
+    if (c === '`' && prev !== '\\') {
+      out += '`';
+      i += 1;
+      while (i < n) {
+        const cc = line[i];
+        const p2 = line[i - 1];
+        if (cc === '`' && p2 !== '\\') { i += 1; break; }
+        i += 1;
+      }
+      continue;
+    }
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
 function codeLineCount(file, lines) {
   if (ext(file) === '.py') return lines.filter(line => line.trim() && !line.trim().startsWith('#')).length;
   return lines.filter(line => stripJsLine(line)).length;
@@ -125,7 +162,7 @@ function maxJsBraceDepth(lines) {
   let depth = 0;
   let maxDepth = 0;
   for (const raw of lines) {
-    const line = stripJsLine(raw);
+    const line = stripJsStringAndTemplate(stripJsLine(raw));
     for (const ch of line) {
       if (ch === '{') {
         depth += 1;
@@ -154,17 +191,17 @@ function inspectJsFunctions(lines, maxFunctionLines) {
   const starters = [
     /\bfunction\s+([A-Za-z_$][\w$]*)?\s*\([^)]*\)\s*\{/,
     /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{/,
-    /\b(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/
+    /\b(?:async\s+)?(?!if\b|for\b|while\b|switch\b|catch\b|finally\b|with\b|return\b|typeof\b|new\b|delete\b|else\b|do\b|try\b|case\b)([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/
   ];
   for (let i = 0; i < lines.length; i++) {
-    const line = stripJsLine(lines[i]);
+    const line = stripJsStringAndTemplate(stripJsLine(lines[i]));
     if (!line.includes('{')) continue;
     if (!starters.some(re => re.test(line))) continue;
     let depth = 0;
     let end = i;
     let seenOpen = false;
     for (let j = i; j < lines.length; j++) {
-      const cur = stripJsLine(lines[j]);
+      const cur = stripJsStringAndTemplate(stripJsLine(lines[j]));
       for (const ch of cur) {
         if (ch === '{') { depth += 1; seenOpen = true; }
         else if (ch === '}') depth -= 1;
