@@ -219,10 +219,11 @@ RuyiTrace NDJSON 狙击式采集:
 
 ### 5.3 默认交付门禁（解题必需，每次必跑）
 
-- `node scripts/check_final_artifact.js --case-dir . --markdown` —— 检查 result 目录结构 / 唯一执行入口 / 无浏览器自动化代码 / 无硬编码或复用样本加密参数值 / **`result/最终项目总结.md` 存在且包含默认 8 章** / result 无临时产物
+- `node scripts/check_final_artifact.js --case-dir . --markdown` —— 检查 result 目录结构 / 唯一执行入口 / 无浏览器自动化代码 / 无硬编码或复用样本加密参数值 / **`result/最终项目总结.md` 存在且包含默认 8 章** / **`result/经验沉淀-<站点>.md` 存在** / result 无临时产物
 - `--case-dir` 指项目根目录（其下应有 `case/` 和 `result/` 两个平级子目录），默认当前目录
 - 失败必须修复后重跑，直到 clean=true 才算交付完成
 - 仅当用户明确说"不生成最终总结"时，才传 `--no-require-final-summary` 并在输出中记录豁免原因
+- 仅当用户明确说"不沉淀经验"时，才传 `--no-require-experience` 并在输出中记录豁免原因
 - 阶段报告检查也由本脚本承担：若 `case/阶段报告/` 存在则校验中文命名 + UTF-8 + 含 `01-需求信息确认.md`
 
 ### 5.4 交付加分（用户要求"生产级交付"时强制）
@@ -245,9 +246,9 @@ RuyiTrace NDJSON 狙击式采集:
 
 ### 5.7 经验沉淀
 
-> **写入位置 = `result/`，不是 skill 内的 `cases/`**：skill 目录在运行期通常只读（部署后不可写），**agent 不得尝试写入 skill 内的 `cases/`**。把内化后的案例经验作为本次交付物写到 `result/`。
+> **写入位置 = `result/`，不是 skill 内的 `cases/`**：skill 目录在运行期通常只读（部署后不可写），**agent 不得尝试写入 skill 内的 `cases/`**。把内化后的案例经验作为本次交付物写到 `result/`。经验沉淀文档与最终项目总结、final.js 同处 `result/` 目录，是交付物的一部分。
 
-- **默认产出**：任务完成后默认生成 `result/经验沉淀-<站点>.md`（**按 `cases/_template.md` 的 Part 2 格式**），不询问、不跳过；仅当用户明确说"不沉淀经验"时才跳过，并在最终总结里记录跳过原因
+- **默认产出**：任务完成后默认生成 `result/经验沉淀-<站点>.md`（**按 `cases/_template.md` 的 Part 2 格式**），不询问、不跳过；仅当用户明确说"不沉淀经验"时才跳过，并传 `--no-require-experience` 给检查脚本，在最终总结里记录跳过原因
 - 内容：题型 / 反爬类型 / 关键踩坑 / 已内化为的编码约束 / 验证结论
-- **5.3 默认交付门禁不检查经验沉淀文档**（避免简单 case 强制沉淀拉低效率），但 agent 必须在最终总结的"风险与后续建议"段标注是否已产出经验沉淀文档
+- **5.3 默认交付门禁会检查经验沉淀文档**：result/ 下必须存在 `经验沉淀-*.md`，缺失则门禁失败
 - **开发者周期回写**：skill 维护者定期把 `result/` 中质量高的经验按 `_template.md` 合并进 skill 的 `cases/` 库；agent 运行期只产出、不回写 skill 目录

@@ -10,6 +10,8 @@ function parseArgs(argv) {
     file: null,
     requireFinalSummary: true,
     finalSummaryOptOut: false,
+    requireExperience: true,
+    experienceOptOut: false,
     production: false,
     json: false,
     markdown: false,
@@ -22,6 +24,10 @@ function parseArgs(argv) {
     else if (a === '--no-require-final-summary' || a === '--allow-no-final-summary') {
       args.requireFinalSummary = false;
       args.finalSummaryOptOut = true;
+    }
+    else if (a === '--no-require-experience' || a === '--allow-no-experience') {
+      args.requireExperience = false;
+      args.experienceOptOut = true;
     }
     else if (a === '--production' || a === '--prod') args.production = true;
     else if (a === '--json') args.json = true;
@@ -38,12 +44,14 @@ function usage() {
   node scripts/check_final_artifact.js --case-dir . --markdown
   node scripts/check_final_artifact.js --case-dir . --production --markdown
   node scripts/check_final_artifact.js --case-dir . --no-require-final-summary --markdown
+  node scripts/check_final_artifact.js --case-dir . --no-require-experience --markdown
   node scripts/check_final_artifact.js --case-dir . --file result/final.js --json
 
 说明：--case-dir 指项目根目录（其下应有 case/ 和 result/ 两个平级子目录），默认可省略用当前目录。
-默认模式（解题必需）：检查 result 目录结构 / 唯一执行入口 / 无浏览器自动化代码 / 无硬编码或复用样本加密参数值 / result/最终项目总结.md 存在且包含默认 8 章 / result 无临时产物。
+默认模式（解题必需）：检查 result 目录结构 / 唯一执行入口 / 无浏览器自动化代码 / 无硬编码或复用样本加密参数值 / result/最终项目总结.md 存在且包含默认 8 章 / result/经验沉淀-<站点>.md 存在 / result 无临时产物。
 --production（生产级交付）：在默认检查基础上，追加校验最终总结的 9 个生产级附加章节（NativeProtect / 指纹基线 / API 调用回放 / 高强度检测矩阵 / Session 请求链 / 加密参数生成与样本复用检查 / 代码质量与中文注释 / 清理结果 / 阶段报告索引）。
---no-require-final-summary：仅当用户明确要求不生成最终总结时传入，并在阶段输出中记录豁免原因。`;
+--no-require-final-summary：仅当用户明确要求不生成最终总结时传入，并在阶段输出中记录豁免原因。
+--no-require-experience：仅当用户明确要求不沉淀经验时传入，并在阶段输出中记录豁免原因。`;
 }
 
 function exists(p) {
@@ -455,6 +463,30 @@ function inspectFinalSummary(resultDir, requireFinalSummary, production) {
   return { result, problems, warnings };
 }
 
+// 经验沉淀文档检查：result/ 下必须存在 经验沉淀-*.md
+function inspectExperienceReport(resultDir, requireExperience) {
+  const result = {
+    required: !!requireExperience,
+    files: [],
+    present: false,
+  };
+  const problems = [];
+  const warnings = [];
+  if (!exists(resultDir)) return { result, problems, warnings };
+  let names = [];
+  try { names = fs.readdirSync(resultDir); } catch { names = []; }
+  const expFiles = names.filter(n => /^经验沉淀-.*\.md$/i.test(n) && !/^final-summary\.md$/i.test(n));
+  result.files = expFiles.map(n => path.join(resultDir, n));
+  result.present = expFiles.length > 0;
+  if (!requireExperience) return { result, problems, warnings };
+  if (!result.present) {
+    problems.push('项目完成后必须默认生成经验沉淀文档 result/经验沉淀-<站点>.md（按 cases/_template.md 的 Part 2 格式）；只有用户明确要求不沉淀时才可跳过，并需运行检查脚本时传入 --no-require-experience。');
+  } else if (expFiles.length > 1) {
+    warnings.push(`result/ 下存在多份经验沉淀文档（${expFiles.join('、')}），建议只保留一份。`);
+  }
+  return { result, problems, warnings };
+}
+
 
 function check(args) {
   if (!args.caseDir && !args.file) throw new Error('必须提供 --case-dir 或 --file');
@@ -570,6 +602,14 @@ function check(args) {
   problems.push(...finalSummary.problems);
   warnings.push(...finalSummary.warnings);
 
+  const experience = exists(resultDir) ? inspectExperienceReport(resultDir, args.requireExperience) : {
+    result: { required: !!args.requireExperience, files: [], present: false },
+    problems: [],
+    warnings: [],
+  };
+  problems.push(...experience.problems);
+  warnings.push(...experience.warnings);
+
   return {
     caseDir,
     caseSubdir,
@@ -581,8 +621,10 @@ function check(args) {
     warnings,
     reusedCryptoCheck: reuse,
     finalSummary: finalSummary.result,
+    experience: experience.result,
     stageReports: stageReports.result,
     finalSummaryOptOut: args.finalSummaryOptOut,
+    experienceOptOut: args.experienceOptOut,
     resultFiles: resultFiles.map(p => rel(caseDir, p)),
   };
 }
@@ -606,6 +648,7 @@ function renderMarkdown(result) {
     `- 是否不含指纹采样 Hook / Node.js 渲染库：${result.problems.some(p => p.includes('指纹采样 Hook') || p.includes('渲染库')) ? '否' : '是'}`,
     `- 是否未复用 cURL / fixture 中的加密参数样本值：${result.reusedCryptoCheck.reused.length || result.reusedCryptoCheck.hardcoded.length ? '否' : '是'}`,
     `- 是否已生成中文命名最终总结且包含默认 8 章：${result.finalSummary.required ? (result.finalSummary.present && !result.finalSummary.mojibakeSuspected && !result.finalSummary.missingSections.length ? '是' : '否') : (result.finalSummaryOptOut ? '用户明确豁免' : '未强制检查')}`,
+    `- 是否已生成经验沉淀文档 result/经验沉淀-<站点>.md：${result.experience.required ? (result.experience.present ? '是' : '否') : (result.experienceOptOut ? '用户明确豁免' : '未强制检查')}`,
     `- 是否包含生产级附加章节（仅生产级交付检查）：${result.finalSummary.production ? (result.finalSummary.missingProductionSections.length ? '否' : '是') : '未要求'}`,
     `- result 目录是否无临时 / 测试产物：${result.problems.some(p => p.includes('临时') || p.includes('测试')) ? '否' : '是'}`,
     '',
@@ -630,6 +673,11 @@ function renderMarkdown(result) {
     `- 疑似乱码：${result.finalSummary.mojibakeSuspected ? '是' : '否'}`,
     `- 缺少默认章节：${result.finalSummary.missingSections.length ? result.finalSummary.missingSections.join('、') : '无'}`,
     `- 缺少生产级附加章节：${result.finalSummary.missingProductionSections.length ? result.finalSummary.missingProductionSections.join('、') : (result.finalSummary.production ? '无' : '未检查')}`,
+    '',
+    '## 经验沉淀文档检查',
+    `- 默认要求：${result.experience.required ? '是' : '否'}`,
+    `- 文件：${result.experience.files.length ? result.experience.files.map(f => rel(result.resultDir, f)).join('、') : '未发现，应为 经验沉淀-<站点>.md'}`,
+    `- 存在：${result.experience.present ? '是' : '否'}`,
     '',
   ];
   if (result.problems.length) {

@@ -403,9 +403,10 @@ result/
 - 详见 `references/quality/stage-reports.md`
 
 **5.3 默认交付门禁**（解题必需，每次必跑）：
-- `node scripts/check_final_artifact.js --case-dir . --markdown` —— 检查 result 目录结构 / 唯一执行入口 / 无浏览器自动化代码 / 无硬编码或复用样本加密参数值 / **`result/最终项目总结.md` 存在且包含默认 8 章** / result 无临时产物
+- `node scripts/check_final_artifact.js --case-dir . --markdown` —— 检查 result 目录结构 / 唯一执行入口 / 无浏览器自动化代码 / 无硬编码或复用样本加密参数值 / **`result/最终项目总结.md` 存在且包含默认 8 章** / **`result/经验沉淀-<站点>.md` 存在** / result 无临时产物
 - 失败必须修复后重跑，直到 clean=true 才算交付完成
 - 仅当用户明确说"不生成最终总结"时，才传 `--no-require-final-summary` 并在输出中记录豁免原因
+- 仅当用户明确说"不沉淀经验"时，才传 `--no-require-experience` 并在输出中记录豁免原因
 - 阶段报告检查也由本脚本承担：若 `case/阶段报告/` 存在则校验中文命名 + UTF-8 + 含 `01-需求信息确认.md`
 
 **5.4 交付加分**（用户要求"生产级交付"时强制）：
