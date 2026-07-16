@@ -71,6 +71,7 @@ result/
 ├── config.json           # 外置配置（脱敏静态配置）
 ├── package.json          # 依赖契约（curl-cffi-node 等），main: final.js
 ├── 最终项目总结.md       # 必选：项目总结报告
+├── 经验沉淀-<站点>.md    # 必选：经验沉淀文档（按 cases/_template.md 的 Part 2 格式）
 └── src/
     ├── signer.js        # generateSign(params, env) + buildParams(config)，用户实现
     ├── env/
@@ -91,6 +92,7 @@ result/
 ├── final.py              # 唯一执行入口：python final.py（带 __main__ 守卫）
 ├── requirements.txt      # 依赖契约（curl_cffi 等）
 ├── 最终项目总结.md       # 必选：项目总结报告
+├── 经验沉淀-<站点>.md    # 必选：经验沉淀文档（按 cases/_template.md 的 Part 2 格式）
 └── src/
     ├── request/client.py  # 从 templates/python-request/client.py 复制，含 create_request_session
     ├── signer.py         # generate_sign(params, env) + build_params(config)，用户实现
@@ -225,6 +227,7 @@ if __name__ == "__main__":
 
 - [ ] `result/` 是规范项目目录，而不是临时文件堆。
 - [ ] `result/最终项目总结.md` 已生成（必选，不生成 = 任务未完成）。
+- [ ] `result/经验沉淀-<站点>.md` 已生成（必选，按 `cases/_template.md` 的 Part 2 格式；仅用户明确拒绝时才跳过并传 `--no-require-experience`）。
 - [ ] case 根目录只有 `case/` 和 `result/` 两个子目录，无散落脚本。
 - [ ] 执行入口 `final.js` / `final.py` 带 `require.main` / `__main__` 守卫，被 `require` / `import` 时只导出 API、不自动执行、不发请求。
 - [ ] 已交付 `package.json`（Node）/ `requirements.txt`（Python）依赖契约，复制方 `npm install` / `pip install -r` 即可。

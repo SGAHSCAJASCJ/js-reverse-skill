@@ -372,6 +372,7 @@ result/
 ├── config.json              # 外置配置（脱敏静态配置）
 ├── package.json             # 依赖契约（curl-cffi-node 等）
 ├── 最终项目总结.md           # 必选：项目总结报告
+├── 经验沉淀-<站点>.md        # 必选：经验沉淀文档（按 cases/_template.md 的 Part 2 格式，详见 5.6）
 └── src/                     # 源码模块（signer / env / request / resources / fixtures，完整结构见 `references/quality/delivery-templates.md`）
 ```
 > Python 交付同理：`final.py` + `requirements.txt`，模板见 `templates/python-request/`。
@@ -383,9 +384,10 @@ result/
 - 无浏览器自动化代码（见红线 3）
 - **≥5 次真实 API 请求验证通过**（默认向目标 API 发请求，确认 200 响应 + 正确数据）
 - `result/最终项目总结.md`（必选，模板见 `references/quality/final-summary.md`）
+- `result/经验沉淀-<站点>.md`（必选，默认产出，详见 5.6；仅用户明确拒绝时才跳过并传 `--no-require-experience`）
 - case 根目录无散落脚本（调试/抓包/提取脚本已清理或放 `case/tmp/`）
 
-> **`最终项目总结.md` 不生成 = 任务未完成**（确认清单见上方 5.2 解题必需项）。
+> **`最终项目总结.md` 或 `经验沉淀-<站点>.md` 不生成 = 任务未完成**（确认清单见上方 5.2 解题必需项）。
 
 阶段报告（可选）：
 - 阶段报告默认不生成。仅多轮复杂补环境 case 或用户明确要求时按需生成到 `case/阶段报告/`
