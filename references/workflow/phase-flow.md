@@ -120,7 +120,7 @@ crypto / encrypt / decrypt
 | eval/Function 打包 | `eval(...)` 或 `new Function(...)` 包裹 | Hook eval/Function 拦截源码 |
 | JSVMP | 200KB+ 文件、自定义解释器 | 不反编译，走路径 A 或路径 D |
 
-需要 AST 反混淆时用 `assets/ast-patterns/`（8 站点专用规则 + 13 流水线脚本）。
+需要 AST 反混淆时用 `assets/ast-patterns/`（14 流水线步骤：7 通用 + 7 站点专用）。
 
 ### 2.4 JSVMP 识别
 **严禁反编译字节码**，走路径 A（算法追踪）或路径 D（环境伪装/补环境）。

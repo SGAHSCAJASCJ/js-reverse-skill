@@ -7,5 +7,6 @@
   "IMPERSONATE": "chrome135",
   "SIGN_PARAM_NAME": "sign",
   "DEVICE_COOKIE": "",
-  "extraHeaders": {}
+  "extraHeaders": {},
+  "responseValidation": null
 }

@@ -26,7 +26,7 @@ argument-hint: "<目标网站URL> <要还原的参数名> [目标接口URL]"
 js-reverse-skill/
 ├── SKILL.md              ← 本文件：流程骨架 + 规则 + 索引
 ├── assets/               ← 可复用资产（复制到 case 后按需调整）
-│   ├── ast-patterns/     ← 【可选/进阶】AST 反混淆子工具链（8 站点规则 + 13 流水线脚本），仅 AST 反混淆路径按需加载，非默认路线
+│   ├── ast-patterns/     ← 【可选/进阶】AST 反混淆子工具链（14 流水线步骤：7 通用 + 7 站点专用），仅 AST 反混淆路径按需加载，非默认路线
 │   ├── env-patch-snippets/ ← 补环境代码片段（NativeProtect），可被 templates 直接 require
 │   └── fixture-templates/  ← fixture 模板（constructor-errors / resource-manifest），复制到 case 后填充
 ├── templates/            ← 交付入口模板（5 类：final.js / Node客户端 / Python客户端 / vm沙箱 / WASM）
@@ -307,7 +307,7 @@ case 根目录只允许两个子目录：
 
 **2.3 混淆识别与还原**：
 - 识别 OB/CFF/eval/JSVMP，走 `references/deobfuscation/obfuscation-identify.md`
-- 需 AST 反混淆时用 `assets/ast-patterns/`（8 站点专用规则 + 13 流水线脚本）
+- 需 AST 反混淆时用 `assets/ast-patterns/`（14 流水线步骤：7 通用 + 7 站点专用）
 
 **2.4 JSVMP 识别**（200KB+ / while-switch / 字节码数组）：
 - **严禁反编译字节码**，走路径 A（算法追踪）或路径 D（环境伪装/补环境）

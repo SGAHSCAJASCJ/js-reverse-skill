@@ -21,7 +21,9 @@
  *   Object.defineProperty(Storage.prototype, 'getItem', { value: getItem, writable: true, enumerable: true, configurable: true });
  *
  * 注意：
- *   - 只在目标 JS 所在运行上下文内 patch，不要污染宿主 Node.js 全局环境。
+ *   - getInstance() 首次调用时会全局 patch Function.prototype.toString / Object.prototype.toString /
+ *     structuredClone / MessagePort.postMessage。patch 对未注册函数保留原始行为，不会破坏宿主 JS
+ *     正常运行；目标 JS 通过 vm context 隔离运行，全局 patch 不影响补环境逻辑的正确性。
  *   - 必须使用带 DataCloneError 改写的版本；旧版只 patch Function.prototype.toString 的不再适用。
  *   - 如果目标 JS 提前保存了原始 Function.prototype.toString，后 patch 可能失效。
  *   - 使用 vm 时要确保 patch 发生在目标 context 内。

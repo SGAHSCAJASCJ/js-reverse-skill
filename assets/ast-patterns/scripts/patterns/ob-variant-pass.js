@@ -218,19 +218,26 @@ function bootstrapDynamicDecoderSandbox(ast) {
   }
 
   const startedAt = Date.now();
+  // 双重预算：时间上限 30s + 尝试次数上限 200（避免 513 次沙箱启动的极端阻塞）
   const PX_BUDGET_MS = 30000;
+  const PX_MAX_ATTEMPTS = 200;
+  // 优先尝试统计高频 px 值（256-320 区间命中率最高），再扩展到全范围
   const pxCandidates = [];
-  for (let pxValue = 256; pxValue <= 512; pxValue += 1) {
+  for (let pxValue = 256; pxValue <= 320; pxValue += 1) {
+    pxCandidates.push(pxValue);
+  }
+  for (let pxValue = 321; pxValue <= 512; pxValue += 1) {
     pxCandidates.push(pxValue);
   }
   for (let pxValue = 0; pxValue < 256; pxValue += 1) {
     pxCandidates.push(pxValue);
   }
 
+  let attempts = 0;
   for (const pxValue of pxCandidates) {
-    if (Date.now() - startedAt > PX_BUDGET_MS) {
-      break;
-    }
+    if (attempts >= PX_MAX_ATTEMPTS) break;
+    if (Date.now() - startedAt > PX_BUDGET_MS) break;
+    attempts++;
     const sandbox = buildDynamicDecoderSandbox(preludeCode, rotationCode, pxSetterName, pxValue);
     if (!validateDynamicDecoderSandbox(sandbox, decoderName, targets)) {
       continue;

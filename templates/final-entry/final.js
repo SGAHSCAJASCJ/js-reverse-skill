@@ -73,6 +73,9 @@ function loadConfig() {
       SIGN_PARAM_NAME: 'sign',
       DEVICE_COOKIE: '',
       extraHeaders: {},
+      // 可选：响应校验规则。配置后自验会按规则判定业务数据正确性，未配置则只校验 HTTP 200 + 非空响应体
+      // 形如 { "jsonPath": "data.list", "minLength": 1, "contains": "success" }
+      responseValidation: null,
     },
     cfg
   );
@@ -198,6 +201,51 @@ function parseArgs() {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+/**
+ * 校验响应体是否符合预期业务数据。
+ * 未配置 responseValidation 时退化为「非空即通过」。
+ * 配置后按 jsonPath / minLength / contains 三选一或多选校验。
+ * @param {string} body
+ * @param {Object} [rule] CONFIG.responseValidation
+ * @returns {{ ok: boolean, reason: string }}
+ */
+function validateResponseBody(body, rule) {
+  if (!body) return { ok: false, reason: '响应体为空' };
+  if (!rule || typeof rule !== 'object') return { ok: true, reason: '' };
+
+  // contains：响应体包含指定字符串（适用于非 JSON 响应或宽松校验）
+  if (typeof rule.contains === 'string' && rule.contains) {
+    if (!body.includes(rule.contains)) {
+      return { ok: false, reason: `响应体未包含期望字符串 "${rule.contains}"` };
+    }
+  }
+
+  // jsonPath + minLength：按简单点路径（如 "data.list"）取值并校验长度
+  if (typeof rule.jsonPath === 'string' && rule.jsonPath) {
+    let parsed;
+    try { parsed = JSON.parse(body); } catch (e) {
+      return { ok: false, reason: `响应体非 JSON：${e.message}` };
+    }
+    const segments = rule.jsonPath.split('.');
+    let cur = parsed;
+    for (const seg of segments) {
+      if (cur == null || typeof cur !== 'object') { cur = undefined; break; }
+      cur = cur[seg];
+    }
+    if (cur == null) {
+      return { ok: false, reason: `jsonPath "${rule.jsonPath}" 未命中` };
+    }
+    if (typeof rule.minLength === 'number') {
+      const len = Array.isArray(cur) ? cur.length : String(cur).length;
+      if (len < rule.minLength) {
+        return { ok: false, reason: `jsonPath "${rule.jsonPath}" 长度 ${len} < minLength ${rule.minLength}` };
+      }
+    }
+  }
+
+  return { ok: true, reason: '' };
+}
+
 // ============================================================
 // 主流程（仅自验时运行）
 // ============================================================
@@ -256,12 +304,18 @@ async function main() {
         console.log(`  响应: ${body.slice(0, 200)}`);
 
         jar.merge(res.headers['set-cookie']);
-        if (res.status === 200 && body) {
-          successCount++;
-        } else {
+        if (res.status !== 200) {
           failCount++;
-          if (res.status !== 200) console.log(`  [WARN] 状态码非 200`);
-          if (!body) console.log(`  [WARN] 响应体为空，视为验证失败`);
+          console.log(`  [WARN] 状态码非 200`);
+        } else {
+          // 业务数据正确性校验：未配置 responseValidation 时退化为「非空即通过」
+          const check = validateResponseBody(body, CONFIG.responseValidation);
+          if (check.ok) {
+            successCount++;
+          } else {
+            failCount++;
+            console.log(`  [WARN] 业务数据校验失败：${check.reason}`);
+          }
         }
       } catch (e) {
         failCount++;

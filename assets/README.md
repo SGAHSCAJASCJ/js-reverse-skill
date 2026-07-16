@@ -13,7 +13,7 @@
 ```
 assets/
 ├── README.md                              ← 本文件
-├── ast-patterns/                          ← AST 反混淆（8 站点规则 + 13 流水线脚本，以 STEP_LIBRARY 为准）
+├── ast-patterns/                          ← AST 反混淆（14 流水线步骤：7 通用 + 7 站点专用，以 STEP_LIBRARY 为准）
 │   ├── README.md
 │   ├── patterns.md
 │   ├── scripts/
