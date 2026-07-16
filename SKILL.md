@@ -102,6 +102,8 @@ js-reverse-skill/
       → 同 nmpa | case: cases/jsvmp-ruishu6-cookie-412-sdenv.md
     bdms.init / signUrl / bundle.js 常驻 + a_bogus + mssdk.bytedance.com
       → 策略: trace 补环境 + 常驻加载 | case: cases/jsvmp-bundle-bdms-a_bogus-douyin.md
+    百度 WAF 三件套（gangplank + nox + tox）/ nox_jst_v1 cookie / tox_token query / wafbotsr.baidu.com / mejd42mp 标识
+      → 策略: trace 补环境（vm 沙箱 + 构造函数 + Object.create，需 eval: eval + window.Tox.getToken 异步等待） | case: cases/jsvmp-baidu-waf-nox-tox-gitee.md
     通用 JSVMP 源码插桩
       → 策略: trace + 源码级插桩 | case: cases/universal-vmp-source-instrumentation.md
 
@@ -400,21 +402,27 @@ result/
 - 阶段报告默认不生成。仅多轮复杂补环境 case 或用户明确要求时按需生成到 `case/阶段报告/`
 - 详见 `references/quality/stage-reports.md`
 
-**5.3 交付加分**（用户要求"生产级交付"时强制）：
-- Session 模式 / `scripts/check_final_artifact.js`
-- 代码风格检查 / `scripts/check_code_quality.js`
+**5.3 默认交付门禁**（解题必需，每次必跑）：
+- `node scripts/check_final_artifact.js --case-dir . --markdown` —— 检查 result 目录结构 / 唯一执行入口 / 无浏览器自动化代码 / 无硬编码或复用样本加密参数值 / **`result/最终项目总结.md` 存在且包含默认 8 章** / result 无临时产物
+- 失败必须修复后重跑，直到 clean=true 才算交付完成
+- 仅当用户明确说"不生成最终总结"时，才传 `--no-require-final-summary` 并在输出中记录豁免原因
+- 阶段报告检查也由本脚本承担：若 `case/阶段报告/` 存在则校验中文命名 + UTF-8 + 含 `01-需求信息确认.md`
+
+**5.4 交付加分**（用户要求"生产级交付"时强制）：
+- `node scripts/check_final_artifact.js --case-dir . --production --markdown` —— 在默认门禁基础上追加校验最终总结的 9 个生产级附加章节
+- Session 模式 / 代码风格检查 / `scripts/check_code_quality.js`
 - `scripts/check_fingerprint_fixture.js` / `scripts/check_trace_api_coverage.js`
 - 完整 23 章总结 / trace 覆盖矩阵
 - 选用 sdenv 路径时额外执行 runtime 自检
 
-> **注**：默认只执行"解题必需"门禁 + 最终项目总结。用户明确要求"生产级交付"时才执行交付加分项。快速解题场景跳过加分项。
+> **注**：默认只执行 5.2 解题必需 + 5.3 默认交付门禁。用户明确要求"生产级交付"时才执行 5.4 加分项。快速解题场景跳过加分项。
 
-**5.4 清理**（交付前必做）：
+**5.5 清理**（交付前必做）：
 - 清理 `case/tmp/` 下的调试/抓包/提取脚本
 - 确保 case 根目录只有 `case/` 和 `result/` 两个子目录
 - 详见 `references/quality/cleanup.md`
 
-**5.5 经验沉淀**：详见 `references/workflow/phase-flow.md`（**写到 `result/`，不写 skill 的 `cases/`**——运行期 skill 目录只读）
+**5.6 经验沉淀**：详见 `references/workflow/phase-flow.md`（**写到 `result/`，不写 skill 的 `cases/`**——运行期 skill 目录只读）
 
 ---
 

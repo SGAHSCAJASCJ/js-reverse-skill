@@ -39,10 +39,10 @@ function parseArgs(argv) {
 
 function usage() {
   return `用法：
-  node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir case --markdown
-  node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir case --truncation-threshold 3900 --json
+  node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir . --markdown
+  node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir . --truncation-threshold 3900 --json
 
-说明：复制 RuyiTrace NDJSON 日志到 case/ruyi-trace/logs/，生成 notes/ruyitrace-summary.md，并标记接近 4000 / 4096 字符的字段为“疑似被 RuyiTrace 截断”。`;
+说明：--case-dir 指项目根目录（其下应有 case/ 和 result/ 两个平级子目录），默认当前目录。复制 RuyiTrace NDJSON 日志到 <case-dir>/case/ruyi-trace/logs/，生成 <case-dir>/case/notes/ruyitrace-summary.md，并标记接近 4000 / 4096 字符的字段为“疑似被 RuyiTrace 截断”。`;
 }
 
 function exists(p) {
@@ -279,10 +279,11 @@ async function main() {
   if (!args.caseDir) throw new Error('必须提供 --case-dir');
   const input = path.resolve(args.input);
   const caseDir = path.resolve(args.caseDir);
+  const caseSubdir = path.join(caseDir, 'case');
   if (!exists(input)) throw new Error(`日志文件不存在：${input}`);
-  if (!exists(caseDir)) fs.mkdirSync(caseDir, { recursive: true });
-  const logDir = path.join(caseDir, 'ruyi-trace', 'logs');
-  const notesDir = path.join(caseDir, 'notes');
+  fs.mkdirSync(caseSubdir, { recursive: true });
+  const logDir = path.join(caseSubdir, 'ruyi-trace', 'logs');
+  const notesDir = path.join(caseSubdir, 'notes');
   fs.mkdirSync(logDir, { recursive: true });
   fs.mkdirSync(notesDir, { recursive: true });
   const dstName = safeName(args.name || path.basename(input) || `trace-${Date.now()}.ndjson`);

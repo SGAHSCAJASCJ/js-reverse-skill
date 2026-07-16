@@ -11,33 +11,37 @@
 
 ## 目录结构
 
+> **项目根下只有 `case/` 和 `result/` 两个平级子目录**。`case/` 放取证/调试材料，`result/` 放最终交付物。两者平级，不要把 `result/` 嵌套进 `case/`。
+
 ```text
-case/
-├── 阶段报告/
-│   └── 01-需求信息确认.md
-├── js/
-│   ├── original/          # 原始 JS 文件
-│   ├── pretty/            # 格式化后的 JS
-│   └── extracted/         # 提取的关键代码片段
-├── requests/
-│   └── request.curl       # Copy as cURL 样本
-├── fixtures/
-│   ├── sample.fixture.json    # 浏览器真实输出 fixture
-│   └── fingerprint.fixture.json # 指纹采样 fixture（如涉及）
-├── notes/
-│   ├── 代码变更记忆.md
-│   ├── entry-chain.md     # source/entry/builder/writer 链路
-│   ├── silent-failure-checklist.md
-│   └── trust-matrix.md
-├── ruyi-trace/            # Trace 日志（如使用）
-│   └── logs/
-├── hooks/                 # 临时 Hook 脚本（用完即删）
-├── env/                   # 补环境代码（开发阶段）
-├── tmp/                   # 临时文件（用完即删）
-└── result/                # 最终交付
-    ├── final.js
-    ├── 最终项目总结.md
-    └── src/
+<项目根>/
+├── case/                      # 取证 / 调试材料
+│   ├── 阶段报告/
+│   │   └── 01-需求信息确认.md
+│   ├── js/
+│   │   ├── original/          # 原始 JS 文件
+│   │   ├── pretty/            # 格式化后的 JS
+│   │   └── extracted/         # 提取的关键代码片段
+│   ├── requests/
+│   │   └── request.curl       # Copy as cURL 样本
+│   ├── fixtures/
+│   │   ├── sample.fixture.json    # 浏览器真实输出 fixture
+│   │   └── fingerprint.fixture.json # 指纹采样 fixture（如涉及）
+│   ├── notes/
+│   │   ├── 代码变更记忆.md
+│   │   ├── entry-chain.md     # source/entry/builder/writer 链路
+│   │   ├── silent-failure-checklist.md
+│   │   └── trust-matrix.md
+│   ├── ruyi-trace/            # Trace 日志（如使用）
+│   │   └── logs/
+│   ├── hooks/                 # 临时 Hook 脚本（用完即删）
+│   ├── env/                   # 补环境代码（开发阶段）
+│   ├── tmp/                   # 临时文件（用完即删）
+│   └── forensic/              # ruyipage 抓包元数据 + target-hits.json
+└── result/                    # 最终交付（与 case/ 平级）
+    ├── final.js               # 唯一执行入口
+    ├── 最终项目总结.md         # 必选
+    └── src/                   # 源码模块（按需拆分）
 ```
 
 ## Case 信息（工作区记录用）

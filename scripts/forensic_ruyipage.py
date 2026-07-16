@@ -275,7 +275,7 @@ def _classify_packets(steps, args, substrings, regexes):
     records_meta = [p.to_dict(include_bodies=False) for p in steps]
     js_records = []
     target_hits = []
-    js_dir = os.path.join(args.case_dir, "js", "original")
+    js_dir = os.path.join(args.case_subdir, "js", "original")
     os.makedirs(js_dir, exist_ok=True)
     for p in steps:
         d = p.to_dict(include_bodies=True)
@@ -357,7 +357,7 @@ def _write_outputs(args, browser_path, records_meta, target_hits, fingerprint, b
     with open(os.path.join(args.out_dir, "target-hits.json"), "w", encoding="utf-8") as f:
         json.dump(target_hits, f, ensure_ascii=False, indent=2)
 
-    notes_dir = os.path.join(args.case_dir, "notes")
+    notes_dir = os.path.join(args.case_subdir, "notes")
     os.makedirs(notes_dir, exist_ok=True)
     fp_path = None
     if fingerprint is not None:
@@ -480,10 +480,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     )
     p.add_argument("--url", required=True, help="目标页面 URL")
     p.add_argument("--browser-path", default="", help="ruyiPage 定制 Firefox 可执行文件；缺省自动解析 managed runtime（禁系统回退）")
-    p.add_argument("--case-dir", default="case", help="case 目录，默认 case")
-    p.add_argument("--out-dir", default="", help="取证输出目录，默认 <case-dir>/forensic")
-    p.add_argument("--profile-dir", default="", help="独立浏览器 profile，默认 <case-dir>/tmp/ruyipage-profile")
-    p.add_argument("--fp-dir", default="", help="智能指纹 base_dir，默认 <case-dir>/tmp/fingerprint")
+    p.add_argument("--case-dir", default=".", help="项目根目录（其下应有 case/ 和 result/ 两个平级子目录），默认当前目录")
+    p.add_argument("--out-dir", default="", help="取证输出目录，默认 <case-dir>/case/forensic")
+    p.add_argument("--profile-dir", default="", help="独立浏览器 profile，默认 <case-dir>/case/tmp/ruyipage-profile")
+    p.add_argument("--fp-dir", default="", help="智能指纹 base_dir，默认 <case-dir>/case/tmp/fingerprint")
     p.add_argument("--targets", default="", help="目标接口子串过滤（逗号分隔），仅用于报告过滤；抓包始终抓全部")
     p.add_argument("--targets-regex", default="", help="目标接口正则过滤（逗号分隔）")
     p.add_argument("--human-algorithm", default="windmouse", help="拟人算法：windmouse / bezier，默认 windmouse")
@@ -505,9 +505,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     if not a.json and not a.markdown:
         a.markdown = True
     a.case_dir = os.path.abspath(a.case_dir)
-    a.out_dir = os.path.abspath(a.out_dir) if a.out_dir else os.path.join(a.case_dir, "forensic")
-    a.profile_dir = os.path.abspath(a.profile_dir) if a.profile_dir else os.path.join(a.case_dir, "tmp", "ruyipage-profile")
-    a.fp_dir = os.path.abspath(a.fp_dir) if a.fp_dir else os.path.join(a.case_dir, "tmp", "fingerprint")
+    a.case_subdir = os.path.join(a.case_dir, "case")
+    a.out_dir = os.path.abspath(a.out_dir) if a.out_dir else os.path.join(a.case_subdir, "forensic")
+    a.profile_dir = os.path.abspath(a.profile_dir) if a.profile_dir else os.path.join(a.case_subdir, "tmp", "ruyipage-profile")
+    a.fp_dir = os.path.abspath(a.fp_dir) if a.fp_dir else os.path.join(a.case_subdir, "tmp", "fingerprint")
     return a
 
 

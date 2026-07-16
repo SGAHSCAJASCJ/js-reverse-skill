@@ -8,7 +8,7 @@
 
 - 使用 `node scripts/write_markdown_utf8.js` 写入，避免编码问题：
   ```bash
-  node scripts/write_markdown_utf8.js --input case/tmp/总结草稿.md --out case/result/最终项目总结.md --require-chinese-name --markdown
+  node scripts/write_markdown_utf8.js --input case/tmp/总结草稿.md --out result/最终项目总结.md --require-chinese-name --markdown
   ```
 - 报告中不得明文写入 Cookie、Authorization、localStorage、账号标识等敏感内容。
 
@@ -86,7 +86,7 @@
 
 ## 生产级交付附加章节
 
-用户要求"生产级交付"时，在上述 8 章基础上追加以下章节（详见 SKILL.md Phase 5.3）：
+用户要求"生产级交付"时，在上述 8 章基础上追加以下章节（详见 SKILL.md Phase 5.4 交付加分 / `check_final_artifact.js --production`）：
 
 - RuyiTrace 日志使用情况
 - 动态资源保鲜与运行时刷新

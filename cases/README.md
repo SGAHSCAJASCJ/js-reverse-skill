@@ -20,6 +20,7 @@
 | [jsvmp-dual-sign-purealgo-vm-xiaohongshu.md](jsvmp-dual-sign-purealgo-vm-xiaohongshu.md) | JSVMP + X-s/X-s-common 双轨（纯算 + vm 沙箱）+ 修改版 CRC32 + 自定义 Base64 | ★★★★ | A 纯算（X-S-Common）+ B vm 沙箱（X-s）双轨 | 签名型 |
 | [browser-extract-modified-md5-yuanrenxue.md](browser-extract-modified-md5-yuanrenxue.md) | obfuscator.io + 修改版 MD5(T常量含动态时间戳) + WAF cookie + charCode反hook | ★★★ | puppeteer 提取 m/f/完整cookie + Node.js https 请求 | 签名型 |
 | [kuaishou-hxfalcon-kww-reverse.md](kuaishou-hxfalcon-kww-reverse.md) | __NS_hxfalcon + kww + Jose 模块 + kwpsec JSVMP | ★★★★ | A 纯算（__NS_hxfalcon/kww SSR fallback）+ D 黑盒（kww 浏览器端） | 签名型 |
+| [jsvmp-baidu-waf-nox-tox-gitee.md](jsvmp-baidu-waf-nox-tox-gitee.md) | 百度 WAF 三件套（Banti+nox+tox）JSVMP + nox_jst_v1 cookie + tox_token query | ★★★★ | D 环境伪装（vm 沙箱补环境，构造函数+Object.create） | 签名型 |
 
 > 同质化案例（不进速查表，按需读取）：[sha1-sort-params-zhitongcaijing.md](sha1-sort-params-zhitongcaijing.md) — 标准 SHA1 签名，与 simple-sign-md5 同路径，供同站升级参考
 
@@ -48,6 +49,7 @@ CHECK-2 速查:
 | `bdms.init` / `signUrl` / `bundle.js` 常驻 + `a_bogus` + `mssdk.bytedance.com` | jsvmp-bundle-bdms-a_bogus-douyin | 高(抖音常驻) |
 | `X-s` / `X-s-common` / `XYS_` + `as-v2-ds.js` + 修改版 CRC32 + 自定义 Base64 | jsvmp-dual-sign-purealgo-vm-xiaohongshu | 高(小红书双轨) |
 | `RM4hZBv0dDon443M` / 修改版 MD5(T常量含动态时间戳) + `$_zw` 指纹数组 + charCode 反hook | browser-extract-modified-md5-yuanrenxue | 高(猿人学浏览器提取) |
+| `nox_jst_v1` cookie / `tox_token` query / `gangplank`+`nox`+`tox` 三件套 / `wafbotsr.baidu.com` / `mejd42mp` 标识 / `window.Tox.getToken` | jsvmp-baidu-waf-nox-tox-gitee | 高(百度 WAF 三件套) |
 
 ## 新增案例
 

@@ -8,7 +8,7 @@ const { spawn, spawnSync } = require('child_process');
 function parseArgs(argv) {
   const args = {
     url: '',
-    caseDir: 'case',
+    caseDir: '.',
     outDir: '',
     profileDir: '',
     ruyitraceHome: '',
@@ -46,11 +46,11 @@ function parseArgs(argv) {
 
 function usage() {
   return `用法：
-  node scripts/capture_ruyitrace_log.js --url <target-page-url> --case-dir case --ruyitrace-home <RuyiTrace-dir> --markdown
-  node scripts/capture_ruyitrace_log.js --url <target-page-url> --case-dir case --duration 90 --import-after --markdown
-  node scripts/capture_ruyitrace_log.js --url <target-page-url> --case-dir case --dry-run --json
+  node scripts/capture_ruyitrace_log.js --url <target-page-url> --case-dir . --ruyitrace-home <RuyiTrace-dir> --markdown
+  node scripts/capture_ruyitrace_log.js --url <target-page-url> --case-dir . --duration 90 --import-after --markdown
+  node scripts/capture_ruyitrace_log.js --url <target-page-url> --case-dir . --dry-run --json
 
-说明：确认 RuyiTrace 已安装后，优先使用随 RuyiTrace 提供的 trace Firefox 和 MOZ_DOM_TRACE 环境变量自动捕获 NDJSON。自动捕获失败、需要登录/验证码/权限交互、或目标路径未覆盖时，才要求用户手动协助。`;
+说明：--case-dir 指项目根目录（其下应有 case/ 和 result/ 两个平级子目录），默认当前目录。确认 RuyiTrace 已安装后，优先使用随 RuyiTrace 提供的 trace Firefox 和 MOZ_DOM_TRACE 环境变量自动捕获 NDJSON。自动捕获失败、需要登录/验证码/权限交互、或目标路径未覆盖时，才要求用户手动协助。`;
 }
 
 function exists(p) {
@@ -110,9 +110,10 @@ function timestamp() {
 }
 
 function buildPlan(args, trace) {
-  const caseDir = path.resolve(args.caseDir || 'case');
-  const outDir = path.resolve(args.outDir || path.join(caseDir, 'ruyi-trace', 'logs'));
-  const profileDir = path.resolve(args.profileDir || path.join(caseDir, 'tmp', 'ruyitrace-profile'));
+  const caseDir = path.resolve(args.caseDir || '.');
+  const caseSubdir = path.join(caseDir, 'case');
+  const outDir = path.resolve(args.outDir || path.join(caseSubdir, 'ruyi-trace', 'logs'));
+  const profileDir = path.resolve(args.profileDir || path.join(caseSubdir, 'tmp', 'ruyitrace-profile'));
   const traceFile = path.join(outDir, `trace-${timestamp()}.ndjson`);
   const firefoxArgs = ['-no-remote', '-new-instance', '-profile', profileDir];
   if (args.url) firefoxArgs.push(args.url);

@@ -6,10 +6,11 @@ const path = require('path');
 
 function parseArgs(argv) {
   const args = {
-    caseDir: null,
+    caseDir: '.',
     file: null,
     requireFinalSummary: true,
     finalSummaryOptOut: false,
+    production: false,
     json: false,
     markdown: false,
   };
@@ -22,6 +23,7 @@ function parseArgs(argv) {
       args.requireFinalSummary = false;
       args.finalSummaryOptOut = true;
     }
+    else if (a === '--production' || a === '--prod') args.production = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
@@ -33,11 +35,15 @@ function parseArgs(argv) {
 
 function usage() {
   return `用法：
-  node scripts/check_final_artifact.js --case-dir case --markdown
-  node scripts/check_final_artifact.js --case-dir case --no-require-final-summary --markdown
-  node scripts/check_final_artifact.js --case-dir case --file case/result/final.js --json
+  node scripts/check_final_artifact.js --case-dir . --markdown
+  node scripts/check_final_artifact.js --case-dir . --production --markdown
+  node scripts/check_final_artifact.js --case-dir . --no-require-final-summary --markdown
+  node scripts/check_final_artifact.js --case-dir . --file result/final.js --json
 
-说明：检查最终交付项目是否是规范目录、只有一个执行入口、无浏览器自动化代码，并确认入口链路最终由已确认的 TLS 指纹兼容 Node.js / Python Session 请求客户端发起少量模拟请求，或明确不发真实请求；同时检查是否硬编码 / 复用了 cURL 或 fixture 中的样本加密参数值。最终总结 result/最终项目总结.md 是默认硬性要求，且必须包含按类别分组的环境与指纹 API 调用回放明细和高强度环境检测覆盖矩阵；只有用户明确要求不生成最终总结时，才允许传入 --no-require-final-summary 并在阶段输出中记录原因。`;
+说明：--case-dir 指项目根目录（其下应有 case/ 和 result/ 两个平级子目录），默认可省略用当前目录。
+默认模式（解题必需）：检查 result 目录结构 / 唯一执行入口 / 无浏览器自动化代码 / 无硬编码或复用样本加密参数值 / result/最终项目总结.md 存在且包含默认 8 章 / result 无临时产物。
+--production（生产级交付）：在默认检查基础上，追加校验最终总结的 9 个生产级附加章节（NativeProtect / 指纹基线 / API 调用回放 / 高强度检测矩阵 / Session 请求链 / 加密参数生成与样本复用检查 / 代码质量与中文注释 / 清理结果 / 阶段报告索引）。
+--no-require-final-summary：仅当用户明确要求不生成最终总结时传入，并在阶段输出中记录豁免原因。`;
 }
 
 function exists(p) {
@@ -283,19 +289,19 @@ function extractSampleCryptoValuesFromText(text, sourceFile) {
   return [...out.values()];
 }
 
-function collectSampleCryptoValues(caseDir) {
-  const roots = ['requests', 'fixtures'].map(d => path.join(caseDir, d)).filter(exists);
+function collectSampleCryptoValues(caseSubdir) {
+  const roots = ['requests', 'fixtures'].map(d => path.join(caseSubdir, d)).filter(exists);
   const values = [];
   for (const root of roots) {
     for (const f of walk(root).filter(p => stat(p) && stat(p).isFile() && isTextLikeFile(p))) {
-      for (const item of extractSampleCryptoValuesFromText(readText(f), rel(caseDir, f))) values.push(item);
+      for (const item of extractSampleCryptoValuesFromText(readText(f), rel(caseSubdir, f))) values.push(item);
     }
   }
   return values;
 }
 
-function inspectReusedSampleCryptoValues(caseDir, resultFiles, textFiles) {
-  const sampleValues = collectSampleCryptoValues(caseDir);
+function inspectReusedSampleCryptoValues(caseSubdir, caseDir, resultFiles, textFiles) {
+  const sampleValues = collectSampleCryptoValues(caseSubdir);
   const textCache = new Map();
   for (const f of textFiles) {
     let text = '';
@@ -337,13 +343,14 @@ function inspectReusedSampleCryptoValues(caseDir, resultFiles, textFiles) {
 }
 
 
-function inspectStageReports(caseDir) {
-  const stageDir = path.join(caseDir, '阶段报告');
+function inspectStageReports(caseSubdir) {
+  const stageDir = path.join(caseSubdir, '阶段报告');
   const result = { dir: stageDir, present: exists(stageDir), files: [], initialPresent: false, chineseFileNames: true, mojibakeSuspected: false };
   const problems = [];
   const warnings = [];
   if (!result.present) {
-    problems.push('缺少阶段报告目录 case/阶段报告；至少应在前置阶段生成中文命名阶段报告 01-需求信息确认.md。');
+    // SKILL.md 明确阶段报告默认不生成，仅在多轮复杂补环境 case 或用户明确要求时按需生成；目录缺失不视为问题
+    warnings.push('未生成阶段报告目录 case/阶段报告（默认可省略；多轮复杂补环境 case 或用户明确要求时才需要）。');
     return { result, problems, warnings };
   }
   let names = [];
@@ -364,38 +371,51 @@ function inspectStageReports(caseDir) {
     result.files.push(item);
   }
   result.initialPresent = result.files.some(x => path.basename(x.file) === '01-需求信息确认.md');
-  if (!result.files.length) problems.push('case/阶段报告 中没有 Markdown 阶段报告。');
-  if (!result.initialPresent) problems.push('缺少前置阶段报告：case/阶段报告/01-需求信息确认.md。');
+  if (!result.files.length) warnings.push('case/阶段报告 中没有 Markdown 阶段报告（默认可省略）。');
+  if (!result.initialPresent) warnings.push('缺少前置阶段报告：case/阶段报告/01-需求信息确认.md（默认可省略；若已生成阶段报告则建议补齐）。');
   if (!result.chineseFileNames) problems.push('阶段报告文件名必须包含中文，不能只使用英文文件名。');
   if (result.mojibakeSuspected) problems.push('阶段报告疑似存在中文乱码或连续问号。');
   return { result, problems, warnings };
 }
 
-const FINAL_SUMMARY_REQUIRED_SECTIONS = [
+// 默认解题必需章节（与 final-summary.md 的 8 章默认模板对应）
+const FINAL_SUMMARY_DEFAULT_SECTIONS = [
+  /目标与边界/,
+  /用户提供材料/,
+  /取证流程与证据来源/,
+  /加密参数定位结论/,
+  /算法还原|补环境概览/,
+  /最终交付结构/,
+  /测试结果/,
+  /风险与后续建议/,
+];
+
+// 生产级交付附加章节（用户要求"生产级交付"时才检查）
+const FINAL_SUMMARY_PRODUCTION_SECTIONS = [
   /阶段报告索引/,
   /NativeProtect\s*使用情况/i,
   /环境与指纹\s*API\s*调用回放明细/i,
   /高强度环境检测覆盖矩阵/,
   /加密参数生成与样本复用检查/,
   /代码质量与中文注释/,
-  /最终交付结构/,
   /指纹基线一致性/,
   /Session\s*请求链|Session 模式|TLS 请求验证与 Session 请求链/i,
-  /测试结果/,
   /清理结果/,
 ];
 
-function inspectFinalSummary(resultDir, requireFinalSummary) {
+function inspectFinalSummary(resultDir, requireFinalSummary, production) {
   const finalSummary = path.join(resultDir, '最终项目总结.md');
   const legacyFinalSummary = path.join(resultDir, 'final-summary.md');
   const result = {
     required: !!requireFinalSummary,
+    production: !!production,
     file: exists(finalSummary) ? finalSummary : '',
     legacyFile: exists(legacyFinalSummary) ? legacyFinalSummary : '',
     present: exists(finalSummary),
     utf8Readable: false,
     mojibakeSuspected: false,
     missingSections: [],
+    missingProductionSections: [],
   };
   const problems = [];
   const warnings = [];
@@ -417,11 +437,19 @@ function inspectFinalSummary(resultDir, requireFinalSummary) {
     result.mojibakeSuspected = true;
     problems.push('最终总结疑似存在中文编码乱码或连续问号，请使用 write_markdown_utf8.js 重新生成 UTF-8 Markdown。');
   }
-  for (const pattern of FINAL_SUMMARY_REQUIRED_SECTIONS) {
+  for (const pattern of FINAL_SUMMARY_DEFAULT_SECTIONS) {
     if (!pattern.test(text)) result.missingSections.push(pattern.toString());
   }
   if (result.missingSections.length) {
-    problems.push(`最终总结缺少必要章节：${result.missingSections.join('、')}。项目完成后的总结必须包含 NativeProtect 使用情况、指纹基线一致性、环境与指纹 API 调用回放明细、高强度环境检测覆盖矩阵、最终请求 Session 请求链、加密参数生成与样本复用检查、代码质量与中文注释、最终交付结构、测试结果和清理结果。`);
+    problems.push(`最终总结缺少默认必需章节：${result.missingSections.join('、')}。默认 8 章模板必须齐全：目标与边界 / 用户提供材料 / 取证流程与证据来源 / 加密参数定位结论 / 算法还原或补环境概览 / 最终交付结构 / 测试结果 / 风险与后续建议。`);
+  }
+  if (production) {
+    for (const pattern of FINAL_SUMMARY_PRODUCTION_SECTIONS) {
+      if (!pattern.test(text)) result.missingProductionSections.push(pattern.toString());
+    }
+    if (result.missingProductionSections.length) {
+      problems.push(`生产级交付模式下最终总结缺少附加章节：${result.missingProductionSections.join('、')}。生产级总结需追加：NativeProtect 使用情况 / 指纹基线一致性 / 环境与指纹 API 调用回放明细 / 高强度环境检测覆盖矩阵 / Session 请求链 / 加密参数生成与样本复用检查 / 代码质量与中文注释 / 清理结果 / 阶段报告索引。`);
+    }
   }
   if (!/^#\s+/.test(text.trim())) warnings.push('最终总结建议以一级标题开头。');
   return { result, problems, warnings };
@@ -431,12 +459,13 @@ function inspectFinalSummary(resultDir, requireFinalSummary) {
 function check(args) {
   if (!args.caseDir && !args.file) throw new Error('必须提供 --case-dir 或 --file');
   const caseDir = args.caseDir ? path.resolve(args.caseDir) : path.resolve(path.dirname(args.file), '..');
+  const caseSubdir = path.join(caseDir, 'case');
   const resultDir = path.join(caseDir, 'result');
   const problems = [];
   const warnings = [];
 
-  if (!exists(caseDir)) problems.push(`case 目录不存在：${caseDir}`);
-  if (!exists(resultDir)) problems.push(`结果目录不存在：${resultDir}`);
+  if (!exists(caseDir)) problems.push(`项目根目录不存在：${caseDir}`);
+  if (!exists(resultDir)) problems.push(`结果目录不存在：${resultDir}（result/ 应与 case/ 平级）`);
 
   const candidate = args.file ? path.resolve(args.file) : null;
   let primary = candidate;
@@ -455,7 +484,7 @@ function check(args) {
   if (primary && exists(primary)) {
     const primaryExt = ext(primary);
     if (!['.js', '.py'].includes(primaryExt)) problems.push('执行入口必须是 final.js 或 final.py');
-    if (path.dirname(primary) !== resultDir) warnings.push('执行入口不在 case/result/ 目录中，建议移动到 result/final.js 或 result/final.py');
+    if (path.dirname(primary) !== resultDir) warnings.push('执行入口不在 result/ 目录中（result/ 应与 case/ 平级），建议移动到 result/final.js 或 result/final.py');
 
     const text = readText(primary);
     if (primaryExt === '.js' && !/require\.main\s*===\s*module|import\.meta\.url|main\s*\(\s*\)\.catch|await\s+main\s*\(/.test(text)) {
@@ -513,7 +542,7 @@ function check(args) {
     problems.push(`最终项目源码疑似包含指纹采样 Hook 或 Node.js 渲染库：${fingerprintRenderHits.map(x => `${x.file}(${x.hits.join('、')})`).join('；')}。指纹应由真实浏览器采样 fixture + 终端 API 值回放实现，采样 Hook 不得进入 result/。`);
   }
 
-  const reuse = exists(resultDir) ? inspectReusedSampleCryptoValues(caseDir, resultFiles, textFiles) : { sampleValues: [], reused: [], hardcoded: [], generationEvidence: [] };
+  const reuse = exists(resultDir) ? inspectReusedSampleCryptoValues(caseSubdir, caseDir, resultFiles, textFiles) : { sampleValues: [], reused: [], hardcoded: [], generationEvidence: [] };
   if (reuse.reused.length) {
     problems.push(`最终项目疑似直接复用了请求样本 / fixture 中的加密参数值：${reuse.reused.map(x => `${x.file} 中 ${x.name}=${x.value}（来源 ${x.source}:${x.sourcePath}）`).join('；')}。这些值只能作为 expected fixture，必须通过补环境重新生成。`);
   }
@@ -529,12 +558,12 @@ function check(args) {
 
   inspectPackageJson(resultDir, problems, warnings);
 
-  const stageReports = inspectStageReports(caseDir);
+  const stageReports = inspectStageReports(caseSubdir);
   problems.push(...stageReports.problems);
   warnings.push(...stageReports.warnings);
 
-  const finalSummary = exists(resultDir) ? inspectFinalSummary(resultDir, args.requireFinalSummary) : {
-    result: { required: !!args.requireFinalSummary, file: '', present: false, utf8Readable: false, mojibakeSuspected: false, missingSections: [] },
+  const finalSummary = exists(resultDir) ? inspectFinalSummary(resultDir, args.requireFinalSummary, args.production) : {
+    result: { required: !!args.requireFinalSummary, production: !!args.production, file: '', present: false, utf8Readable: false, mojibakeSuspected: false, missingSections: [], missingProductionSections: [] },
     problems: [],
     warnings: [],
   };
@@ -543,9 +572,11 @@ function check(args) {
 
   return {
     caseDir,
+    caseSubdir,
     resultDir,
     entryFile: primary || null,
     clean: problems.length === 0,
+    production: !!args.production,
     problems,
     warnings,
     reusedCryptoCheck: reuse,
@@ -560,9 +591,11 @@ function renderMarkdown(result) {
   const lines = [
     '# 最终项目检查结果',
     '',
-    `case 目录：${result.caseDir}`,
+    `项目根目录：${result.caseDir}`,
+    `case 子目录：${result.caseSubdir}`,
     `结果目录：${result.resultDir}`,
     `唯一执行入口：${result.entryFile || '未找到'}`,
+    `交付模式：${result.production ? '生产级交付（检查附加章节）' : '默认解题必需'}`,
     `是否通过：${result.clean ? '是' : '否'}`,
     '',
     '## 检查项',
@@ -572,7 +605,8 @@ function renderMarkdown(result) {
     `- 是否使用 Session 模式并具备销毁逻辑：${result.problems.some(p => p.includes('Session 模式')) ? '否' : '是'}`,
     `- 是否不含指纹采样 Hook / Node.js 渲染库：${result.problems.some(p => p.includes('指纹采样 Hook') || p.includes('渲染库')) ? '否' : '是'}`,
     `- 是否未复用 cURL / fixture 中的加密参数样本值：${result.reusedCryptoCheck.reused.length || result.reusedCryptoCheck.hardcoded.length ? '否' : '是'}`,
-    `- 是否已生成中文命名最终总结且包含 API 调用回放明细和高强度检测矩阵：${result.finalSummary.required ? (result.finalSummary.present && !result.finalSummary.mojibakeSuspected && !result.finalSummary.missingSections.length ? '是' : '否') : (result.finalSummaryOptOut ? '用户明确豁免' : '未强制检查')}`,
+    `- 是否已生成中文命名最终总结且包含默认 8 章：${result.finalSummary.required ? (result.finalSummary.present && !result.finalSummary.mojibakeSuspected && !result.finalSummary.missingSections.length ? '是' : '否') : (result.finalSummaryOptOut ? '用户明确豁免' : '未强制检查')}`,
+    `- 是否包含生产级附加章节（仅生产级交付检查）：${result.finalSummary.production ? (result.finalSummary.missingProductionSections.length ? '否' : '是') : '未要求'}`,
     `- result 目录是否无临时 / 测试产物：${result.problems.some(p => p.includes('临时') || p.includes('测试')) ? '否' : '是'}`,
     '',
     '## 样本加密参数复用检查',
@@ -590,10 +624,12 @@ function renderMarkdown(result) {
     '',
     '## 最终总结检查',
     `- 默认要求：${result.finalSummary.required ? '是' : '否'}`,
+    `- 生产级附加章节检查：${result.finalSummary.production ? '是' : '否'}`,
     `- 文件：${result.finalSummary.file ? rel(result.resultDir, result.finalSummary.file) : '未发现，应为 最终项目总结.md'}`,
     `- UTF-8 可读：${result.finalSummary.utf8Readable ? '是' : '否'}`,
     `- 疑似乱码：${result.finalSummary.mojibakeSuspected ? '是' : '否'}`,
-    `- 缺少章节：${result.finalSummary.missingSections.length ? result.finalSummary.missingSections.join('、') : '无'}`,
+    `- 缺少默认章节：${result.finalSummary.missingSections.length ? result.finalSummary.missingSections.join('、') : '无'}`,
+    `- 缺少生产级附加章节：${result.finalSummary.missingProductionSections.length ? result.finalSummary.missingProductionSections.join('、') : (result.finalSummary.production ? '无' : '未检查')}`,
     '',
   ];
   if (result.problems.length) {
