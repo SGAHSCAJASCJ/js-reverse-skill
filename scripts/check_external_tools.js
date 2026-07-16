@@ -334,7 +334,8 @@ function verifyRuyiRuntimeCandidate(label, executablePath) {
   ret.executableMatchesInstallJson = ret.executableDeclared ? samePath(ret.executableDeclared, exe) : false;
 
   const textForRuyi = [ret.runtimeRelease, ret.runtimeAsset, path.basename(near.installRoot)].join(' ');
-  ret.releaseLooksRuyi = /ruyi/i.test(textForRuyi);
+  // 匹配两种 ruyiPage 命名约定：旧版含 "ruyi" 标识（如 151-ruyi），新版 151- 前缀（如 151-proxy）
+  ret.releaseLooksRuyi = /ruyi/i.test(textForRuyi) || /^151-/i.test(ret.runtimeRelease);
   ret.assetLooksFirefox = /firefox/i.test(ret.runtimeAsset || exe);
   ret.managedRuntimeInstalled = ret.installJsonValid && ret.executableExists;
   ret.managedRuntimeVerified = ret.managedRuntimeInstalled

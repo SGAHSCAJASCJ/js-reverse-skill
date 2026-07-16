@@ -287,7 +287,7 @@ new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 3, clien
 通用脚本已覆盖绝大多数场景（打开页面、抓全部包、过滤目标、落盘 JS、指纹基线、登录前暂停、单点拟人点击 / 滚动）。仅在脚本参数无法覆盖的**复杂多步业务交互**时才手写，且必须遵守：
 
 1. 复用通用脚本同一套启动硬约束（定制 Firefox、有头、独立 profile、smart_fingerprint + apply_emulation、capture.start 在 get 之前、navigator.webdriver 自检）。
-2. **正确 API（基于 ruyipage 1.2.45 内省确认，避免重蹈覆辙）**：
+2. **正确 API（基于 ruyipage >=1.2.45 / 151-proxy runtime 内省确认，避免重蹈覆辙）**：
    - `page.capture.start(targets=True, collect_bodies=True)`：`targets=True` 抓**全部**请求；用字符串 / `list` 只做子串过滤，会漏掉 JS 文件。
    - `page.capture.wait(timeout=, count=1)` 返回**单个** `CapturePacket` 或 `None`；`count>1` 才返回列表。
    - 全部已抓包用 `page.capture.steps`（**不是** `get_all`）读取。

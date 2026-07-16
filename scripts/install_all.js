@@ -82,7 +82,7 @@ function detectBestMirror() {
   if (process.env.GITHUB_MIRROR) return process.env.GITHUB_MIRROR;
   // 用已知的 release URL + 范围请求测试（只下载 1 字节，避免全量下载）
   // ghproxy 等镜像只转发 releases/download 路径，不代理仓库主页和 api.github.com
-  const testPath = 'https://github.com/LoseNine/ruyipage/releases/download/151-ruyi/firefox-151.0a1.en-US.win64.zip';
+  const testPath = 'https://github.com/LoseNine/ruyipage/releases/download/151-proxy/firefox-151.0a1.en-US.win64.zip';
   for (const m of MIRROR_CANDIDATES) {
     const ret = run('curl', ['-sk', '--max-time', '10', '-r', '0-0', '-o', 'NUL', '-w', '%{http_code}', `${m}/${testPath}`], 15000);
     const code = ret.stdout.trim();

@@ -15,7 +15,7 @@ ruyiPage 通用取证脚本
   - 导航后自检 navigator.webdriver === false
   - 抓所有包（targets=True），事后从 steps 过滤，避免漏掉 JS 文件
 
-正确 API（基于 ruyipage 1.2.45 内省确认）：
+正确 API（基于 ruyipage >=1.2.45 / 151-proxy runtime 内省确认）：
   - page.capture.start(targets=True, collect_bodies=True)  # True=抓全部
   - page.capture.wait(timeout=, count=1)  -> 单个 CapturePacket 或 None
   - page.capture.steps                     -> list[CapturePacket]（全部包）
