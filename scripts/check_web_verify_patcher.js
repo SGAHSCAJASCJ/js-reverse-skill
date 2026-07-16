@@ -56,10 +56,9 @@ function defaultCandidates(args) {
   if (args.skillsRoot) return [path.join(path.resolve(args.skillsRoot), 'web-verify-patcher')];
   const roots = [];
   if (process.env.CODEX_HOME) roots.push(path.join(process.env.CODEX_HOME, 'skills'));
-  if (process.env.AGENTS_HOME) roots.push(path.join(process.env.AGENTS_HOME, 'skills'));
   const home = os.homedir();
   roots.push(path.join(home, '.codex', 'skills'));
-  roots.push(path.join(home, '.agents', 'skills'));
+  roots.push(path.join(home, '.claude', 'skills'));
   roots.push(path.join(process.cwd(), 'skills'));
   return unique(roots).map(root => path.join(root, 'web-verify-patcher'));
 }
@@ -87,13 +86,13 @@ function inspect(args) {
     installed: Boolean(installed),
     selected: installed,
     candidates,
-    installRepo: 'https://github.com/lwjjike/universal-js-reverse-skill',
+    installRepo: 'https://github.com/lwjjike/xbsReverseSkill',
     expectedFolder: 'web-verify-patcher',
     instructions: [
       '自动安装前先让用户确认安装目录；克隆仓库后必须检查是否存在 web-verify-patcher/ 目录。',
       '如果仓库当前分支没有 web-verify-patcher/，不得假装安装成功，要求用户提供正确分支、正确仓库、压缩包或本地目录。',
       '自行安装时，将 web-verify-patcher 文件夹放到 $HOME/.codex/skills/web-verify-patcher；Windows 可使用 %USERPROFILE%\\.codex\\skills\\web-verify-patcher。',
-      '如当前环境使用 .agents/skills，也可同步放到 $HOME/.agents/skills/web-verify-patcher。安装后重启或刷新 Codex 再检测。',
+      '如当前环境使用 Claude CLI，也可同步放到 $HOME/.claude/skills/web-verify-patcher。安装后重启或刷新对应 CLI 再检测。',
     ],
   };
   return report;
