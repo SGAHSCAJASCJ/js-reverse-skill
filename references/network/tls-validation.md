@@ -283,7 +283,7 @@ def close_curl_cffi_session(session):
 `cffi_curl` 与 `cyCronet` / `cycronet` 的 API 版本差异较大，Skill 不应硬编码某个本机版本。`cyCronet` / `cycronet` 默认优先用于 Chrome / Chromium baseline；Firefox baseline 应优先走 curl_cffi 对齐流程。使用方式：
 
 1. 先运行 `check_tls_clients.js --python python --json` 确认导入名。
-2. 在 `result/src/request_client.py` 封装一个统一函数 `send_request(...)`。
+2. 在 `result/src/request/client.py` 封装一个统一函数 `send_request(...)`。
 3. 只在封装内部处理库差异；`final.py` 不直接散落库调用。
 4. 若当前包 API 与模板不一致，以本机包文档为准，并在 `notes/final-request-validation.md` 记录使用版本和参数。
 

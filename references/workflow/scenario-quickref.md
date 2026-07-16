@@ -84,7 +84,7 @@
 
 | 案例文件 | 关联点 |
 |---------|--------|
-| `cases/simple-sign-md5.md` | 场景 1 实战（纯算 + 零浏览器路径） |
+| `cases/sha1-sort-params-zhitongcaijing.md` | 场景 1 实战（标准算法纯算 + 零浏览器路径） |
 | `cases/jsvmp-xhr-interceptor-env-emulation.md` | 场景 8 实战（JSVMP + jsdom 环境伪装） |
 | `cases/jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md` | 场景 8 双签名变体 |
 | `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | 场景 2 + 场景 7（瑞数 RS6 Cookie 生成 + 412 挑战） |

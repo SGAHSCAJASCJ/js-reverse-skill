@@ -223,7 +223,7 @@ if (navigator.plugins.length === 0) {
 }
 ```
 
-**绕过**：补全环境变量（参考 `references/env/env-object-model.md` 和 `env-detect-bypass.md`）。
+**绕过**：补全环境变量（参考 `references/env/env-object-model.md` 和 `references/env/env-detect-bypass.md`）。
 
 ### 5.3 Selenium / Puppeteer 检测
 

@@ -18,12 +18,13 @@
 
 const vm = require('vm');
 
-// 规范版 NativeProtect（优先仓库内路径，复制交付时回退到同目录）
+// NativeProtect：优先同目录的内联副本（交付物自包含，不依赖 skill 仓库），
+// 其次回退到 skill 仓库路径（开发期在仓库内直接引用 assets/ 时也可用）。
 let NativeProtect = null;
 try {
-  NativeProtect = require('../../assets/env-patch-snippets/native-protect.js');
+  NativeProtect = require('./native-protect.js');
 } catch (_) {
-  try { NativeProtect = require('./native-protect.js'); } catch (_) { NativeProtect = null; }
+  try { NativeProtect = require('../../assets/env-patch-snippets/native-protect.js'); } catch (_) { NativeProtect = null; }
 }
 
 // 必须在 vm 上下文中删除 / 置 undefined 的宿主全局（阻断 Node 能力泄露）。

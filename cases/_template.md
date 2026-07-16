@@ -11,38 +11,37 @@
 
 ## 目录结构
 
-> **项目根下只有 `case/` 和 `result/` 两个平级子目录**。`case/` 放取证/调试材料，`result/` 放最终交付物。两者平级，不要把 `result/` 嵌套进 `case/`。
+> `<case 根>` 下只有 `case/` 和 `result/` 两个平级子目录（SKILL.md Phase 0.4 要求）。
 
 ```text
-<项目根>/
-├── case/                      # 取证 / 调试材料
-│   ├── 阶段报告/
+<case 根>/
+├── case/
+│   ├── 阶段报告/          # 仅复杂补环境或用户明确要求时按需生成
 │   │   └── 01-需求信息确认.md
 │   ├── js/
-│   │   ├── original/          # 原始 JS 文件
-│   │   ├── pretty/            # 格式化后的 JS
-│   │   └── extracted/         # 提取的关键代码片段
+│   │   ├── original/      # 原始 JS 文件
+│   │   ├── pretty/        # 格式化后的 JS
+│   │   └── extracted/     # 提取的关键代码片段
 │   ├── requests/
-│   │   └── request.curl       # Copy as cURL 样本
+│   │   └── request.curl   # Copy as cURL 样本
 │   ├── fixtures/
 │   │   ├── sample.fixture.json    # 浏览器真实输出 fixture
 │   │   └── fingerprint.fixture.json # 指纹采样 fixture（如涉及）
 │   ├── notes/
 │   │   ├── 代码变更记忆.md
-│   │   ├── entry-chain.md     # source/entry/builder/writer 链路
+│   │   ├── entry-chain.md # source/entry/builder/writer 链路
 │   │   ├── silent-failure-checklist.md
 │   │   └── trust-matrix.md
-│   ├── ruyi-trace/            # Trace 日志（如使用）
+│   ├── ruyi-trace/        # Trace 日志（如使用）
 │   │   └── logs/
-│   ├── hooks/                 # 临时 Hook 脚本（用完即删）
-│   ├── env/                   # 补环境代码（开发阶段）
-│   ├── tmp/                   # 临时文件（用完即删）
-│   └── forensic/              # ruyipage 抓包元数据 + target-hits.json
-└── result/                    # 最终交付（与 case/ 平级）
-    ├── final.js               # 唯一执行入口
-    ├── 最终项目总结.md         # 必选
-    ├── 经验沉淀-<站点>.md      # 必选（按 _template.md Part 2 格式）
-    └── src/                   # 源码模块（按需拆分）
+│   ├── hooks/             # 临时 Hook 脚本（用完即删）
+│   ├── env/               # 补环境代码（开发阶段）
+│   └── tmp/               # 临时文件（用完即删）
+└── result/                # 最终交付（必选，与 case/ 平级）
+    ├── final.js
+    ├── 最终项目总结.md
+    ├── 经验沉淀-<站点>.md  # 必选（按 Part 2 格式）
+    └── src/
 ```
 
 ## Case 信息（工作区记录用）
@@ -72,6 +71,8 @@
 
 ## 阶段报告清单
 
+> **阶段报告默认不生成**。仅多轮复杂补环境 case 或用户明确要求时按需生成到 `case/阶段报告/`（详见 `references/quality/stage-reports.md`）。以下清单供需要时参考。
+
 - [ ] 01-需求信息确认.md
 - [ ] 02-取证方案确认.md
 - [ ] 03-请求样本与可疑参数确认.md
@@ -79,7 +80,6 @@
 - [ ] 05-补环境前置分析.md
 - [ ] 06-补环境实现记录.md
 - [ ] 07-验证与清理记录.md
-- [ ] 最终项目总结.md
 
 ## 交付前检查清单
 
@@ -94,7 +94,7 @@
 - [ ] 补环境真实性检查通过
 - [ ] 最终产物检查通过
 - [ ] 清理 dry-run 通过
-- [ ] 最终总结已生成
+- [ ] 最终总结已生成（`result/最终项目总结.md`，必选项）
 
 ---
 

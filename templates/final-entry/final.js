@@ -1,101 +1,187 @@
 /**
- * final.js 入口模板（Node.js 版）
+ * final.js — JS 逆向交付物【单一入口】（轻量：自验 + 可被 require 调用）。
  *
- * 硬性要求（来自 references/quality/delivery-templates.md）：
- *   1. 必须使用 createRequestSession + try-finally close
- *   2. 不得使用普通 fetch / axios 发送最终业务请求
- *   3. 动态资源必须运行时刷新，不硬编码动态参数
- *   4. signer 与 request 分离
- *   5. Session 模式：同一 session 复用 Cookie / TLS 上下文
- *   6. 仅用于授权范围内的少量最终验证请求
- *   7. 【默认强制】默认向真实 API 发请求验证（≥5 次交叉验证），仅当用户明确说"只输出参数"时
- *      才用 --sign-only 跳过 HTTP 请求。不得以"签名生成了"作为交付完成的判定标准。
+ * 双重角色：
+ *   - 自验：   node final.js            → 补环境 → 生成加密参数 → 用 TLS 客户端发真实请求 → 输出结果 → 销毁 session
+ *   - 库调用： const { sign } = require('./result');  → 只取 API，不自动执行、不发请求
  *
- * 并发注意：本模板为单次签名设计。signer 通常持有 vm context / WASM 实例 / Cookie 状态，
- * 非无状态。高并发场景需调用方自行池化 signer 实例（多个独立 vm context），
- * 不要跨线程/进程共享同一 signer。详见 references/workflow/common-pitfalls.md 反模式 7。
+ * 含 require.main 守卫：被其他项目 require 时只导出 API，不会自动跑主流程、不会发请求。
+ *
+ * 硬编码纪律（红线）：本文件不含任何 ruyiPage / RuyiTrace / Playwright / 浏览器自动化代码；
+ * 所有加密参数均由补环境后的 signer 动态生成，不硬编码样本 sign/token 值。
  *
  * 使用方式：
- *   node result/final.js                          # 默认：发真实 API 请求，交叉验证 5 次
- *   node result/final.js --verify 5               # 发真实 API 请求，交叉验证 5 次
- *   node result/final.js --sign-only              # 仅输出签名，不发真实请求（需用户明确指定）
- *   node result/final.js --cookie "name=value"    # 注入用户 cookie
+ *   node final.js                          # 默认：发真实 API 请求，交叉验证 5 次
+ *   node final.js --verify 5               # 指定验证次数
+ *   node final.js --sign-only              # 仅输出签名，不发真实请求（需用户明确指定）
+ *   node final.js --cookie "name=value"    # 注入用户 cookie（覆盖设备 cookie 同名项）
+ *
+ * 并发注意：signer 通常持有 vm context / WASM 实例 / Cookie 状态，非无状态。
+ * 高并发场景需调用方自行池化 signer 实例（多个独立 vm context），不要跨线程/进程共享同一 signer。
  */
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+const { URL } = require('url');
+
 // ============================================================
-// 模块引用（最终项目结构 result/src/...，从 templates/ 复制或自行实现）
+// 依赖（由用户从 templates 复制到 result/src/ 后填充）
 // ============================================================
-// 补环境模块:从 templates/vm-sandbox/install-env.js 复制到 result/src/env/install-env.js
+// 补环境：从 templates/vm-sandbox/install-env.js 复制到 result/src/env/install-env.js
 const { installEnv } = require('./src/env/install-env');
-// 请求客户端:从 templates/node-request/client.js 复制到 result/src/request/client.js
+// 签名生成：用户自行实现（参考 cases/ 同类案例），需导出 generateSign + buildParams
+const signer = require('./src/signer');
+// 请求客户端：从 templates/node-request/client.js 复制到 result/src/request/client.js
 const { createRequestSession, CookieJar } = require('./src/request/client');
-// 签名生成:用户自行实现(每个站点签名逻辑不同),参考 cases/ 中同类案例
-/**
- * 生成签名参数
- * @param {Object} params - 请求参数（buildParams() 的返回值）
- * @param {Object} env - installEnv() 的返回值，结构: { global, nativeProtect, source, navigator, document, location, storage, performance, crypto }
- * @returns {string} 签名值（用于 URL query 或 header）
- * @example generateSign({timestamp:'123', nonce:'abc'}, env) → "a1b2c3..."
- */
-const { generateSign } = require('./src/signer');
-// 动态资源刷新:用户自行实现(刷新 home/init 等预热请求拿 cookie/seed),参考 references/network/dynamic-resource.md
-// 未实现时使用空实现（不阻塞主流程），用户在 case 中替换为真实刷新逻辑
-/**
- * 刷新运行时动态资源（home 页/init 接口拿 cookie/seed/challenge）
- * @param {Object} session - createRequestSession() 的返回值，有 .request(method, url, opts) 方法
- * @param {Object} jar - CookieJar 实例，有 .cookies(Map) / .toString() / .merge(setCookieHeader) 方法
- * @param {Object} urls - { homeUrl: string, initUrl: string }
- * @returns {Promise<Object>} runtimeCtx - 运行时上下文（当前实现未使用返回值，可返回空对象）
- */
-let fetchRuntimeResources;
+
+// 指纹 fixture：用户从浏览器采集真实值写入 result/src/env/fixtures/index.js（可选）
+let FIXTURES = {};
 try {
-  // 从 templates/final-entry/ 复制后路径为 result/src/resources/fetch-runtime-resources.js
-  // 用户未实现该模块时使用空实现
+  FIXTURES = require('./src/env/fixtures/index.js');
+} catch (_) {
+  FIXTURES = {};
+}
+
+// 动态资源刷新模块（可选）：复制到 result/src/resources/fetch-runtime-resources.js
+let fetchRuntimeResources = null;
+try {
   fetchRuntimeResources = require('./src/resources/fetch-runtime-resources').fetchRuntimeResources;
-} catch (e) {
-  fetchRuntimeResources = async (session, jar, urls) => {
-    console.warn('[warn] fetch-runtime-resources.js 未实现，使用空实现（动态资源未刷新）');
-    console.warn(`       预期路径: result/src/resources/fetch-runtime-resources.js`);
-    console.warn(`       参考: references/network/dynamic-resource.md`);
-    return {};
+} catch (_) {
+  fetchRuntimeResources = async () => ({});
+}
+
+// ============================================================
+// 配置（静态外置 config.json + 内置默认，不做环境变量覆盖）
+// ============================================================
+function loadConfig() {
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+  } catch (_) {
+    // 无 config.json 时退回内置默认
+  }
+  return Object.assign(
+    {
+      TARGET_URL: '',
+      HOME_URL: '',
+      INIT_URL: '',
+      METHOD: 'GET',
+      USER_AGENT: '',
+      IMPERSONATE: 'chrome135',
+      SIGN_PARAM_NAME: 'sign',
+      DEVICE_COOKIE: '',
+      extraHeaders: {},
+    },
+    cfg
+  );
+}
+const CONFIG = loadConfig();
+
+// ============================================================
+// 补环境对象缓存（进程内复用，避免每次 sign 都重建 vm 上下文）
+// ============================================================
+let _envCache = null;
+function getEnv(opts = {}) {
+  if (_envCache) return _envCache;
+  const config = opts.config || CONFIG;
+  _envCache = installEnv({
+    fixtures: FIXTURES,
+    userAgent: config.USER_AGENT,
+    cookie: mergeCookie(config.DEVICE_COOKIE, opts.userCookie),
+  });
+  return _envCache;
+}
+
+/** 合并 Cookie（用户 cookie 优先同名项） */
+function mergeCookie(deviceCookie, userCookie) {
+  if (!userCookie) return deviceCookie || '';
+  if (!deviceCookie) return userCookie;
+  const setPair = (map, pair) => {
+    const eq = pair.indexOf('=');
+    if (eq < 0) return;
+    const k = pair.slice(0, eq).trim();
+    const v = pair.slice(eq + 1).trim();
+    if (k) map.set(k, v);
+  };
+  const merged = new Map();
+  for (const pair of deviceCookie.split(';').map(s => s.trim()).filter(Boolean)) setPair(merged, pair);
+  for (const pair of userCookie.split(';').map(s => s.trim()).filter(Boolean)) setPair(merged, pair);
+  return Array.from(merged.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+// ============================================================
+// 可复用 API（被 require 时导出；本身不发请求）
+// ============================================================
+/**
+ * 生成加密参数。只计算、不发任何网络请求。
+ * @param {Object} [rawParams] 业务参数，会与 buildParams() 的默认参数合并（同名覆盖）
+ * @param {Object} [opts]
+ * @param {Object} [opts.config]    已加载的配置（不传则使用 CONFIG）
+ * @param {string} [opts.userCookie] 注入的用户 cookie（覆盖设备 cookie 同名项）
+ * @returns {{ params: Object, signature: string, env: Object }}
+ */
+function sign(rawParams = {}, opts = {}) {
+  const config = opts.config || CONFIG;
+  const env = getEnv(opts);
+  const baseParams = typeof signer.buildParams === 'function' ? signer.buildParams(config) : {};
+  const params = Object.assign({}, baseParams, rawParams);
+  const signature = signer.generateSign(params, env);
+  return { params, signature, env };
+}
+
+/**
+ * 在 sign() 基础上组装出「待发送」请求描述符（仍不发请求）。
+ * @param {Object} [opts]
+ * @param {Object} [opts.rawParams]   业务参数（传给 sign）
+ * @param {Object} [opts.config]      配置
+ * @param {string} [opts.userCookie]   注入 cookie
+ * @param {Object} [opts.extraHeaders] 额外请求头（如业务 token）
+ * @returns {{ method: string, url: string, headers: Object, params: Object, signature: string }}
+ */
+function buildSignedRequest(opts = {}) {
+  const config = opts.config || CONFIG;
+  const { params, signature } = sign(opts.rawParams || {}, opts);
+
+  const url = new URL(config.TARGET_URL);
+  url.searchParams.set(config.SIGN_PARAM_NAME, signature);
+  for (const [k, v] of Object.entries(params)) {
+    if (k === config.SIGN_PARAM_NAME) continue;
+    url.searchParams.set(k, String(v));
+  }
+
+  const headers = Object.assign(
+    { 'User-Agent': config.USER_AGENT },
+    config.extraHeaders || {},
+    opts.extraHeaders || {}
+  );
+
+  return {
+    method: config.METHOD,
+    url: url.toString(),
+    headers,
+    params: Object.assign({}, params, { [config.SIGN_PARAM_NAME]: signature }),
+    signature,
   };
 }
-// 指纹 fixture:用户从浏览器采集真实值写入,参考 references/fingerprint/fingerprint-baseline-consistency.md
-const FIXTURES = require('./src/env/fixtures/index.js');
 
-// ============================================================
-// 常量配置（硬编码，不依赖 req.txt 等已有请求文件）
-// ============================================================
-const CONFIG = {
-  // 目标 API（通过硬编码常量和函数构建基础 URL）
-  TARGET_URL: 'https://example.com/api/search',
-  HOME_URL: 'https://example.com/',
-  INIT_URL: 'https://example.com/api/init',
-
-  // UA（固定为 Chrome 135，与签名用 UA 一致）
-  USER_AGENT: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
-
-  // TLS 客户端配置
-  IMPERSONATE: 'chrome135',
-
-  // 指纹 fixture（已在上方声明为 FIXTURES const）
-
-  // 设备 Cookie（内置，用户 cookie 优先）
-  DEVICE_COOKIE: process.env.DEVICE_COOKIE || '',
-};
+/** 创建 TLS 指纹兼容 Session（与自验主流程共用） */
+async function createClient(opts = {}) {
+  const config = opts.config || CONFIG;
+  return createRequestSession({
+    impersonate: config.IMPERSONATE,
+    userAgent: config.USER_AGENT,
+    ...(opts.client || {}),
+  });
+}
 
 // ============================================================
 // 命令行参数解析
 // ============================================================
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = {
-    verify: 5,
-    noRealRequest: false,
-    userCookie: '',
-  };
+  const opts = { verify: 5, noRealRequest: false, userCookie: '' };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--verify' && args[i + 1]) {
       opts.verify = parseInt(args[i + 1], 10);
@@ -110,47 +196,37 @@ function parseArgs() {
   return opts;
 }
 
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
 // ============================================================
-// 主入口
+// 主流程（仅自验时运行）
 // ============================================================
 async function main() {
   const opts = parseArgs();
 
-  console.log('=== JS 逆向 final.js 启动 ===');
+  console.log('=== JS 逆向 final.js 启动（自验入口）===');
   console.log(`目标 API: ${CONFIG.TARGET_URL}`);
-  console.log(`UA: ${CONFIG.USER_AGENT}`);
+  console.log(`UA: ${CONFIG.USER_AGENT || '(未配置)'}`);
   console.log(`TLS 客户端: ${CONFIG.IMPERSONATE}`);
   console.log(`验证次数: ${opts.verify}`);
   console.log(`发送真实请求: ${opts.noRealRequest ? '否（--sign-only）' : '是（默认）'}`);
 
-  // ----- 1. 安装补环境 -----
-  const env = installEnv({
-    fixtures: FIXTURES,
-    userAgent: CONFIG.USER_AGENT,
-    cookie: mergeCookie(CONFIG.DEVICE_COOKIE, opts.userCookie),
-  });
-  console.log(`补环境来源: ${env.source}`);
-
-  // ----- 2. 仅输出签名模式（需用户明确指定 --sign-only）-----
+  // ----- 仅输出签名模式（需用户明确指定 --sign-only）-----
   if (opts.noRealRequest) {
     console.log('\n--- 仅输出签名（--sign-only，不发真实请求）---');
     for (let i = 0; i < opts.verify; i++) {
-      const params = buildParams();
-      const sign = generateSign(params, env);
-      console.log(`[第 ${i + 1} 次] sign=${sign} params=${JSON.stringify(params)}`);
+      const { params, signature } = sign({}, { userCookie: opts.userCookie });
+      console.log(`[第 ${i + 1} 次] sign=${signature} params=${JSON.stringify(params)}`);
     }
     return;
   }
 
-  // ----- 3. 创建请求 Session -----
-  const session = await createRequestSession({
-    impersonate: CONFIG.IMPERSONATE,
-    userAgent: CONFIG.USER_AGENT,
-  });
+  // ----- 创建请求 Session -----
+  const session = await createClient({ userCookie: opts.userCookie });
   const jar = new CookieJar();
 
   try {
-    // ----- 4. 动态资源刷新 -----
+    // ----- 动态资源刷新（可选）-----
     console.log('\n--- 刷新动态资源 ---');
     const runtimeCtx = await fetchRuntimeResources(session, jar, {
       homeUrl: CONFIG.HOME_URL,
@@ -158,33 +234,28 @@ async function main() {
     });
     console.log(`动态资源刷新完成: cookie 数 ${jar.cookies.size}`);
 
-    // ----- 5. 交叉验证 -----
+    // ----- 交叉验证 -----
     console.log(`\n--- 交叉验证 ${opts.verify} 次 ---`);
     let successCount = 0;
     let failCount = 0;
 
     for (let i = 0; i < opts.verify; i++) {
       try {
-        const params = buildParams();
-        const sign = generateSign(params, env);
-        const url = buildTargetUrl(CONFIG.TARGET_URL, { ...params, sign });
-
+        const req = buildSignedRequest({ userCookie: opts.userCookie });
         console.log(`\n[第 ${i + 1} 次请求]`);
-        console.log(`  URL: ${url}`);
-        console.log(`  sign: ${sign}`);
-        console.log(`  cookie: ${jar.toString().slice(0, 80)}...`);
+        console.log(`  URL: ${req.url}`);
+        console.log(`  sign: ${req.signature}`);
+        console.log(`  cookie: ${(jar.toString() || '').slice(0, 80)}...`);
 
-        const res = await session.request('GET', url, {
-          headers: { Cookie: jar.toString() },
+        const res = await session.request(req.method, req.url, {
+          headers: Object.assign({ Cookie: jar.toString() }, req.headers),
         });
 
         console.log(`  状态码: ${res.status}`);
         const body = res.body == null ? '' : (typeof res.body === 'string' ? res.body : JSON.stringify(res.body));
         console.log(`  响应: ${body.slice(0, 200)}`);
 
-        // 合并新 Cookie
         jar.merge(res.headers['set-cookie']);
-
         if (res.status === 200 && body) {
           successCount++;
         } else {
@@ -197,7 +268,6 @@ async function main() {
         console.log(`  [FAIL] 异常: ${e.message}`);
       }
 
-      // 间隔
       if (i < opts.verify - 1) {
         await sleep(1000 + Math.random() * 2000);
       }
@@ -206,8 +276,10 @@ async function main() {
     console.log(`\n=== 验证结果 ===`);
     console.log(`成功: ${successCount} / ${opts.verify}`);
     console.log(`失败: ${failCount} / ${opts.verify}`);
+    if (successCount < opts.verify) {
+      process.exitCode = 2;
+    }
   } finally {
-    // ----- 6. 关闭 Session（硬性要求）-----
     if (session.close) {
       session.close();
       console.log('Session 已关闭');
@@ -216,85 +288,14 @@ async function main() {
 }
 
 // ============================================================
-// 辅助函数
+// 启动（require.main 守卫：被 require 时不自动执行）
 // ============================================================
-
-/**
- * 构建请求参数（硬编码常量 + 动态时间戳）
- */
-function buildParams() {
-  return {
-    timestamp: String(Date.now()),
-    nonce: Math.random().toString(36).slice(2, 10),
-    // 其他固定参数
-    app_id: 'demo_app',
-    platform: 'web',
-  };
+if (require.main === module) {
+  main().catch(err => {
+    console.error('主流程异常:', err);
+    process.exit(1);
+  });
 }
 
-/**
- * 构建目标 URL（query 拼接）
- */
-function buildTargetUrl(base, params) {
-  const url = new URL(base);
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v);
-  }
-  return url.toString();
-}
-
-/**
- * 合并 Cookie（用户 cookie 优先同名项）
- */
-function mergeCookie(deviceCookie, userCookie) {
-  if (!userCookie) return deviceCookie;
-  if (!deviceCookie) return userCookie;
-
-  const setPair = (map, pair) => {
-    const eq = pair.indexOf('=');
-    if (eq < 0) return;
-    const k = pair.slice(0, eq).trim();
-    const v = pair.slice(eq + 1).trim();
-    if (k) map.set(k, v);
-  };
-
-  const merged = new Map();
-  // 设备 Cookie 先加入
-  for (const pair of deviceCookie.split(';').map(s => s.trim()).filter(Boolean)) {
-    setPair(merged, pair);
-  }
-  // 用户 Cookie 覆盖同名项
-  for (const pair of userCookie.split(';').map(s => s.trim()).filter(Boolean)) {
-    setPair(merged, pair);
-  }
-  return Array.from(merged.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
-}
-
-/**
- * sleep
- */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// ============================================================
-// 异常处理
-// ============================================================
-process.on('uncaughtException', (err) => {
-  // 致命异常：记录并退出，避免处于不确定状态（JSVMP crash 应在主流程 try/catch 中捕获，不会落到此处）
-  console.error(`[uncaughtException] ${err && err.message ? err.message : err}`);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason) => {
-  console.error(`[unhandledRejection] ${reason}`);
-  process.exit(1);
-});
-
-// ============================================================
-// 启动
-// ============================================================
-main().catch(err => {
-  console.error('主流程异常:', err);
-  process.exit(1);
-});
+// 同时作为库导出（轻量透传，方便 require('./result') 直接拿到 API）
+module.exports = { sign, buildSignedRequest, CONFIG, loadConfig };

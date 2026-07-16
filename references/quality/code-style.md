@@ -158,4 +158,4 @@ node scripts/check_final_artifact.js --case-dir case --markdown
 | `markObjectType` | 删除该调用；native-like 实例不需要二次标记，普通对象才用 `markObjectToString` 并记录原因 |
 | `prototype = {}` | 改为 `createProtoChains` 或 `Object.defineProperties`，保留 `constructor` 和 `Symbol.toStringTag` |
 | 直接复用宿主 Web API | 按浏览器样本和目标调用范围重建可控实现，不盲目透传 Node 宿主对象 |
-| target bundle 混入手写代码 | 原始 bundle 放 `src/target/original/`，入口包装放 `src/target/entry.js` |
+| target bundle 混入手写代码 | 原始 bundle 放 `src/target/original/`（仅 vm 加载原始 JS 时），加密入口实现放 `src/signer.js` |

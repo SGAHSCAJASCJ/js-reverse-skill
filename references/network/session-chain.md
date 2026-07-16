@@ -72,14 +72,10 @@ def create_request_session(headers=None, impersonate="chrome"):
     return session
 
 
-def close_request_session(session):
-    try:
-        session.cookies.clear()
-    finally:
-        session.close()
-```
+# 统一在 finally 中调用 session.close() 释放连接与 Cookie jar
+# （真实 client.py 的 RequestSession 已提供 close 方法，final.py 直接调用）
 
-如 cffi_curl / cyCronet 当前版本没有现成 Session，需要在 `src/request_client.py` 自行维护 Cookie jar 和底层连接生命周期，并提供 `close_request_session(...)`。
+如 cffi_curl / cyCronet 当前版本没有现成 Session，需要在 `src/request/client.py` 自行维护 Cookie jar 和底层连接生命周期，并在 `finally` 中统一调用 `session.close()`。
 
 ## 高强度入口页与请求顺序
 

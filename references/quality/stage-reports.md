@@ -182,7 +182,7 @@ node scripts/check_stage_reports.js --case-dir case --require-stage WebAPI补齐
 
 ## 4a. 计划外新增 WebAPI 与原因
 
-计划外新增只能使用以下原因：`trace-not-covered` / `dynamic-resource-new-branch` / `baseline-mismatch` / `trace-truncated` / `native-gap` / `missed-from-trace`。如果原因是 `missed-from-trace`，必须标为流程缺陷，并补写 `trace-api-inventory.json`、`env-coverage-matrix.md` 和 `notes/代码变更记忆.md` 后再继续。
+计划外新增只能使用以下原因：`trace-not-covered` / `dynamic-resource-new-branch` / `baseline-mismatch` / `trace-truncated` / `native-gap` / `missed-from-trace`。如果原因是 `missed-from-trace`，必须标为流程缺陷，并补写 `trace-api-inventory.json` 和 `notes/代码变更记忆.md` 后再继续。
 
 | WebAPI | 新增原因 | 为什么未在 Trace 覆盖矩阵首轮处理 | 证据 | 处理结果 |
 |---|---|---|---|---|

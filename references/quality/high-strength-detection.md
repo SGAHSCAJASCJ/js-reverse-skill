@@ -1,6 +1,6 @@
 # 高强度浏览器环境检测通用排查指南
 
-> **交叉引用**：本清单与 `debug/debug-playbook.md`（故障树总览 + 请求失败 6 步）、`network/node-leakage.md`（12 项静默失败）、`network/ip-risk-control.md`（IP 风控识别）互补。请求失败时先查 `debug-playbook.md` 顶部故障树定位分支，本清单用于高强度检测场景的深度排查。
+> **交叉引用**：本清单与 `debug/debug-playbook.md`（故障树总览 + 请求失败 6 步）、`network/node-leakage.md`（12 项静默失败）、`network/ip-risk-control.md`（IP 风控识别）互补。请求失败时先查 `debug/debug-playbook.md` 顶部故障树定位分支，本清单用于高强度检测场景的深度排查。
 
 本文件用于从 Cloudflare / Turnstile / Akamai / DataDome / Kasada / Shape / F5 等高强度检测样本中抽象通用补环境要求。它不是任何厂商的专用绕过流程，也不用于生成或伪造 challenge、验证码、访问控制 Cookie 或第三方防护 token；只用于授权范围内的网页端 Node.js 补环境、取证一致性检查和最终请求链验证。
 
@@ -29,11 +29,11 @@
 
 | 类别 | 重点排查 | 通用处理原则 |
 |---|---|---|
-| 环境真实性 | 原型链、属性描述符、getter/setter、非法构造、brand check、枚举顺序、Error stack、DataCloneError、toString 多通道 | 按 `env-object-model.md`、`env-native-protection.md`，JS 层 NativeProtect 保护 |
+| 环境真实性 | 原型链、属性描述符、getter/setter、非法构造、brand check、枚举顺序、Error stack、DataCloneError、toString 多通道 | 按 `references/env/env-object-model.md`、`references/env/env-native-protection.md`，JS 层 NativeProtect 保护 |
 | 指纹值 | Canvas、WebGL、WebGPU、Audio、Speech、Fonts、DOM geometry、Permissions、Plugins、MimeTypes、MediaDevices、WebRTC、screen、UA-CH | Trace 未截断优先，截断 / 缺失则真实浏览器采样，禁止 AI 猜值和随机化 |
 | 自动化痕迹 | `navigator.webdriver`、Selenium / PhantomJS / NightmareJS / ChromeDriver 痕迹、CDP / DevTools 侧信道、headless 差异、`isTrusted` | 从第一次取证起使用用户确认的 ruyiPage / 手动浏览器，固定 baseline |
 | 浏览器状态 | Cookie、localStorage、sessionStorage、IndexedDB、Cache、ServiceWorker、权限状态、visibility、focus、history | 入口页优先，记录生成 / 刷新链路，不把过期状态误判为补环境失败 |
-| 网络一致性 | TLS JA3/JA4、HTTP/2、Header 顺序、Accept-Encoding、UA、UA-CH、Sec-Fetch、Referer、Origin、Accept-Language、代理地区 | 参见 `tls-validation.md` + `session-chain.md`，最终请求使用 Session + TLS 指纹兼容客户端 |
+| 网络一致性 | TLS JA3/JA4、HTTP/2、Header 顺序、Accept-Encoding、UA、UA-CH、Sec-Fetch、Referer、Origin、Accept-Language、代理地区 | 参见 `network/tls-validation.md` + `network/session-chain.md`，最终请求使用 Session + TLS 指纹兼容客户端 |
 | 请求链与时序 | 入口 HTML、动态 JS、检测脚本、前置接口、目标 API、请求间隔、Cookie 变化 | 不孤立重放单个 API，保存 request-chain manifest 与失败排查结论 |
 
 ## 入口页优先原则
@@ -43,7 +43,7 @@
 1. 入口 HTML URL 与目标 API URL 的关系。
 2. 入口页是否注入检测脚本、动态 seed、nonce、challenge 资源或 Set-Cookie。
 3. 目标 API 是否依赖入口页产生的 Cookie / Storage / JS runtime 状态。
-4. 是否存在动态 HTML / JS 资源过期风险，必要时按 `dynamic-resource.md` 在最终入口运行时刷新。
+4. 是否存在动态 HTML / JS 资源过期风险，必要时按 `references/network/dynamic-resource.md` 在最终入口运行时刷新。
 5. 如果用户只提供 API cURL 且返回风控 / challenge，应暂停要求入口页、HAR、浏览器取证证据或用户确认无法提供，不得直接盲补 API 参数。
 
 ## 指纹值不能随机化

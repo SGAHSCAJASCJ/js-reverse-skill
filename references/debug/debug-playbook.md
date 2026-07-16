@@ -229,7 +229,7 @@
 
 | 问题 | 可能原因 | 解决方法 |
 |------|---------|---------|
-| Node.js vm 沙箱报错 | 缺少 DOM API（document/window） | 参考 `env-object-model.md` 补环境 |
+| Node.js vm 沙箱报错 | 缺少 DOM API（document/window） | 参考 `references/env/env-object-model.md` 补环境 |
 | Python execjs 报错 | Node.js 未安装 / JS 代码有语法错误 | 检查 Node.js 环境、验证 JS 代码 |
 | WASM 加载失败 | 缺少 imports / 内存不足 | 检查 WASM imports 并补全 |
 | Cookie 设置不生效 | domain 不匹配 / path 不匹配 | 确认 Cookie 的 domain 和 path |

@@ -123,7 +123,7 @@ ruyiPage 的价值在于使用 Firefox + WebDriver BiDi，并配合其 managed r
 
 - ruyiPage Python 包可导入。
 - `requests` 可导入，或用户已提供 `smart_fingerprint(manual_geo=...)` 所需地理信息；不要在智能指纹失败时静默降级。
-- `check_external_tools.js` 输出“定制 Firefox runtime 是否通过验证：是”。
+- `scripts/check_external_tools.js` 输出“定制 Firefox runtime 是否通过验证：是”。
 - 如果默认解析路径不是定制 Firefox，但检测到了已验证 runtime，启动示例必须显式 `set_browser_path("<verified-ruyipage-managed-firefox>")`。
 - 如果只检测到系统 Firefox fallback，判定为不合格，不启动 ruyiPage；先询问用户是否已经安装定制 Firefox。
 

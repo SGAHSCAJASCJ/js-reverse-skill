@@ -49,7 +49,7 @@ node scripts/check_change_memory.js --case-dir case --init --markdown
 ## 变更 001 - 简短标题
 
 - 时间：YYYY-MM-DD HH:mm
-- 涉及文件：result/src/env/install-env.js；result/src/signer/index.js
+- 涉及文件：result/src/env/install-env.js；result/src/signer.js
 - 涉及函数 / 模块：installNavigator；buildSign
 - 当前状态：临时修复 / 当前验证通过 / 已失败 / 被替代 / 稳定基线
 

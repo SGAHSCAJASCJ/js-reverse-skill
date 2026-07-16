@@ -158,5 +158,4 @@ function signGet(params) {
 | `references/workflow/trace-flow.md` | 统一日志驱动逆向流程 |
 | `references/workflow/decision-tree.md` | 题型判定边界 |
 | `references/crypto/algorithm-families.md` | SHA1 标准算法识别 |
-| `cases/simple-sign-md5.md` | 同类标准签名案例（MD5 变种） |
 | `cases/sm2-sm4-sm3-guomi-jobonline.md` | 同类标准算法案例（国密） |

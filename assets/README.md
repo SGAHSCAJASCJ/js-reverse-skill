@@ -13,7 +13,7 @@
 ```
 assets/
 ├── README.md                              ← 本文件
-├── ast-patterns/                          ← AST 反混淆（8 站点规则 + 14 流水线脚本，以 STEP_LIBRARY 为准）
+├── ast-patterns/                          ← AST 反混淆（8 站点规则 + 13 流水线脚本，以 STEP_LIBRARY 为准）
 │   ├── README.md
 │   ├── patterns.md
 │   ├── scripts/
@@ -30,6 +30,17 @@ assets/
 ### native-protect.js
 
 补环境基础设施，覆盖多通道 toString + DataCloneError 保护。详见 `references/env/env-native-protection.md`（外部依赖，不在 assets/ 内）。
+
+> **已内联进交付模板**：`templates/vm-sandbox/native-protect.js` 是同一份文件的副本。复制 `vm-sandbox/` 到 `result/src/env/` 后，`vm-context.js` 优先 `require('./native-protect.js')`，**交付物不再依赖 skill 仓库的 `assets/`**，可整体搬走到任意位置。
+
+```javascript
+// 在交付物中（result/src/env/ 内）
+const NativeProtect = require('./native-protect.js');
+const np = NativeProtect.getInstance();
+np.setNativeFunc(myFunc, 'myFunc');
+```
+
+技能开发期也可直接引用仓库内副本：
 
 ```javascript
 const NativeProtect = require('./assets/env-patch-snippets/native-protect.js');

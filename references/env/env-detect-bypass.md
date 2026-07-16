@@ -71,7 +71,7 @@ if (navigator.plugins.length === 0) {
 }
 ```
 
-绕过：补全环境变量（参考 `env-object-model.md`）。
+绕过：补全环境变量（参考 `references/env/env-object-model.md`）。
 
 ### Selenium / Puppeteer 检测
 
@@ -114,7 +114,7 @@ function createMinimalSandbox(options = {}) {
         self: null,
         globalThis: null,
         
-        // DOM 最小模拟（探测模式可用；交付模式需按 env-object-model.md 补齐原型链）
+        // DOM 最小模拟（探测模式可用；交付模式需按 references/env/env-object-model.md 补齐原型链）
         document: {
             cookie: options.cookie || '',
             createElement: (tag) => ({

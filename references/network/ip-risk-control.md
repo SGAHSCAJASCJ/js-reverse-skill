@@ -12,7 +12,7 @@
 | HTTP 403 + `Server: cloudflare` + `cf-mitigated: challenge` | Cloudflare 主动挑战 | 同上 |
 | HTTP 200 + 空 body + `x-vc-bdturing-parameters` 响应头 | 字节系滑块风控（code=10000, type=verify, subtype=slide） | IP 被限流，等待或换 IP |
 | HTTP 200 + 空 body + 其他风控响应头 | 静默风控（签名通过但环境不对） | 查 `silent-failure-checklist` |
-| HTTP 412 循环 + `Server: Akamai` | Akamai sensor data 失效 | 重算 sensor，查 `high-strength-detection.md` |
+| HTTP 412 循环 + `Server: Akamai` | Akamai sensor data 失效 | 重算 sensor，查 `quality/high-strength-detection.md` |
 | HTTP 200 + Set-Cookie 含 `__cf_bm` / `_abck` / `bm_sz` | 风控 Cookie 下发，需二次提交 | 采集后重发，详见 `cookie-generation.md` |
 | HTTP 429 Too Many Requests | 明确频率限制 | 退避 + 降频 |
 | HTTP 403 + `Server: tengine` + 空 body | 阿里系 WAF | 换 IP 或降频 |

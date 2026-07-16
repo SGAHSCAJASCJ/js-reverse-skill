@@ -1,212 +1,264 @@
-# Case：JSVMP RS6 + Cookie 生成 + 412 挑战 + sdenv 补环境
+# Case：JSVMP RS6（412 挑战 Cookie）+ 业务层 md5 签名 + GET 接口（nmpa.gov.cn）
 
-> 难度：★★★★★
-> 还原方案：D: sdenv 纯 Node.js（sdenv 魔改 jsdom + C++ V8 扩展）
-> 实现语言：Node.js
-> 最后验证日期：2026-04-17
-> 平台类型：政府监管类(nmpa.gov.cn)
+> 难度：★★★★★（双层防护：RS6 Cookie 包裹 + 业务 sign 校验，任一层错都 412/签名失败）
+> 还原方案：D 补环境（sdenv 生成 RS6 Cookie）+ A 纯算法还原（业务 sign，Node crypto）
+> 实现语言：Node.js（运行在 WSL2，因为原生模块需 Linux 编译）
+> 最后验证日期：2026-07-13（实测 6/6 次 GET 返回 200 + 真实 JSON）
+> 平台类型：政府监管类（nmpa.gov.cn 国家药监局数据查询）
 
 ---
 
 ## 技术指纹（供 CHECK-2 自动匹配）
 
-### JS 特征
-- [x] 单文件 230KB+，变量名为 `_$` 前缀加2-3位随机字母（如 `_$bV`, `_$ku`），存在 `if($_ts.cd){` 入口判断，函数名每次请求动态变化
-- [x] 页面底部存在 `<script>_$xx();</script>` 格式的入口函数调用，函数名每次不同
-- [x] HTML 中包含 `<meta id="固定ID" content="动态token" r='m'>` 标签，content 值约 100 字符，每次请求变化
-- [x] 内联脚本设置 `$_ts` 全局变量，包含 `nsd`（数字种子）和 `cd`（约 1800 字符的配置字符串），每次请求动态变化
+### 第一层：RS6 412 挑战（Cookie 生成）
+- [x] 单文件 200KB+，变量名 `_$` 前缀加 2-3 位随机字母（如 `_$bV`、`_$ku`），入口 `if($_ts.cd){`，函数名每次请求动态变化
+- [x] 页面底部 `<script>_$xx();</script>` 入口调用，函数名每次不同
+- [x] HTML 含 `<meta id="固定ID" content="动态token">`，content 约 100 字符每次变化
+- [x] 内联脚本设 `$_ts` 全局（含 `nsd` 数字种子 + `cd` 约 1800 字符配置串）
+- [x] Cookie 名格式 `NfBCSins2OywS` / `NfBCSins2OywO` / `NfBCSins2OywP`（服务端 Set-Cookie）+ 客户端 JS 生成项
+- [x] 首次请求 HTTP 412（非标准），响应体为精简 HTML（meta + `$_ts` 内联配置 + 外部 JS 引用 + 入口函数）
+- [x] 412 的 Set-Cookie 同时下发 `acw_tc` 和 `NfBCSins2OywS`（HttpOnly，过期 10 年）
+- [x] 成功请求需携带 `acw_tc` + `NfBCSins2OywS`（服务端）+ 客户端生成项共 4 个 Cookie
+- [x] RS JS 路径含随机目录名，版本号后缀（如 `.e17ed02.js`）一段时间固定
+- [x] JSVMP 用内部函数表+直接调用（非 `Function.prototype.apply/call`），标准 JSVMP Hook 工具拦截不到
+- [x] `$_ts` 在 JS 执行后被清理，运行时无法 console 访问
+- [x] 检测 `typeof document.all === "undefined"`（浏览器特有，`document.all` 可调用但 typeof 为 undefined）——纯 jsdom 返回 `"object"` 会卡死
 
-### 参数特征
-- [x] Cookie 名称格式为 `XxxYyyZzz2Aaaa` + `S`/`T` 后缀（如 `NfBCSins2OywS` 和 `NfBCSins2OywT`），S 由服务端 Set-Cookie 下发，T 由客户端 JS 生成
+### 第二层：业务接口 sign 校验（必过 412 之后）
+- [x] 业务 JS（`ajax.js`）经 jsjiami.com.v6 混淆（自举解密 `_0xdfc7`），含 `appSecret` / `jsonMD5ToStr` / `getSign` / `pajax` 命名空间
+- [x] **请求方法是 GET，不是 POST**；参数序列化为 query string（`itemId=&isSenior=N&searchValue=&pageNum=1&pageSize=15&timestamp=<T>`）
+- [x] `sign = jsonMD5ToStr(getSign(params))`，`timestamp` 取**服务器时间**（见下）
+- [x] headers 带 `{ token, timestamp, sign }`（`token` 在本站上下文为 `"false"`）
+- [x] `appSecret = "nmpasecret2020"`（写死在 ajax.js 里，裸 jsdom 可提取）
 
-### 请求特征
-- [x] 首次请求返回 HTTP 412（非标准状态码），响应体为精简 HTML（含 meta + 内联 $_ts 配置 + 外部 JS 引用 + 入口函数调用）
-- [x] 412 响应的 Set-Cookie 头同时下发 `acw_tc`（会话标识）和 `XxxS`（服务端标识，HttpOnly，过期时间 10 年）
-- [x] 成功请求需携带 3 个 Cookie：`acw_tc` + `XxxS`（服务端下发）+ `XxxT`（客户端生成）
-- [x] RS JS 文件 URL 路径包含随机目录名和文件名，但版本号后缀（如 `.e17ed02.js`）在一段时间内固定
+---
 
-### 反调试特征
-- [x] JSVMP 内部使用函数表+直接调用（非 `Function.prototype.apply/call`），导致标准 JSVMP Hook 工具无法拦截
-- [x] `$_ts` 全局变量在 JS 执行完毕后被清理，运行时无法通过 console 访问
-- [x] 检测 `typeof document.all` 必须为 `"undefined"`（浏览器特有行为，纯 JS 无法模拟）
-
-### 混淆类型
-- [x] JSVMP（三层嵌套虚拟机），外层解析配置生成 eval 代码，中层执行 Cookie 生成和 XHR 劫持，内层执行 AES/CRC32/Huffman/Base64 加密
-
-### 指纹检测规则（Agent 执行）
+## 两层防护结构（关键认知）
 
 ```
-快速检测命令（30秒内完成）：
-  - search_code(keyword="$_ts") → 命中 + 存在 nsd/cd 字段 → 高置信度
-  - search_code(keyword="_$") → 大量 _$ 前缀变量 → 辅助确认
-  - list_scripts → 存在 230KB+ 文件 → 辅助确认
-  - list_network_requests → 首次请求返回 412 → 高置信度
-  - 检查 Set-Cookie 头 → 存在 acw_tc + XxxS 格式 Cookie → 直接定位本案例
-  匹配判定：412 响应 + $_ts 配置 + _$ 前缀变量 → RS6 高置信度匹配
+浏览器请求 search 接口
+   │
+   ├─ 第 0 层：WAF / RS6 412 挑战
+   │     → 需先过 412 生成 RS6 Cookie（sdenv 补环境）
+   │     → 任何业务请求都必须带这套 Cookie，否则直接 412 重挑战
+   │
+   └─ 第 1 层：业务 sign 校验（200 之后才校验）
+         → GET + query string + 正确 sign + 合法 itemId/keyword
+         → 错则 200 + {"code":500,"message":"对不起，请求签名验证失败!"}
 ```
+
+> **两个根因都曾卡死我们**：① 一直用 POST，真实是 GET；② timestamp 用 `Date.now()`/`NaN` 都失败，真实用**服务器时间**。这两点不靠猜，靠"加载真实 ajax.js 跑一遍抓真值"一次性锁定（见下方"已验证定位路径"）。
 
 ---
 
 ## 加密方案
 
-- **算法**：Huffman 编码 → XOR → AES-128-CBC → CRC32 校验 → AES-128-CBC → Base64（URL-safe 变体）
-- **密钥来源**：从 `$_ts.cd` 配置字符串中通过 XOR offset 推导提取 45 组密钥，密钥随每次 412 响应动态变化
-- **加密流程**：
-  1. 收集浏览器指纹（Canvas、WebGL、UA、屏幕尺寸、navigator 属性等）
-  2. 组装 basearr（约 154 字节 TLV 结构，包含 8 种 type 的环境数据）
-  3. basearr → Huffman 编码 → XOR 加密 → AES-128-CBC 加密 → 追加 CRC32 校验 → 再次 AES-128-CBC → Base64 编码
-  4. Cookie T = `"0"` + Base64 结果
-  5. 写入 `document.cookie`，然后通过 `location.replace` 或 XHR 重新请求页面
-- **签名公式**：Cookie T 不是简单的签名，而是完整的加密数据包，包含浏览器指纹、时间戳、随机数等信息，服务端解密后验证指纹一致性
+### 第一层（RS6 Cookie，算法不需复刻，sdenv 直接生成）
+- 算法链：Huffman → XOR → AES-128-CBC → CRC32 → AES-128-CBC → Base64（URL-safe）
+- 密钥由 `$_ts.cd` 配置串 XOR offset 推导，每次 412 动态变化
+- **结论**：不要复刻，用 sdenv 在 Node 里真实执行 RS JS 生成 Cookie（见还原模板）
+
+### 第二层（业务 sign，纯算法，必须复刻）
+```js
+const crypto = require('crypto');
+const md5 = s => crypto.createHash('md5').update(s, 'utf8').digest('hex');
+const appSecret = 'nmpasecret2020';
+
+// 过滤空值 + 按 key 排序拼接为 "k=v&k=v"
+function getSign(o) {
+  const a = [];
+  for (const k in o) {
+    const v = o[k];
+    if (v !== '' && v !== undefined && v != null) a.push(k + '=' + v);
+  }
+  return a.sort().join('&');   // a.sort() 默认按字符串排序 key
+}
+
+// 字符串版：拼 appSecret → encodeURIComponent → 4 个防御性 replace → md5
+function jsonMD5ToStr(str) {
+  let s = str + '&' + appSecret;
+  s = encodeURIComponent(s);
+  s = s.replace(/!/g, '%21').replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/~/g, '%7E');
+  return md5(s);
+}
+
+// 调用链：sign = jsonMD5ToStr(getSign(params))
+// getSign 接受【对象】，返回排序字符串；jsonMD5ToStr 接受【字符串】
+```
+
+**签名覆盖的字段集合（真值）**：
+```js
+const params = {
+  itemId: '<真实分类id，如 ff80808183cad75001840881f848179f>', // 境内生产药品
+  isSenior: 'N',
+  searchValue: '<关键词，不能为空>',
+  pageNum: 1,
+  pageSize: 15,
+  timestamp: T,   // 服务器时间（见下）
+};
+const sign = jsonMD5ToStr(getSign(params));  // 空值已被 getSign 过滤
+```
+
+**timestamp 来源（关键，曾反复失败）**：
+- 页面真实逻辑 `getdate()` = 同步 XHR 读 `<itemFileUrl>/config/DATE.json?date=<now>`，返回 `new Date(responseText).getTime()`。
+- 但该站 `DATE.json` 当前**返回空 `[]`** → `new Date("").getTime()` = `NaN`。
+- 实测：用 `Date.now()`、`NaN` 作 timestamp 均"签名验证失败"；用**服务器自身时钟时间 T**（来自任意响应的 `Date` 响应头 `Date.parse(r.headers.get('date'))`）作 T，sign 即被服务端接受。
+- **工程做法**：每次请求前用一次轻量请求拿服务器 `Date` 头作为 T，且 query string 里的 `timestamp` 与参与签名的 `timestamp` 必须为**同一个 T**。
+
+**合法查询参数（否则"请求参数不能为空"）**：
+- `itemId` 必须是**真实分类 id**，取自 `/datasearch/config/NMPA_DATA.json`（如 `ff80808183cad75001840881f848179f` 境内生产药品、`ff80808183cad7500183cb66fe690285` 境内医疗器械等）。
+- `searchValue` 不能为空。
+- 注：页面另有高级检索变体用 `itemIds`（复数、逗号拼接），但标准 `queryList` 用**单数 `itemId` + 真实分类 id**。
 
 ---
 
-## 已验证定位路径（CHECK-2 命中后直接执行）
+## 已验证定位路径（本次实际走的：WSL2 内 sdenv + 裸 jsdom 插桩）
 
+> **关于 ruyipage / RuyiTrace（重要澄清）**：本 case **并非因为工具不行而没用**——它们完全能直接定位加密参数与 `hasTokenGet → getSign → jsonMD5ToStr` 调用链（这正是其设计目的，也是 skill 第一原则"以 RuyiTrace NDJSON 为优先证据源"的默认路径）。真实 Firefox 还能自然过 RS6 的 412 挑战。
+>
+> 本次未用是**环境可用性**决定，不是能力问题：
+> ① RuyiTrace 内核 + 定制 trace Firefox 当时未安装（需 GitHub 下载，skill 自身提示常因代理/自签 CA 失败）；
+> ② 实际逆向在 **WSL2（node）** 中执行（sdenv 原生模块在此编译），而 `ruyiPage` 是 Windows python 包，跨环境驱动浏览器未搭建。
+>
+> 因此本 case 走的是**降级路径**：sdenv 过 RS6（也是 skill 对 `document.all` 检测的推荐升级项）+ 裸 jsdom 加载真实 `ajax.js` 插桩抓真值。**当你所在环境已装好 ruyipage + RuyiTrace 时，应优先走 skill 默认取证链**；本 jsdom 路径仅作为"浏览器工具链不可用时"的等价备选。
+
+**步骤 1：WSL2 搭建 sdenv 环境（生成 RS6 Cookie 必需）**
 ```
-步骤 1: trace 取证 反检测浏览器 + 网络捕获
-  启动 trace 取证（C++ 引擎级指纹伪装），注入 XHR/Fetch/Crypto 持久化 Hook，导航到目标页面。
-  通过 list_network_requests 发现请求链路：
-    请求 #1 返回 412 + Set-Cookie + HTML body
-    请求 #2 加载 230KB JS 文件
-    请求 #3 携带 3 个 Cookie 返回 200
-
-步骤 2: 412 响应体分析
-  通过 get_network_request(id=1, include_body=true) 获取完整的 412 响应。
-  发现 HTML body 结构为：
-    <meta> 标签（动态 token）+ $_ts 内联配置（nsd + cd）+ 外部 JS 引用 + 入口函数调用 _$xx()
-  同时从 Set-Cookie 头提取到 acw_tc 和 XxxS 两个服务端 Cookie。
-
-步骤 3: 成功请求对比
-  通过 get_network_request(id=3, include_headers=true) 对比成功请求的 Cookie 头，
-  发现多了一个 XxxT Cookie — 这就是客户端 JS 生成的。
-  同时发现请求头中 Referer 和 Sec-Fetch-Site: same-origin 是必需的。
-
-步骤 4: Cookie setter Hook 验证
-  注入 document.cookie setter Hook，发现 Cookie 日志为空 —
-  说明RS JS 不是通过标准 document.cookie setter 写入的
-  （可能是通过 jsdom 内部机制或 location.replace 触发的重新请求时由浏览器自动携带）。
-
-步骤 5: JSVMP 插桩尝试
-  使用 hook_jsvmp_interpreter 对RS JS 进行插桩，发现日志为空 —
-  确认RS6使用内部函数表+直接调用，不经过 Function.prototype.apply/call，
-  标准 JSVMP Hook 无效。
-
-步骤 6: 环境对比
-  使用 compare_env 采集 trace 取证 中的真实浏览器环境数据，
-  发现 document.cookie 中包含 enable_XxxYyy=true 标记，
-  说明RS JS 执行成功后会设置一个启用标记。
-
-步骤 7: RS JS 保存
-  通过 save_script 将 230KB 的RS JS 文件保存到本地，分析其结构：
-  以 if($_ts.cd){ 开头，内部是 JSVMP 解释器，
-  window 仅出现 3 次（环境访问全部通过 JSVMP 字节码间接进行）。
-
-步骤 8: 补环境方案选型
-  参考开源社区的手动补环境方案和 sdenv/纯算/JsRpc 多方案，
-  确定 sdenv（魔改 jsdom + C++ V8 扩展）是RS6的最优纯 Node.js 方案。
+# WSL2 Ubuntu：node v20.20.2（managed 或系统均可），需 build-essential + canvas/pango 系统库
+sudo apt update && sudo apt install -y build-essential
+# 安装 sdenv（tgz）+ jsdom，走 npmmirror 镜像（GitHub 直连易失败）
+cd /home/<user>/nmpa-test
+npm init -y
+npm install /path/sdenv-1.1.3.tgz jsdom --registry=https://registry.npmmirror.com
+# 原生模块 documentAll.node 会被 node-gyp 编译（约 17KB），需 build-essential
+export NODE_PATH=/home/<user>/nmpa-test/node_modules
+# 旧版 OpenSSL 站点需降级协商（注意变量名是 RENEGOTIATION，曾误写为 RENEGOTIATION）
+export OPENSSL_LEGACY_RENEGOTIATION=1
+export NODE_TLS_REJECT_UNAUTHORIZED=0
 ```
+
+**步骤 2：sdenv 生成 RS6 Cookie**
+```js
+const { jsdomFromUrl } = require('sdenv');
+async function genCookie(homeUrl, UA) {
+  const dom = await jsdomFromUrl(homeUrl, {
+    userAgent: UA,
+    consoleConfig: { error: () => {} },   // 吞掉 RS 内部噪音
+  });
+  // 监听 sdenv:exit（location.replace/assign 触发）→ Cookie 落入 cookieJar
+  await new Promise((res) => {
+    dom.window.addEventListener('sdenv:exit', () => res());
+    setTimeout(res, 60000);  // 兜底超时
+  });
+  const ck = dom.cookieJar.getCookieStringSync(homeUrl);
+  dom.window.close();
+  return ck;  // 形如 acw_tc=...; NfBCSins2OywS=...; NfBCSins2OywO=...; NfBCSins2OywP=...
+}
+```
+
+**步骤 3：裸 jsdom 提取业务 sign 函数（sdenv 自带 jsdom 不执行内联 script，必须用裸 jsdom）**
+```js
+const { JSDOM } = require('jsdom');
+const fs = require('fs');
+const html = `<!doctype html><html><body>
+  <script>${fs.readFileSync('dl/md5.js','utf8')}</script>
+  <script>${fs.readFileSync('dl/base64.js','utf8')}</script>
+  <script>${fs.readFileSync('dl/ajax.js','utf8')}</script>
+</body></html>`;
+const dom = new JSDOM(html, {
+  runScripts: 'dangerously',
+  beforeParse(w) {
+    // 用 try/catch + defineProperty 补浏览器特征（jsdom 里 navigator 属性只读）
+    try { Object.defineProperty(w.navigator, 'userAgent', { value: UA, configurable: true }); } catch(e){}
+    try { Object.defineProperty(w.navigator, 'platform', { value: 'Win32', configurable: true }); } catch(e){}
+    w.axios = { create: () => ({ interceptors: { request: { use(){} }, get(){}, post(){} } }) };
+    w.jQuery = () => ({ cookie: () => '' });
+  },
+});
+const w = dom.window;
+// 提取真值
+console.log('appSecret =', w.appSecret);          // "nmpasecret2020"
+console.log('getSign    =', typeof w.getSign);    // function
+console.log('jsonMD5..  =', typeof w.jsonMD5ToStr);// function
+```
+
+**步骤 4（核心突破）：加载真实 ajax.js，插桩抓"真实发出的请求"——不猜字段**
+```js
+// 在裸 jsdom 里加载真实 ajax.js，用假 axios 重放真实请求拦截器，
+// 覆盖 pajax.getdate 绕过同步 XHR，WRAP getSign/jsonMD5ToStr 记录入参出参：
+let getSignInput, getSignOutput, signInput, signOutput;
+const o1 = w.getSign;
+w.getSign = function () { getSignInput = JSON.stringify(arguments[0]); getSignOutput = o1.apply(this, arguments); return getSignOutput; };
+const o2 = w.jsonMD5ToStr;
+w.jsonMD5ToStr = function () { signInput = arguments[0]; signOutput = o2.apply(this, arguments); return signOutput; };
+// 覆盖 getdate（页面真实逻辑走同步 XHR 读 DATE.json，这里直接给固定 T）
+w.pajax.getdate = () => T_FIXED;
+// 假 axios：service({url,method,headers,params}) → 记录真实 method/query/headers
+w.axios.create = () => ({
+  interceptors: { request: { use: (fn) => { intercept = fn; } },
+  get(url, cfg) { const r = intercept({ ...cfg, url, method: 'get' }); record(r); return Promise.resolve({ status:200, data:{} }); },
+});
+// 触发：w.pajax.hasTokenGet(w.api.queryList, {itemId, isSenior:'N', searchValue, pageNum, pageSize})
+// → 直接得到：method='GET'、params 进 query string、headers={token,timestamp,sign}
+```
+> **这一招一次性锁定两个根因**：① method 是 GET 不是 POST；② timestamp 来自 `getdate()`（服务器时间）不是 `Date.now()`。之前反复失败就是因为这两点猜错。
 
 ---
 
 ## 还原代码模板
 
-### 核心函数：RS6 Cookie 生成 — 基于 sdenv
-
-```javascript
-/**
- * RS6 Cookie 生成 — 基于 sdenv (魔改 jsdom + C++ V8 扩展)
- * 依赖: npm install sdenv (需要 pnpm 安装 + node-gyp 编译原生模块)
- * 原理:
- *   sdenv 的核心是 documentAll.node (51行C++)，用 V8 的
- *   ObjectTemplate::MarkAsUndetectable() 实现 document.all 的浏览器特有行为
- *   (typeof === "undefined" 但可调用)，加上完整的浏览器环境模拟，
- *   让RS JSVMP 在 Node.js 中真实执行并生成有效 Cookie。
- */
-
-// 注意：以下全局禁用 TLS 校验仅限快速验证用。正式交付应使用站点级 https.Agent 配置
-// （const agent = new https.Agent({ rejectUnauthorized: false }); 仅传给目标站点的请求），
-// 避免影响整个进程的 TLS 安全性。
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
-const { jsdomFromUrl } = require('sdenv');
+### 完整可运行骨架（final.js 核心）
+```js
+const crypto = require('crypto');
 const https = require('https');
+const { jsdomFromUrl } = require('sdenv');
 
-class RuishuClient {
-  constructor(config = {}) {
-    this.host = config.host;           // 目标主机名
-    this.entryPath = config.entryPath; // 入口页面路径（返回 412 的页面）
-    this.ua = config.userAgent || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36';
-    this.dom = null;
-    this.cookies = '';
-    this.ready = false;
-  }
+const appSecret = 'nmpasecret2020';
+const md5 = s => crypto.createHash('md5').update(s, 'utf8').digest('hex');
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const HOME = 'https://www.nmpa.gov.cn/datasearch/search-result.html';
+const API  = 'https://www.nmpa.gov.cn/datasearch/data/nmpadata/search';
 
-  async init() {
-    const url = `https://${this.host}${this.entryPath}`;
-    this.dom = await jsdomFromUrl(url, {
-      userAgent: this.ua,
-      consoleConfig: { error: () => {} },
-    });
+function getSign(o){const a=[];for(const k in o){const v=o[k];if(v!==''&&v!==undefined&&v!=null)a.push(k+'='+v);}return a.sort().join('&');}
+function jsonMD5ToStr(str){let s=str+'&'+appSecret;s=encodeURIComponent(s);s=s.replace(/!/g,'%21').replace(/\(/g,'%28').replace(/\)/g,'%29').replace(/~/g,'%7E');return md5(s);}
 
-    // 等待RS JS 执行完毕
-    await new Promise(resolve => {
-      this.dom.window.addEventListener('sdenv:exit', () => resolve());
-      setTimeout(resolve, 8000);
-    });
+async function genCookie(){ /* 见步骤 2 */ }
+async function serverTime(ck){ // 轻量请求拿 Date 头
+  return new Promise((res)=>{ https.get({hostname:'www.nmpa.gov.cn',path:'/datasearch/search-result.html',headers:{'User-Agent':UA,'Cookie':ck,'Referer':'https://www.nmpa.gov.cn/datasearch/'}}, r=>{res(Date.parse(r.headers['date']));r.resume();}).on('error',()=>res(NaN)); });
+}
 
-    this.cookies = this.dom.cookieJar.getCookieStringSync(`https://${this.host}`);
-    this.ready = true;
-    return this;
-  }
-
-  get(path) {
-    if (!this.ready) throw new Error('请先调用 init()');
-    return new Promise((resolve, reject) => {
-      https.request({
-        hostname: this.host, port: 443, path, method: 'GET',
-        headers: {
-          'User-Agent': this.ua,
-          'Host': this.host,
-          'Cookie': this.cookies,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Referer': `https://${this.host}/`,
-          'Sec-Fetch-Site': 'same-origin',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Dest': 'document',
-        },
-      }, res => {
-        let body = '';
-        res.on('data', chunk => body += chunk);
-        res.on('end', () => resolve({ status: res.statusCode, body }));
-      }).on('error', reject).end();
-    });
-  }
-
-  close() {
-    if (this.dom) {
-      try { this.dom.window.close(); } catch(e) {}
-      this.dom = null;
-      this.ready = false;
-    }
-  }
+async function oneSearch(ck, itemId, keyword){
+  const T = await serverTime(ck);
+  const params = { itemId, isSenior:'N', searchValue:keyword, pageNum:1, pageSize:15, timestamp:T };
+  const sign = jsonMD5ToStr(getSign(params));
+  const qs = new URLSearchParams(params).toString();   // URL 顺序无关，服务端按对象重排
+  return new Promise((res)=>{
+    https.get({hostname:'www.nmpa.gov.cn',path:`/datasearch/data/nmpadata/search?${qs}`,
+      headers:{ 'User-Agent':UA, 'Cookie':ck, 'Referer':'https://www.nmpa.gov.cn/datasearch/',
+                'token':'false', 'timestamp':String(T), 'sign':sign }},
+      r=>{ let b=''; r.on('data',c=>b+=c); r.on('end',()=>res({status:r.statusCode,body:b})); }).on('error',e=>res({status:0,body:String(e)}));
+  });
 }
 ```
 
 ---
 
-## 踩坑记录
+## 踩坑记录（按实际踩过的排，含已纠正的误判）
 
-| # | 坑 | 现象 | 解决方法 |
-|---|---|------|---------|
-| 1 | 误判反爬类型 | 通过 webFetch 直接请求返回 412，猜测是 JSL 加速乐（`__jsl_clearance_s` cookie），实际是RS信息（RS） | 不要猜，用 trace 取证 实际抓包看 412 响应体结构和 Set-Cookie 头 |
-| 2 | Cookie 有效但请求返回 400 | trace 取证 获取的 Cookie 有效（curl 测试返回 200），但 axios 请求返回 400 | RS不仅检查 Cookie，还检查请求头指纹 — UA 必须与生成 Cookie 时一致，且必须包含 `Sec-Fetch-Site: same-origin` 等 Fetch Metadata 头 |
-| 3 | jsdom 执行RS JS 卡死（超时） | 原生 jsdom + `runScripts: 'dangerously'` 加载 412 页面，RS JS 执行后进入死循环 | `typeof document.all` 在 jsdom 中返回 `"object"` 而非 `"undefined"`，RS检测到非浏览器环境后故意卡死。必须用 sdenv（C++ 层面实现 `MarkAsUndetectable()`）或真实浏览器 |
-| 4 | V8 `%GetUndetectable()` 不够 | 用 V8 内部函数获取的 undetectable 对象通过了 `typeof === "undefined"` 检测，但它是空对象，没有 `HTMLAllCollection` 的方法 | RS JSVMP 后续尝试调用该对象的方法时报错 `_$xx[_$yy[49]] is not a function`。`document.all` 不仅要通过 typeof 检测，还要有完整的集合行为 |
-| 5 | RS入口函数名每次不同 | 412 响应体底部的入口函数调用（如 `_$bV()`, `_$l1()`, `_$jH()`）每次请求都不同 | 正则匹配时需要用 `_\$[a-zA-Z0-9]+\(\)` 而非固定函数名 |
-| 6 | Node.js v24 的 Navigator 原型有只读属性 | `Navigator.prototype` 上的 `language` 等属性已经有了 getter，用 `Object.assign` 赋值报错 | 必须用 `Object.defineProperty` 逐个覆盖 |
-| 7 | sdenv 原生模块编译 | sdenv 的核心 `documentAll.node` 是 C++ 原生模块，需要 node-gyp 编译 | pnpm 安装时默认不执行 build scripts，需要手动 `pnpm approve-builds` 或 `npx node-gyp rebuild` |
-| 8 | JSVMP Hook 工具对RS6无效 | trace 取证 的 `hook_jsvmp_interpreter` 通过 Hook `Function.prototype.apply/call` 追踪，但RS6使用内部函数表+直接调用，日志为空 | 不是所有 JSVMP 都能用标准 Hook 工具分析，需要根据具体实现选择分析方法 |
+| # | 坑 | 现象 | 正确做法 |
+|---|------|------|---------|
+| 1 | 误判反爬类型 | webFetch 直连 412，猜是 JSL（`__jsl_clearance_s`） | 看 412 响应体 + Set-Cookie：`NfBCSins2OywS` 是 RS 特征 |
+| 2 | **用 POST 而非 GET** | 所有 `test_search1-4` 都"签名验证失败"/412 | 真实是 **GET**，参数进 query string；插桩真实 ajax.js 一眼锁定 |
+| 3 | **timestamp 源错** | `Date.now()`、`NaN` 都失败，且失败信息完全相同 | 用**服务器时间 T**（响应 `Date` 头 `Date.parse`），query 与签名用同一 T |
+| 4 | sdenv 自带 jsdom 不执行内联 script | `sign_env.js` 取不到 `appSecret`/`getSign`（全 undefined，无报错） | 改裸 `jsdom` 的 `JSDOM(html,{runScripts:'dangerously'})` 提取 |
+| 5 | jsdom `navigator.platform='Win32'` 抛错 | navigator 属性只读 | 全改 `Object.defineProperty(...,{value,configurable:true})` 并包 try/catch |
+| 6 | `jsonMD5ToStr(OBJ)` 抛错 | 该函数是**字符串版**，对对象调 `.replace` 报错 | 签名走 `jsonMD5ToStr(getSign(params))`；getSign 接受对象返回字符串 |
+| 7 | 业务 JS 下载 404 / 拿到 RS6 包裹 | 直连 `https://.../js/ajax.js` 返回 404 | 先生成 RS6 Cookie 再带 Cookie 下载；且用 `new URL(rel, homeUrl)` 解析（homeUrl 在 `/datasearch/` 下） |
+| 8 | `itemId:''` 触发"请求参数不能为空" | 空分类 id + 空关键词 | `itemId` 填真实分类 id（取自 `/config/NMPA_DATA.json`），`searchValue` 非空 |
+| 9 | WSL `/root/nmpa-test` 会话重启后丢失 | 目录空了但 WSL 本体完好 | 重建目录 + 重装 sdenv(tgz)+jsdom（`registry.npmmirror.com`） |
+| 10 | 环境变量名笔误 | 写成 `OPENSSL_LEGACY_RENEGOTIATION`（应为 `RENEGOTIATION`） | 正确：`OPENSSL_LEGACY_RENEGOTIATION=1` + `NODE_TLS_REJECT_UNAUTHORIZED=0` |
+| 11 | RS6 Cookie 在两次请求间过期 | 第二次请求突然 412 | 每次请求前重新 `genCookie()` 生成新鲜 Cookie，并复用同一 T |
+| 12 | JSVMP Hook 工具对 RS6 无效 | 标准 `Function.prototype.apply/call` Hook 日志为空 | RS6 用内部函数表+直接调用；不要硬 Hook，用 sdenv 真实执行 |
 
 ---
 
@@ -214,29 +266,30 @@ class RuishuClient {
 
 | 变体 | 差异点 | 影响 |
 |------|--------|------|
-| RS 4/5 代 vs 6 代 | RS6 JS 文件约 230KB，比 4/5 代（约 200KB）更大，环境检测项更多 | 4/5 代可通过手动补环境成功，6 代手动补环境极其困难，建议直接用 sdenv |
-| Cookie-only vs Cookie+URL后缀 | 大部分RS站点只需要 Cookie 即可访问。少数站点还需要 URL 后缀签名 | sdenv 只能生成 Cookie，不能生成 URL 后缀。需要后缀的站点建议用 JsRpc 方案 |
-| HTTP vs HTTPS | 部分RS站点使用 HTTP，其他使用 HTTPS | sdenv 的 `jsdomFromUrl` 两种协议都支持，但 HTTPS 站点需要设置 `NODE_TLS_REJECT_UNAUTHORIZED=0`（某些政府站点的证书链不完整） |
-| 静态页面 vs API 接口 | 列表页和详情页可能是纯静态 HTML（服务端渲染），用 cheerio 解析即可。其他站点可能有 JSON API 接口 | API 请求可能需要额外的签名参数（如 `sign = MD5(itemId + searchValue + timestamp)`） |
-| `$_ts` 配置差异 | 不同站点的 `$_ts` 配置结构可能不同，有的只有 `nsd` 和 `cd`，其他可能还有 `cp`、`aebi` 等字段 | sdenv 方案不需要关心这些差异，因为它让RS JS 自己解析配置 |
-| 服务端动态更新 | RS服务端可以随时更新 `basearr` 中的环境检测值 | 纯算方案会因此失效，sdenv 方案通常不受影响（除非RS新增了 sdenv 未模拟的检测点） |
+| RS 4/5 代 vs 6 代 | RS6 JS ≈ 230KB，比 4/5 代更大、检测项更多 | 4/5 代可手动补环境；6 代建议直接 sdenv |
+| Cookie-only vs Cookie+URL 后缀 | 大部分 RS 站只需 Cookie；少数还需 URL 后缀签名 | sdenv 只生成 Cookie，需后缀的站建议 JsRpc 方案 |
+| HTTP vs HTTPS | 部分 RS 站用 HTTP | sdenv 两种都支持；HTTPS 政府站点常需 `NODE_TLS_REJECT_UNAUTHORIZED=0`（证书链不完整）+ `OPENSSL_LEGACY_RENEGOTIATION=1` |
+| 静态页 vs JSON API | 列表/详情可能是 SSR HTML（cheerio 解析）；也可能有 JSON API | API 请求需额外 sign（本 case：`sign=md5(排序参数+appSecret)`，GET query string） |
+| `$_ts` 配置差异 | 不同站 `$_ts` 结构可能不同（有的仅 `nsd`+`cd`，有的还有 `cp`/`aebi`） | sdenv 不关心，让 RS JS 自己解析 |
+| 高级检索 vs 标准检索 | 高级检索用 `itemIds`（复数逗号拼接），标准 `queryList` 用单数 `itemId` | 本 case 走标准路径：单数 `itemId` + 真实分类 id |
 
 ---
 
-## 可验证事实清单（经验资产）
+## 可验证事实清单（经验资产，同站升级时逐条核对）
 
-> 同站升级时逐条核对,找出"哪些变了"。每条可断言。
-
-1. 首次请求返回 412,带 Set-Cookie 挑战
-2. FSSBBIl1UgzbN7N / NfBCSins2OywS 为瑞数特征参数
-3. $_ts 变量 + nsd/cd 字段为 RS6 标志
-4. sdenv 必须在 412 响应后执行生成 Cookie
+1. 首次请求返回 412 + Set-Cookie 挑战
+2. `NfBCSins2OywS` / `NfBCSins2OywO` / `NfBCSins2OywP` 为 RS6 特征参数
+3. `$_ts` + `nsd`/`cd` 字段为 RS6 标志
+4. sdenv 必须在 412 响应后执行生成 Cookie（裸 jsdom 会因 `typeof document.all` 卡死）
 5. 第二次请求带生成的 Cookie 返回 200
-6. sdenv = 魔改 jsdom + C++ V8 扩展
-7. navigator.webdriver === false
-8. 瑞数 JSVMP 单文件 200KB+
-9. Cookie 中 FSSBBIl1UgzbN7N 和 NfBCSins2OywS 为动态生成
-10. 补环境不依赖浏览器,纯 Node.js 运行
+6. sdenv = 魔改 jsdom + C++ V8 扩展（`documentAll.node`，`MarkAsUndetectable()` 实现 `document.all`）
+7. 业务 sign 与 RS6 Cookie 是**两层独立校验**：RS6 过 412，sign 过 200 后的业务层
+8. 业务请求是 **GET**（非 POST），参数进 query string
+9. `appSecret = "nmpasecret2020"`（写死在 ajax.js，裸 jsdom 提取）
+10. `sign = jsonMD5ToStr(getSign(params))`；getSign 过滤空值并按 key 排序；jsonMD5ToStr 拼 appSecret→encodeURIComponent→4 个防御性 replace→md5
+11. `timestamp` 必须用**服务器时间**（响应 `Date` 头），`Date.now()`/`NaN` 会被拒
+12. `itemId` 必须填真实分类 id（来自 `/config/NMPA_DATA.json`），`searchValue` 非空
+13. 纯 Node.js（WSL2 + sdenv）即可完整跑通，无需浏览器自动化
 
 ---
 
@@ -244,10 +297,25 @@ class RuishuClient {
 
 | 参考文档 | 关联点 |
 |---------|--------|
-| `references/env/env-object-model.md` | 补环境对象模型（sdenv = 魔改 jsdom + C++ Addon） |
 | `references/env/env-native-protection.md` | document.all native HTMLDDA 能力（C++ MarkAsUndetectable） |
-| `references/env/native-capability-gap.md` | native 能力缺口闭环（typeof document.all === "undefined"） |
-| `references/env/runtime-frameworks.md` | 框架选择（sdenv vs jsdom） |
+| `references/env/native-capability-gap.md` | native 能力缺口（typeof document.all === "undefined"） |
+| `references/env/runtime-frameworks.md` | 框架选择（sdenv vs 裸 jsdom vs 手动补环境） |
 | `references/network/session-chain.md` | Session 请求链（412 挑战 → Cookie 生成 → 200 重试） |
 | `references/workflow/decision-tree.md` | RS6 路径决策（签名型反爬 → 补环境） |
-| `references/workflow/experience-rules.md` | 规则 2/6/8（JSVMP 寄存器 / 回查案例 / 路径选择） |
+| `references/crypto/crypto-entry.md` | 四层链路 source→entry→builder→writer（本 case 业务 sign 的 entry=getSign） |
+
+---
+
+## 关键方法论（可复用到其他 sign 逆向）
+
+**不要猜签名字段集合——加载真实代码抓真值。**
+> 能力允许时，**ruyipage + RuyiTrace 取证链是首选**（真实浏览器自然过 RS6 + NDJSON 直接给出 `hasTokenGet → getSign → jsonMD5ToStr` 调用链与入参/出参）。**本 jsdom 插桩路径仅当浏览器工具链不可用时的等价替代**。
+
+当反复"签名验证失败"且本地公式已验证正确时，几乎总是"客户端签名的字段集合/顺序/来源"与服务端不一致，而非公式错。此时最有效的一步：
+
+1. 用**裸 jsdom**（`runScripts:'dangerously'`）加载目标站**真实的**业务 JS（如 `ajax.js`）。
+2. **WRAP** 真实签名函数（`getSign` / `jsonMD5ToStr` / `sign` 等），记录每次调用的入参与返回值。
+3. **Stub 传输层**（假 `axios` / 假 `XMLHttpRequest`），重放真实请求拦截器，记录真实发出的 `method` / `query string` / `headers`。
+4. 必要时**覆盖时间/随机源函数**（如本 case 覆盖 `pajax.getdate`），排除外部依赖干扰。
+
+一次运行即可拿到"真实签名串 + 真实请求形态"，直接对照自己复刻的版本，差异一目了然。本 case 正是靠这一步发现"GET 而非 POST"和"服务器时间而非 Date.now()"两个根因。

@@ -13,11 +13,11 @@
    允许把补环境、目标入口、请求客户端、配置、工具函数拆成模块，避免把所有代码硬塞进一个超大文件。
 
 3. **最终项目只能有一个执行入口**
-   默认入口为 `result/final.js`。如果用户明确选择 Python 请求客户端，可以使用 `result/final.py`。
+   默认入口为 `result/final.js`（Python 为 `result/final.py`）。入口执行后必须完成：安装/加载补环境 → 调用目标 JS 入口生成加密参数 → 组装请求 → 用 Node.js / Python TLS 指纹兼容 Session 客户端发送模拟请求 → 输出验证结果 → 销毁 session。
 
-   入口执行后必须完成：安装/加载补环境 → 调用目标 JS 入口生成加密参数 → 组装请求 → 用 Node.js / Python TLS 指纹兼容 Session 客户端发送模拟请求 → 输出验证结果 → 销毁 session。
+   硬性要求：`final.js` / `final.py` 必须带 `require.main === module` / `if __name__ == "__main__"` 守卫，被其他项目 `require` / `import` 时不得自动执行、不得发请求（守卫让交付物也能被当库 `require` 取 `sign` 等函数，但不会自动跑主流程、不会发请求）。
 
-   其他文件只能作为被入口调用的模块，不得再提供 `server.js`、`bridge.py`、`runner.js`、`sign.js`、`test.js` 等第二入口或测试入口。
+   其他文件只能作为被入口调用的模块，不得再提供 `server.js`、`bridge.py`、`runner.js`、`sign.js`、`test.js` 等会自行执行的第二入口或测试入口。
 
 4. **最终项目不能有自动化操作代码**
    最终项目内任何源码文件不得出现：ruyiPage / RuyiTrace 启动或控制代码、Playwright / Puppeteer / Selenium / browser-use、CDP / WebDriver / Marionette 控制代码、`page.goto`、`browser.launch`、`chromium.launch`、`FirefoxPage`、`page.capture` 等自动化取证调用。
@@ -59,10 +59,28 @@
 
 目录结构详见 `references/quality/code-style.md` 的"按职责拆模块"段。补充要求：
 
-- `final.js` 是唯一可以直接运行的入口。
-- [ ] `result/final.js` 无外部依赖文件（有依赖需放 `result/src/` 下）。
+- `final.js` 是**唯一执行入口**，必须带 `require.main === module` 守卫（被 `require('./result')` 时只导出 `sign` / `buildSignedRequest` 等 API、不自动执行、不发请求）。
+- `result/final.js` 无外部依赖文件（有依赖需放 `result/src/` 下）。
 - `src/` 中模块不能直接启动浏览器、启动服务或发起额外批量请求。
+- `native-protect.js` 已内联进 `result/src/env/`（从 `templates/vm-sandbox/` 复制），交付物不依赖 skill 仓库目录。
 - 不交付 `test/`、`tests/`、`__tests__/`、`tmp/`、`logs/`、`hooks/`、`screenshots/`、`ruyi-trace/`、`browser-profile/`。
+
+```text
+result/
+├── final.js              # 唯一执行入口：node final.js（带 require.main 守卫，可被 require 取 sign）
+├── config.json           # 外置配置（脱敏静态配置）
+├── package.json          # 依赖契约（curl-cffi-node 等），main: final.js
+├── 最终项目总结.md       # 必选：项目总结报告
+└── src/
+    ├── signer.js        # generateSign(params, env) + buildParams(config)，用户实现
+    ├── env/
+    │   ├── install-env.js
+    │   ├── vm-context.js
+    │   ├── native-protect.js   # 已内联，无需 skill 目录
+    │   └── fixtures/index.js
+    ├── request/client.js
+    └── resources/fetch-runtime-resources.js   # 可选（动态资源刷新）
+```
 
 ## 推荐 Python 最终目录
 
@@ -70,24 +88,25 @@
 
 ```text
 result/
-├── final.py                 # 唯一执行入口：python final.py
-├── 最终项目总结.md           # 必选：项目总结报告
-├── requirements.txt         # 可选，仅列运行依赖
-├── config.example.json      # 可选，脱敏配置模板
+├── final.py              # 唯一执行入口：python final.py（带 __main__ 守卫）
+├── requirements.txt      # 依赖契约（curl_cffi 等）
+├── 最终项目总结.md       # 必选：项目总结报告
 └── src/
-    ├── request_client.py    # curl_cffi / cffi_curl / cyCronet，或用户确认不发真实请求
-    ├── signer.py            # 参数生成入口；仅在逻辑已可靠迁移时使用
+    ├── request/client.py  # 从 templates/python-request/client.py 复制，含 create_request_session
+    ├── signer.py         # generate_sign(params, env) + build_params(config)，用户实现
     └── normalize.py
 ```
 
 如果目标 JS 必须在 Node.js 补环境里执行，优先交付 Node.js 项目，不要用 Python 调浏览器自动化来完成签名。
 
+
 ## `final.js` 入口职责
 
-`final.js` 不需要包含全部源码，但必须串联完整流程：
+`final.js` 是 **唯一执行入口**：不需要包含全部源码，但必须串联完整流程，且带 `require.main === module` 守卫（被 `require('./result')` 时只导出 `sign` / `buildSignedRequest` 等 API、不自动执行、不发请求）。
 
 ```javascript
-// 唯一入口：生成加密参数并使用已确认的请求客户端验证结果
+// 自验入口：生成加密参数并使用已确认的请求客户端验证结果
+// 注意：必须带 require.main 守卫，否则被 import 时会自动发请求
 'use strict';
 
 let fetchRuntimeResources = null;
@@ -97,7 +116,8 @@ try {
   // 无动态资源时可以不提供刷新模块；存在动态资源时必须提供并通过检查。
 }
 
-const { makeEncryptedParams } = require('./src/target/entry');
+const { installEnv } = require('./src/env/install-env');   // 用户从 templates/vm-sandbox/ 复制
+const { generateSign, buildParams } = require('./src/signer'); // 用户实现 generateSign + buildParams
 const { createRequestSession } = require('./src/request/client');
 
 // 请求配置来自脱敏后的浏览器成功样本，敏感值由用户本地补充
@@ -119,13 +139,15 @@ async function main() {
       ? await fetchRuntimeResources(CONFIG, session)
       : null;
 
-    // 加密参数必须由补环境后的目标入口动态生成，不复用 cURL 样本值
-    const params = await makeEncryptedParams({ request: CONFIG, runtimeResources, session });
+    // 补环境（安装 NativeProtect 等）；加密参数必须由补环境后动态生成，不复用 cURL 样本值
+    const env = installEnv({ fixtures: {}, userAgent: CONFIG.headers['user-agent'], cookie: '' });
+    const params = buildParams(CONFIG);
+    const signature = generateSign(params, env);
 
-    const response = await session.request({ config: CONFIG, params });
+    const response = await session.request({ config: CONFIG, params: Object.assign({}, params, { sign: signature }) });
 
     const ok = response.status >= 200 && response.status < 300;
-    console.log(JSON.stringify({ ok, params, response }, null, 2));
+    console.log(JSON.stringify({ ok, params: Object.assign({}, params, { sign: signature }), response }, null, 2));
 
     if (!ok) process.exitCode = 2;
   } finally {
@@ -144,38 +166,54 @@ if (require.main === module) {
 
 ## `final.py` 入口职责
 
+`final.py` 是 **唯一执行入口**：必须带 `if __name__ == "__main__"` 守卫（被 `from final import ...` 时只导出、不自动执行、不发请求）。
+
 ```python
-# 唯一入口：生成加密参数并使用已确认的请求客户端验证结果
-from src.signer import make_encrypted_params
-from src.request_client import create_request_session, close_request_session
+# 自验入口：生成加密参数并使用已确认的请求客户端验证结果
+# 注意：必须带 __main__ 守卫，否则被 import 时会自动发请求
+from src.signer import generate_sign, build_params
+from src.request.client import create_request_session, CookieJar
 
 # 请求配置来自脱敏后的浏览器成功样本，敏感值由用户本地补充
+# 字段名与 Node final.js 的 config.json 完全一致，可共用同一份 config.json
 CONFIG = {
-    "api": "https://example.com/api",
-    "method": "GET",
-    "headers": {
-        "user-agent": "<从样本脱敏迁移>",
-    },
-    "query": {},
-    "body": None,
+    "TARGET_URL": "https://example.com/api",
+    "METHOD": "GET",
+    "USER_AGENT": "<从样本脱敏迁移>",
+    "IMPERSONATE": "chrome135",
+    "SIGN_PARAM_NAME": "sign",
+    "DEVICE_COOKIE": "",
+    "extraHeaders": {},
 }
 
 def main():
-    session = create_request_session(CONFIG)
+    session = create_request_session(
+        impersonate=CONFIG["IMPERSONATE"],
+        user_agent=CONFIG.get("USER_AGENT") or None,
+    )
+    jar = CookieJar()
     try:
         # 加密参数必须由补环境后的目标入口动态生成，不复用 cURL 样本值
-        params = make_encrypted_params({"request": CONFIG, "session": session})
+        # 补环境为可选：Python 侧通常不需要；如需则 `from src.env.install_env import install_env`
+        env = None
+        params = build_params(CONFIG)
+        signature = generate_sign(params, env)
+        params[CONFIG["SIGN_PARAM_NAME"]] = signature
 
-        response = session.request(CONFIG, params)
+        response = session.request(
+            CONFIG["METHOD"],
+            CONFIG["TARGET_URL"],
+            headers={**CONFIG.get("extraHeaders", {}), "Cookie": jar.to_string(), "User-Agent": CONFIG["USER_AGENT"]},
+        )
 
-        ok = 200 <= response["status"] < 300
-        print({"ok": ok, "params": params, "response": response})
+        ok = 200 <= response.status_code < 300
+        print({"ok": ok, "params": params, "status": response.status_code})
 
         if not ok:
             raise SystemExit(2)
     finally:
         # 中文说明：请求结束后销毁 Session，清理 Cookie jar 和敏感运行态
-        close_request_session(session)
+        session.close()
 
 if __name__ == "__main__":
     main()
@@ -188,7 +226,9 @@ if __name__ == "__main__":
 - [ ] `result/` 是规范项目目录，而不是临时文件堆。
 - [ ] `result/最终项目总结.md` 已生成（必选，不生成 = 任务未完成）。
 - [ ] case 根目录只有 `case/` 和 `result/` 两个子目录，无散落脚本。
-- [ ] 只有一个执行入口：`final.js` 或 `final.py`。
+- [ ] 执行入口 `final.js` / `final.py` 带 `require.main` / `__main__` 守卫，被 `require` / `import` 时只导出 API、不自动执行、不发请求。
+- [ ] 已交付 `package.json`（Node）/ `requirements.txt`（Python）依赖契约，复制方 `npm install` / `pip install -r` 即可。
+- [ ] `native-protect.js` 已内联进 `result/src/env/`，交付物不 `require` skill 仓库的 `assets/`。
 - [ ] 执行入口可直接运行，并会生成加密参数、使用 Session 发送模拟请求、输出请求结果并销毁 session。
 - [ ] 模块拆分合理，必要源码位于 `src/`。
 - [ ] 补环境代码已运行 `check_code_quality.js`，中文注释 UTF-8 正常、无问号、无连续问号、无乱码。

@@ -1,6 +1,6 @@
 # Node 泄露阻断与静默失败排查
 
-> **交叉引用**：本清单与 `debug/debug-playbook.md`（故障树总览 + 请求失败 6 步 + 签名 7 环节对比）、`quality/high-strength-detection.md`（高强度 10 步）、`network/ip-risk-control.md`（IP 风控识别）互补。请求失败时先查 `debug-playbook.md` 顶部故障树定位分支，本清单用于 200 但空 body / 结果不一致场景。
+> **交叉引用**：本清单与 `debug/debug-playbook.md`（故障树总览 + 请求失败 6 步 + 签名 7 环节对比）、`quality/high-strength-detection.md`（高强度 10 步）、`network/ip-risk-control.md`（IP 风控识别）互补。请求失败时先查 `debug/debug-playbook.md` 顶部故障树定位分支，本清单用于 200 但空 body / 结果不一致场景。
 
 本文件用于进入 Node.js 补环境前后，防止目标 JS 误读 Node 环境，并排查"不报错但结果不一致"的问题。
 

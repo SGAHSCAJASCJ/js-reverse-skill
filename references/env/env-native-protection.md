@@ -94,7 +94,7 @@ node scripts/check_fingerprint_fixture.js --case-dir case --require canvas,webgl
 
 ## 构造函数报错的 native 保护策略
 
-构造函数错误采样（采样字段 `error.name` / `error.constructor.name` / `error.message` / `String(error)` / stack 首行、`case/fixtures/constructor-errors.fixture.json` 路径、"不要统一写 `Illegal constructor`"等取证要求、采样模板）详见 `env-object-model.md` 的"构造函数行为采样"段。本文件只关注 native 保护策略：
+构造函数错误采样（采样字段 `error.name` / `error.constructor.name` / `error.message` / `String(error)` / stack 首行、`case/fixtures/constructor-errors.fixture.json` 路径、"不要统一写 `Illegal constructor`"等取证要求、采样模板）详见 `references/env/env-object-model.md` 的"构造函数行为采样"段。本文件只关注 native 保护策略：
 
 1. 构造函数的非法调用 / 非法构造行为必须由 JS 层抛出与采样一致的错误（错误构造器、`error.name`、`error.message`、stack 首行均需匹配）。
 2. 错误信息要精确到浏览器版本和调用方式；例如 Chrome 中"需要 new 调用"和"非法构造"通常不是同一条 message，应分别实现对应抛错逻辑。

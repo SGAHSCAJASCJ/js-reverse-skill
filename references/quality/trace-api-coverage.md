@@ -46,7 +46,7 @@ case/notes/missing-env-priority.md
 }
 ```
 
-`env-coverage-matrix.md` 至少包含：
+至少包含：
 
 - Trace 来源、日志覆盖范围、`baselineId`、是否存在 profile / baseline 冲突。
 - P0/P1/P2 分类规则。
