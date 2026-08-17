@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2.3.44 - 2026-08-17
+
+### 修复
+- **forensic 终态目标与验证码前置链路解耦**：撤销 2.3.43 的多 targets 全部命中语义；`--targets/--targets-regex` 恢复为 URL OR 匹配，用户只需提供最终业务/登录接口，命中后默认再等待 3 秒接收后置回调。
+- **关联动态材料自动保留**：全量请求元数据继续写入 `capture.json`，终态前最近的 API/JSON、验证码/风控资源与 WASM 按默认 60 包、100MB 总预算自动保留；避免预先列全验证码接口，也避免逐包拉取所有 body。
+- **目标误命中修复**：目标过滤只匹配 URL，不再因 `Referer` 或响应头文字命中接口关键词。
+- **无 targets 模式 body 过度读取修复**：未指定终态目标时不再把所有网络包误当作目标包拉取响应体。
+- **关联材料原因标注**：`related-hits.json` 按 `flow-url`、`write-request`、`wasm`、`dynamic-response` 标记自动保留原因，便于后续快速区分验证码/风控与业务请求。
+- **多次终态回溯修复**：同一会话中存在多次最终接口提交时，以最后一次已捕获的非 OPTIONS 2xx 终态为关联锚点，保留失败重试之间重新触发的验证码/风控链；HTTP 2xx 不等同业务成功，预期重试时通过 `--target-settle` 扩大继续抓取窗口。`--wait` 只限制首次终态等待，命中后始终执行完整收尾窗口，不再被总超时余额截断。
+- **完整 body/WASM 落盘**：JSON 默认只保留 1MB 内联/预览；普通大 body 默认完整写入 `forensic/bodies/`（单体 10MB），WASM 默认完整写入 `forensic/wasm/`（单体 50MB），关联总预算提高到 100MB。超过安全上限或预算时不写不可解析半包，并在记录中写入 `*_complete=false` 与原因；完整文件带大小和 SHA-256。gzip/br/deflate 响应保存解码后的分析 payload，并用 `*_content_decoded` 明示，避免误当 wire-level 字节。
+- **新增 `forensic_ruyipage.py --self-test`**：覆盖终态 OR、URL 匹配、多次终态回溯、普通大 body/WASM 逐字节落盘、预算拒绝半包和关联筛选。
+
 ## 2.3.43 - 2026-08-16
 
 ### 修复

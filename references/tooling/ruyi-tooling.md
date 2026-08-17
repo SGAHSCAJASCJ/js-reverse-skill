@@ -214,7 +214,7 @@ node scripts/download_ruyi_tool.js --tool ruyipage-firefox --dest <download-dir>
 > # 仅检测环境并打印计划（不启动浏览器）：
 > python scripts/forensic_ruyipage.py --url <目标页> --case-dir <project-root> --dry-run --markdown
 > ```
-> 输出：`<case-dir>/forensic/capture.json`（全部包元数据）、`target-hits.json`（目标命中，含响应体截断）、`js/original/`（JS 文件）、`notes/fingerprint-baseline.json`。
+> 输出：`<case-dir>/forensic/capture.json`（全部包元数据）、`target-hits.json`（目标命中元数据/小 body/预览）、`related-hits.json`（前置链元数据/小 body/预览）、`bodies/`（超过 JSON 预览阈值的完整 body）、`wasm/`（完整 WASM）、`js/original/`（JS 文件）、`notes/fingerprint-baseline.json`。
 >
 > 指定 `--targets/--targets-regex` 后，未捕获到非 OPTIONS 2xx 目标响应时脚本退出码非 0（报告 `NO_TARGET`/`PARTIAL`），作为 Step 1 缺失硬信号；未命中不得转源码搜索，需重采或由用户提供 cURL/HAR。
 

@@ -86,7 +86,7 @@ node scripts/check_evidence.js --case-dir <project-root> --url <target-url> --in
 
 环境检测类脚本统一 `--project-dir` 定位 tools/ 所在工程根；多 case 项目共享 tools 时，`--project-dir`/`--case-dir` 传 case 目录或共享工程根均可（自动向上查找含 `tools/` 的祖先目录）。目标接口 URL/关键词已知时，`check_evidence.js` 加 `--require-target-signal <目标接口URL或关键词>` 同时约束 Step 1 与 Step 2。
 
-Step 1 只接受有效 `capture.json` 网络记录（纯元数据，响应体在 `target-hits.json`），或通过内容校验的 HAR、cURL、原始 HTTP 请求文本；单独 JS、截图和指纹基线只作辅助材料，不计为 Step 1。Step 2 只接受内容可解析、记录非空且关联目标域的 RuyiTrace NDJSON/JSONL（新版按进程类型分目录，脚本自动递归扫描）；摘要不能替代日志。脚本输出 `none`、`step1-only`、`step2-only` 或 `both`，据此补采缺失步骤。
+Step 1 只接受有效 `capture.json` 网络记录（纯元数据；终态与关联记录索引在 `target-hits.json`/`related-hits.json`，超过 JSON 预览阈值的完整 body/WASM 分别在 `case/forensic/bodies/`、`case/forensic/wasm/`），或通过内容校验的 HAR、cURL、原始 HTTP 请求文本；单独 JS、截图和指纹基线只作辅助材料，不计为 Step 1。Step 2 只接受内容可解析、记录非空且关联目标域的 RuyiTrace NDJSON/JSONL（新版按进程类型分目录，脚本自动递归扫描）；摘要不能替代日志。脚本输出 `none`、`step1-only`、`step2-only` 或 `both`，据此补采缺失步骤。
 
 ## 案例查询
 

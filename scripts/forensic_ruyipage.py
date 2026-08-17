@@ -312,47 +312,93 @@ def load_manual_geo(value: str) -> Any:
 
 
 # ============================================================
-# JS / target 过滤
+# JS / target / 关联请求过滤
 # ============================================================
 _JS_EXT_RE = re.compile(r"\.js(\?|#|$)", re.IGNORECASE)
+_WASM_EXT_RE = re.compile(r"\.wasm(\?|#|$)", re.IGNORECASE)
+_FLOW_URL_RE = re.compile(
+    r"captcha|challenge|verify|validate|slider|jigsaw|risk|security|ticket|seccode|"
+    r"geetest|tcaptcha|yidun|dun\.163|captcha_output|pass_token",
+    re.IGNORECASE,
+)
+_DYNAMIC_CONTENT_TYPES = (
+    "application/json",
+    "application/graphql",
+    "application/x-www-form-urlencoded",
+    "application/octet-stream",
+    "application/wasm",
+    "text/json",
+    "text/plain",
+)
 
 
 def is_js_packet(pkt: Dict[str, Any]) -> bool:
     url = (pkt.get("url") or "").split("?")[0].split("#")[0]
     if _JS_EXT_RE.search(url):
         return True
-    ct = (pkt.get("response_headers") or {}).get("content-type", "") or ""
+    ct = ""
+    for k, v in (pkt.get("response_headers") or {}).items():
+        if str(k).lower() == "content-type":
+            ct = str(v or "")
+            break
     return "javascript" in ct.lower() or "ecmascript" in ct.lower()
 
 
-def _match_text(pkt: Dict[str, Any]) -> str:
-    # 仅对标识性元数据做匹配：URL / method / 请求头 / 响应头。
-    # 不纳入 request_body / response_body —— 一来它们可能是 bytes（json.dumps 会崩），
-    # 二来把响应体纳入会导致目标关键词只出现在正文时被误命中。
-    parts: List[str] = [
-        pkt.get("url", "") or "",
-        pkt.get("method", "") or "",
-    ]
-    for hk in ("request_headers", "response_headers"):
-        h = pkt.get(hk) or {}
-        if isinstance(h, dict):
-            for k, v in h.items():
-                parts.append(f"{k}: {v}")
-    return "\n".join(str(p) for p in parts)
-
-
 def match_targets(pkt: Dict[str, Any], substrings: List[str], regexes: List[re.Pattern]) -> bool:
+    """目标接口只按 URL 匹配，避免 Referer/响应头中的字样冒充真实接口命中。"""
     if not substrings and not regexes:
         return True
     url = pkt.get("url", "") or ""
-    text = _match_text(pkt)
     for s in substrings:
-        if s and (s in url or s in text):
+        if s and s in url:
             return True
     for r in regexes:
-        if r.search(url) or r.search(text):
+        if r.search(url):
             return True
     return False
+
+
+def _related_reason(pkt: Dict[str, Any]) -> Optional[str]:
+    """返回前置动态请求的保留原因；None 表示不拉取 body。"""
+    method = str(pkt.get("method") or "").upper()
+    if method == "OPTIONS" or is_js_packet(pkt):
+        return None
+    url = str(pkt.get("url") or "")
+    ct = _response_content_type(pkt)
+    if _WASM_EXT_RE.search(url) or "application/wasm" in ct:
+        return "wasm"
+    if _FLOW_URL_RE.search(url):
+        return "flow-url"
+    if method in ("POST", "PUT", "PATCH", "DELETE"):
+        return "write-request"
+    if any(marker in ct for marker in _DYNAMIC_CONTENT_TYPES):
+        return "dynamic-response"
+    return None
+
+
+def _is_related_packet(pkt: Dict[str, Any]) -> bool:
+    """筛选值得保留 body 的前置动态请求，不对所有页面资源做昂贵的 BiDi body RPC。"""
+    return _related_reason(pkt) is not None
+
+
+def _select_related_indices(records_meta: List[Dict[str, Any]], target_indices: List[int], max_packets: int) -> List[int]:
+    """从终态接口向前回溯动态请求，优先保留最接近最终业务提交的链路材料。"""
+    if max_packets <= 0 or not records_meta:
+        return []
+    accepted_targets = [
+        i for i in target_indices
+        if str(records_meta[i].get("method") or "").upper() != "OPTIONS"
+        and int(records_meta[i].get("response_status") or 0) // 100 == 2
+    ]
+    # 以最后一次已捕获的有效终态为回溯锚点。一次会话可能先提交失败、
+    # 重新完成验证码后再次提交；取最早命中会漏掉后续验证码链。
+    terminal_index = max(accepted_targets or target_indices) if target_indices else len(records_meta) - 1
+    target_set = set(target_indices)
+    candidates = [
+        i for i in range(terminal_index + 1)
+        if i not in target_set and _is_related_packet(records_meta[i])
+    ]
+    return sorted(candidates[-max_packets:])
 
 
 def _safe_body(body: Any) -> bytes:
@@ -365,6 +411,14 @@ def _safe_body(body: Any) -> bytes:
     return json.dumps(body, ensure_ascii=False).encode("utf-8", "replace")
 
 
+def _header_value(headers: Optional[dict], name: str) -> str:
+    wanted = name.lower()
+    for key, value in (headers or {}).items():
+        if str(key).lower() == wanted:
+            return str(value or "")
+    return ""
+
+
 def _maybe_decompress(body: bytes, headers: Optional[dict]) -> bytes:
     """按 Content-Encoding / 魔数尝试解压 gzip / br / deflate 响应体；解压失败原样返回。
 
@@ -374,12 +428,7 @@ def _maybe_decompress(body: bytes, headers: Optional[dict]) -> bytes:
     """
     if not body:
         return body
-    headers = headers or {}
-    ce = ""
-    for k, v in headers.items():
-        if str(k).lower() == "content-encoding":
-            ce = str(v or "").lower().strip()
-            break
+    ce = _header_value(headers, "content-encoding").lower().strip()
     try:
         if "gzip" in ce or body[:2] == b"\x1f\x8b":
             import gzip
@@ -407,13 +456,56 @@ def _body_to_text(body: bytes, headers: Optional[dict]) -> Tuple[str, bool, int]
     if not body:
         return "", False, 0
     body = _maybe_decompress(body, headers)
-    ct = ((headers or {}).get("content-type", "") or "").lower()
-    if "application/octet-stream" in ct:
+    ct = _header_value(headers, "content-type").lower()
+    if "application/octet-stream" in ct or "application/wasm" in ct:
         return base64.b64encode(body).decode("ascii"), True, len(body)
     try:
         return body.decode("utf-8"), False, len(body)
     except UnicodeDecodeError:
         return base64.b64encode(body).decode("ascii"), True, len(body)
+
+
+def _is_wasm_body(url: str, headers: Optional[dict]) -> bool:
+    return bool(_WASM_EXT_RE.search(url or "")) or "application/wasm" in _header_value(headers, "content-type").lower()
+
+
+def _body_extension(url: str, headers: Optional[dict], is_wasm: bool) -> str:
+    if is_wasm:
+        return ".wasm"
+    ct = _header_value(headers, "content-type").lower().split(";", 1)[0].strip()
+    by_type = {
+        "application/json": ".json",
+        "application/graphql": ".json",
+        "application/xml": ".xml",
+        "text/xml": ".xml",
+        "text/html": ".html",
+        "text/plain": ".txt",
+        "application/x-www-form-urlencoded": ".txt",
+        "application/octet-stream": ".bin",
+        "application/protobuf": ".bin",
+        "application/x-protobuf": ".bin",
+    }
+    if ct in by_type:
+        return by_type[ct]
+    clean = (url or "").split("?", 1)[0].split("#", 1)[0]
+    ext = os.path.splitext(clean)[1].lower()
+    if ext and re.fullmatch(r"\.[a-z0-9]{1,8}", ext):
+        return ext
+    return ".bin"
+
+
+def _body_file_path(out_dir: str, pkt: Dict[str, Any], direction: str,
+                    capture_index: int, headers: Optional[dict], is_wasm: bool) -> str:
+    url = str(pkt.get("url") or "")
+    clean = url.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    base = clean.rsplit("/", 1)[-1] or "body"
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base)[:80] or "body"
+    ext = _body_extension(url, headers, is_wasm)
+    if base.lower().endswith(ext):
+        base = base[:-len(ext)] or "body"
+    digest = hashlib.sha1(f"{url}|{direction}|{capture_index}".encode("utf-8")).hexdigest()[:10]
+    subdir = "wasm" if is_wasm else "bodies"
+    return os.path.join(out_dir, subdir, f"{capture_index:06d}-{direction}-{base}.{digest}{ext}")
 
 
 def sanitize_filename(url: str) -> str:
@@ -499,11 +591,7 @@ def build_options(args: argparse.Namespace, browser_path: str):
 
 
 def _response_content_type(d: Dict[str, Any]) -> str:
-    headers = d.get("response_headers") or {}
-    for k, v in headers.items():
-        if str(k).lower() == "content-type":
-            return str(v or "").lower()
-    return ""
+    return _header_value(d.get("response_headers"), "content-type").lower()
 
 
 def _is_entry_document(d: Dict[str, Any], args_url: str) -> bool:
@@ -518,33 +606,193 @@ def _is_entry_document(d: Dict[str, Any], args_url: str) -> bool:
     return bool(url and target and url == target)
 
 
+def _serialize_packet_bodies(
+    d: Dict[str, Any],
+    per_body_limit: int,
+    total_budget: Optional[int] = None,
+    *,
+    inline_limit: Optional[int] = None,
+    max_wasm_bytes: Optional[int] = None,
+    out_dir: Optional[str] = None,
+    capture_index: int = -1,
+) -> Tuple[Dict[str, Any], int]:
+    """保留完整 body 证据，JSON 仅内联小 body 或大 body 预览。
+
+    返回 (序列化记录, 本次占用预算的原始字节数)。普通 body 超过 per_body_limit、
+    WASM 超过 max_wasm_bytes、或剩余总预算不足时不会写入不可用的半包；JSON 中仅保留
+    预览并显式标记 omitted_reason。完整二进制、大文本和所有 WASM 写入独立文件。
+    """
+    out = dict(d)
+    inline_limit = max(0, min(
+        inline_limit if inline_limit is not None else min(per_body_limit, 1024 * 1024),
+        per_body_limit,
+    ))
+    max_wasm_bytes = max_wasm_bytes if max_wasm_bytes is not None else per_body_limit
+    remaining = total_budget if total_budget is not None else max(per_body_limit, max_wasm_bytes) * 2
+    saved = 0
+
+    for direction in ("response", "request"):
+        body_key = f"{direction}_body"
+        headers = out.get(f"{direction}_headers") or {}
+        raw = _safe_body(out.get(body_key))
+        if direction == "response":
+            encoded = raw
+            raw = _maybe_decompress(encoded, headers)
+            if raw != encoded:
+                out[f"{body_key}_content_decoded"] = _header_value(headers, "content-encoding") or "detected"
+        total = len(raw)
+        out[f"{body_key}_bytes"] = total
+        out[f"{body_key}_complete"] = True
+        if total == 0:
+            out[body_key] = ""
+            continue
+
+        out[f"{body_key}_sha256"] = hashlib.sha256(raw).hexdigest()
+        is_wasm = _is_wasm_body(str(out.get("url") or ""), headers)
+        is_binary = is_wasm or _body_to_text(raw[:min(total, inline_limit or total)], headers)[1]
+        size_limit = max_wasm_bytes if is_wasm else per_body_limit
+        omitted_reason = None
+        if total > size_limit:
+            omitted_reason = "wasm-size-limit" if is_wasm else "body-size-limit"
+        elif total > remaining:
+            omitted_reason = "total-budget"
+
+        complete = omitted_reason is None
+        external_preferred = is_wasm or is_binary or total > inline_limit
+        if complete and (not external_preferred or not out_dir):
+            preview_size = total
+        elif complete:
+            preview_size = min(total, inline_limit)
+        else:
+            preview_size = min(total, inline_limit, size_limit, max(0, remaining))
+        preview = raw[:preview_size]
+        preview_text, preview_binary, _ = _body_to_text(preview, headers)
+        out[body_key] = preview_text
+        if preview_binary:
+            out[f"{body_key}_binary"] = True
+            out[f"{body_key}_preview_encoding"] = "base64"
+
+        should_write_file = complete and out_dir and external_preferred
+        if should_write_file:
+            file_path = _body_file_path(out_dir, out, direction, capture_index, headers, is_wasm)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(raw)
+            out[f"{body_key}_saved_to"] = os.path.relpath(file_path, out_dir)
+            out[f"{body_key}_file_type"] = "wasm" if is_wasm else ("binary" if is_binary else "text")
+
+        if complete:
+            if preview_size < total:
+                out[f"{body_key}_preview_truncated"] = True
+            # 完整内容已内联或外部落盘；不再把 JSON 预览截断误报为证据截断。
+            out[f"{body_key}_complete"] = True
+            saved += total
+            remaining = max(0, remaining - total)
+        else:
+            out[f"{body_key}_complete"] = False
+            out[f"{body_key}_truncated"] = True
+            out[f"{body_key}_omitted_reason"] = omitted_reason
+            if preview_size < total:
+                out[f"{body_key}_preview_truncated"] = True
+            saved += preview_size
+            remaining = max(0, remaining - preview_size)
+    return out, saved
+
+
+def _body_storage_stats(records: List[Dict[str, Any]]) -> Dict[str, int]:
+    stats = {
+        "completeBytes": 0,
+        "externalFileCount": 0,
+        "incompleteBodyCount": 0,
+        "previewTruncatedCount": 0,
+    }
+    for record in records:
+        for direction in ("response", "request"):
+            key = f"{direction}_body"
+            if record.get(f"{key}_complete") is True:
+                stats["completeBytes"] += int(record.get(f"{key}_bytes") or 0)
+            elif record.get(f"{key}_complete") is False:
+                stats["incompleteBodyCount"] += 1
+            if record.get(f"{key}_saved_to"):
+                stats["externalFileCount"] += 1
+            if record.get(f"{key}_preview_truncated"):
+                stats["previewTruncatedCount"] += 1
+    return stats
+
+
 def _classify_packets(steps, args, substrings, regexes):
-    """遍历抓包 steps，分离三类产物。
+    """遍历抓包 steps，分离目标、JS 和终态之前的关联动态请求。
 
     - records_meta：每包 to_dict(include_bodies=False)，纯 metadata、零 BiDi RPC，用于 capture.json
     - js_records：识别为 JS 的包，response_body 落盘到 case/js/original/
-    - target_hits：命中 --targets/--targets-regex 的包，body 转字符串并按阈值截断
+    - target_hits：命中 --targets/--targets-regex 的包，小 body 内联、大 body 完整文件落盘
+    - related_hits：终态之前最近的 API/验证码/WASM 等候选包，完整证据受包数和总字节预算限制
 
     性能关键：metadata 全部用 include_bodies=False 读取（不触发 RPC）；
-    只有 JS 文件 / 目标命中的包才 to_dict(include_bodies=True) 按需拉 body——
+    只有 JS / 目标 / 受限的关联候选才 to_dict(include_bodies=True) 按需拉 body——
     避免对所有包逐包拉 body（每个都是 BiDi get_data RPC，京东几百包会拖到数百秒）。
-
-    返回 (records_meta, js_records, target_hits, js_dir)。
     """
     js_records = []
     target_hits = []
+    related_hits = []
     document = None
     js_dir = os.path.join(args.case_subdir, "js", "original")
     os.makedirs(js_dir, exist_ok=True)
-    records_meta = []
+    packets = []
     for p in steps:
-        d = p.to_dict(include_bodies=False)
-        records_meta.append(d)
+        try:
+            packets.append((p, p.to_dict(include_bodies=False)))
+        except Exception as e:
+            logger.warning("读取抓包元数据失败，跳过该包：%s", e)
+    records_meta = [d for _, d in packets]
+    has_target_filter = bool(substrings or regexes)
+    target_indices = [
+        i for i, d in enumerate(records_meta)
+        if has_target_filter and match_targets(d, substrings, regexes)
+    ]
+    related_indices = set()
+    if not args.no_related_bodies:
+        related_indices = set(_select_related_indices(records_meta, target_indices, args.max_related_packets))
+    related_saved_bytes = 0
+    target_saved_bytes = 0
+
+    # 容量预算从终态向前消费，确保接近最终业务提交的 verify/load 请求优先保留。
+    related_by_index = {}
+    for i in sorted(related_indices, reverse=True):
+        if related_saved_bytes >= args.max_related_total_bytes:
+            break
+        p, meta = packets[i]
+        try:
+            body_packet = p.to_dict(include_bodies=True)
+        except Exception as e:
+            logger.warning("读取关联包 body 失败（%s）：%s", meta.get("url"), e)
+            body_packet = meta
+        remaining = args.max_related_total_bytes - related_saved_bytes
+        serialized, saved = _serialize_packet_bodies(
+            body_packet,
+            args.max_body_bytes,
+            remaining,
+            inline_limit=args.body_inline_bytes,
+            max_wasm_bytes=args.max_wasm_bytes,
+            out_dir=args.out_dir,
+            capture_index=i,
+        )
+        serialized["capture_index"] = i
+        serialized["related_reason"] = _related_reason(meta) or "terminal-predecessor"
+        related_by_index[i] = serialized
+        related_saved_bytes += saved
+    related_hits = [related_by_index[i] for i in sorted(related_by_index)]
+
+    for i, (p, meta) in enumerate(packets):
+        d = meta
         is_js = is_js_packet(d)
-        is_target = match_targets(d, substrings, regexes)
+        is_target = has_target_filter and match_targets(d, substrings, regexes)
         is_doc = document is None and _is_entry_document(d, args.url)
         if is_js or is_target or is_doc:
-            d = p.to_dict(include_bodies=True)
+            try:
+                d = p.to_dict(include_bodies=True)
+            except Exception as e:
+                logger.warning("读取包 body 失败（%s）：%s", d.get("url"), e)
         if is_js:
             body = _maybe_decompress(_safe_body(d.get("response_body")), d.get("response_headers"))
             fname = sanitize_filename(d.get("url", ""))
@@ -561,29 +809,19 @@ def _classify_packets(steps, args, substrings, regexes):
                 "source_mapping_url": extract_sourcemap(body) if body else None,
             })
         if is_target:
-            body = _maybe_decompress(_safe_body(d.get("response_body")), d.get("response_headers"))
-            total = len(body)
-            truncated = total > args.max_body_bytes
-            if truncated:
-                body = body[: args.max_body_bytes]
-            text, is_bin, _ = _body_to_text(body, d.get("response_headers"))
-            d["response_body"] = text
-            if is_bin:
-                d["response_body_binary"] = True
-                d["response_body_bytes"] = total
-            if truncated:
-                d["response_body_truncated"] = True
-                d["response_body"] += f"\n...[truncated, total {total} bytes]"
-            rb = _safe_body(d.get("request_body"))
-            if rb:
-                rtext, rbin, rlen = _body_to_text(rb, d.get("request_headers"))
-                d["request_body"] = rtext
-                if rbin:
-                    d["request_body_binary"] = True
-                    d["request_body_bytes"] = rlen
-            else:
-                d["request_body"] = ""
-            target_hits.append(d)
+            remaining = max(0, args.max_target_total_bytes - target_saved_bytes)
+            serialized, saved = _serialize_packet_bodies(
+                d,
+                args.max_body_bytes,
+                remaining,
+                inline_limit=args.body_inline_bytes,
+                max_wasm_bytes=args.max_wasm_bytes,
+                out_dir=args.out_dir,
+                capture_index=i,
+            )
+            serialized["capture_index"] = i
+            target_hits.append(serialized)
+            target_saved_bytes += saved
         if is_doc:
             body = _maybe_decompress(_safe_body(d.get("response_body")), d.get("response_headers"))
             os.makedirs(args.out_dir, exist_ok=True)
@@ -598,7 +836,15 @@ def _classify_packets(steps, args, substrings, regexes):
                 "size": len(body),
                 "body_missing": not body,
             }
-    return records_meta, js_records, target_hits, js_dir, document
+    related_stats = {
+        "candidateCount": len(related_indices),
+        "savedCount": len(related_hits),
+        "budgetBytes": related_saved_bytes,
+        "maxPackets": args.max_related_packets,
+        "maxTotalBytes": args.max_related_total_bytes,
+        **_body_storage_stats(related_hits),
+    }
+    return records_meta, js_records, target_hits, related_hits, related_stats, js_dir, document
 
 
 def _split_acceptance(target_hits):
@@ -614,40 +860,20 @@ def _split_acceptance(target_hits):
     return accepted, only_options
 
 
-def _target_acceptance(accepted, substrings, regexes):
-    """all 语义：每个 --targets/--targets-regex 目标都必须至少有一个非 OPTIONS 2xx 命中。
-    返回 (全部命中?, 未命中目标列表)。单目标时与 any 等价。"""
-    missing = []
-    for s in substrings:
-        if s and not any(s in (d.get("url") or "") or s in _match_text(d) for d in accepted):
-            missing.append(s)
-    for r in regexes:
-        if not any(r.search(d.get("url") or "") or r.search(_match_text(d)) for d in accepted):
-            missing.append(r.pattern)
-    return (len(missing) == 0), missing
-
-
 def _target_reached(steps, substrings, regexes) -> bool:
-    """轮询判定：--targets/--targets-regex 的每一个目标都已出现非 OPTIONS 2xx 响应（all 语义）。
-
-    背景：any 语义下多 targets 列全（如 gettype,get,ajax,login）时，页面加载只触发初始化接口
-    就提前收尾关浏览器，用户后续交互（滑动/登录）触发的接口永远抓不到——"一次会话列全"不成立
-    （geetest 案例被迫分三次重采）。all 语义：全部命中才停；永远等不到的目标由 --wait 超时兜底，
-    已抓包仍落盘。单目标时行为与 any 相同。
-    """
-    matched = []
+    """任一目标 URL 出现非 OPTIONS 2xx 响应即到达终态；多个目标表示替代终态。"""
     for p in steps:
         try:
             d = p.to_dict(include_bodies=False)
         except Exception:
             continue
-        if match_targets(d, substrings, regexes):
-            matched.append(d)
-    accepted, _ = _split_acceptance(matched)
-    if not substrings and not regexes:
-        return bool(accepted)
-    all_hit, _ = _target_acceptance(accepted, substrings, regexes)
-    return all_hit
+        if not match_targets(d, substrings, regexes):
+            continue
+        status = int(d.get("response_status") or 0)
+        method = str(d.get("method") or "").upper()
+        if method != "OPTIONS" and status // 100 == 2:
+            return True
+    return False
 
 
 def _js_quality(js_records) -> str:
@@ -668,21 +894,10 @@ def _js_quality(js_records) -> str:
 
 
 def _build_result(args, browser_path, baseline_id, fingerprint, cookies,
-                  records_meta, js_records, target_hits, accepted, only_options,
-                  webdriver_flag, wd_err, has_filter, document=None,
-                  substrings=None, regexes=None):
+                  records_meta, js_records, target_hits, related_hits, related_stats,
+                  accepted, only_options, webdriver_flag, wd_err, has_filter, document=None):
     """汇总取证结果为报告字典。has_filter 表示是否指定了 --targets/--targets-regex。"""
-    if has_filter:
-        all_hit, missing = _target_acceptance(accepted, substrings or [], regexes or [])
-        if all_hit:
-            acceptance = "PASS"
-        elif target_hits:
-            acceptance = "PARTIAL"
-        else:
-            acceptance = "NO_TARGET"
-    else:
-        missing = []
-        acceptance = "PASS"
+    acceptance = "PASS" if (not has_filter) or accepted else ("PARTIAL" if target_hits else "NO_TARGET")
     return {
         "url": args.url,
         "browserPath": browser_path,
@@ -693,7 +908,17 @@ def _build_result(args, browser_path, baseline_id, fingerprint, cookies,
         "jsFileCount": len(js_records),
         "targetHitCount": len(target_hits),
         "acceptedTargetCount": len(accepted),
-        "missingTargets": missing,
+        "relatedHitCount": len(related_hits),
+        "bodyPolicy": {
+            "inlineBytes": args.body_inline_bytes,
+            "maxBodyBytes": args.max_body_bytes,
+            "maxWasmBytes": args.max_wasm_bytes,
+        },
+        "targetBodyCapture": {
+            "maxTotalBytes": args.max_target_total_bytes,
+            **_body_storage_stats(target_hits),
+        },
+        "relatedCapture": related_stats,
         "webdriverTrue": bool(webdriver_flag) if webdriver_flag is not None else None,
         "webdriverCheckError": wd_err,
         "navigatorWebdriverSelfCheck": "FAIL" if webdriver_flag is True else ("PASS" if webdriver_flag is False else "UNKNOWN"),
@@ -712,13 +937,15 @@ def _build_result(args, browser_path, baseline_id, fingerprint, cookies,
     }
 
 
-def _write_outputs(args, browser_path, records_meta, target_hits, fingerprint, baseline_id, js_dir):
-    """落盘 capture.json / target-hits.json / fingerprint-baseline.json，返回输出路径字典。"""
+def _write_outputs(args, browser_path, records_meta, target_hits, related_hits, fingerprint, baseline_id, js_dir):
+    """落盘抓包元数据、终态目标、关联链路与指纹基线，返回输出路径字典。"""
     os.makedirs(args.out_dir, exist_ok=True)
     with open(os.path.join(args.out_dir, "capture.json"), "w", encoding="utf-8") as f:
         json.dump(records_meta, f, ensure_ascii=False, indent=2)
     with open(os.path.join(args.out_dir, "target-hits.json"), "w", encoding="utf-8") as f:
         json.dump(target_hits, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(args.out_dir, "related-hits.json"), "w", encoding="utf-8") as f:
+        json.dump(related_hits, f, ensure_ascii=False, indent=2)
 
     notes_dir = os.path.join(args.case_subdir, "notes")
     os.makedirs(notes_dir, exist_ok=True)
@@ -737,6 +964,9 @@ def _write_outputs(args, browser_path, records_meta, target_hits, fingerprint, b
     return {
         "captureJson": os.path.join(args.out_dir, "capture.json"),
         "targetHitsJson": os.path.join(args.out_dir, "target-hits.json"),
+        "relatedHitsJson": os.path.join(args.out_dir, "related-hits.json"),
+        "bodyDir": os.path.join(args.out_dir, "bodies"),
+        "wasmDir": os.path.join(args.out_dir, "wasm"),
         "jsDir": js_dir,
         "fingerprintBaseline": fp_path,
     }
@@ -952,8 +1182,8 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
         _trigger_actions(page, args, args.human_algorithm)
 
         if substrings or regexes:
-            # 目标命中即停：每轮先检查已捕获包（目标可能在 get 期间已返回，不能等新包），
-            # 命中非失败 2xx 立即结束；未命中再等新包。总时长受 --wait 约束。
+            # 用户给出的目标接口是本次流程的终态（如最终登录/提交接口）。命中后只短暂收尾，
+            # 由后续分类从同一会话中回溯验证码等前置链路，不能要求预先列全中间接口。
             import time
             deadline = time.time() + args.wait
             target_done = False
@@ -965,7 +1195,7 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
                     steps_now = []
                 if _target_reached(steps_now, substrings, regexes):
                     target_done = True
-                    logger.info("目标接口已命中，提前结束抓包")
+                    logger.info("终态目标接口已命中，开始 %ss 收尾窗口", args.target_settle)
                     break
                 try:
                     pkt = page.capture.wait(timeout=2, count=1)
@@ -978,6 +1208,20 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
                         break
             if not target_done:
                 logger.warning("[超时] 未在 %ss 内命中目标接口，按 --wait 收尾。若用户尚未在浏览器完成操作（登录/滑动验证码等），请调大 --wait 或重采；已捕获的包仍会落盘供分析", args.wait)
+            elif args.target_settle > 0:
+                # --wait 只限制首次终态的等待时间；命中后应完整执行收尾窗口，
+                # 避免目标在 deadline 附近出现时后置回调只抓到不足 target-settle 秒。
+                settle_deadline = time.time() + args.target_settle
+                while time.time() < settle_deadline:
+                    try:
+                        page.capture.wait(timeout=min(2, max(1, int(settle_deadline - time.time()))), count=1)
+                        wait_fail = 0
+                    except Exception as e:
+                        wait_fail += 1
+                        logger.warning("收尾 capture.wait 异常（连续第 %s 次）：%s", wait_fail, e)
+                        if wait_fail >= 5:
+                            logger.warning("收尾 capture.wait 连续 %s 次异常，结束收尾窗口", wait_fail)
+                            break
         else:
             # 未指定目标：网络静默即停——包数不再增长且连续 settle 秒无新包视为抓包完成。
             # 比"首个包+固定 sleep"更早结束（早完成早停），避免页面加载完仍在空等。
@@ -1021,7 +1265,7 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
             logger.warning("读取 steps 失败：%s", e)
             steps = []
 
-        records_meta, js_records, target_hits, js_dir, document = _classify_packets(
+        records_meta, js_records, target_hits, related_hits, related_stats, js_dir, document = _classify_packets(
             steps, args, substrings, regexes
         )
 
@@ -1048,16 +1292,15 @@ def run_forensic(args: argparse.Namespace, browser_path: str) -> Dict[str, Any]:
         has_filter = bool(substrings) or bool(regexes)
         result = _build_result(
             args, browser_path, baseline_id, fingerprint, cookies,
-            records_meta, js_records, target_hits, accepted, only_options,
-            webdriver_flag, wd_err, has_filter, document,
-            substrings=substrings, regexes=regexes,
+            records_meta, js_records, target_hits, related_hits, related_stats,
+            accepted, only_options, webdriver_flag, wd_err, has_filter, document,
         )
         result["getTimedOut"] = get_timed_out
         result["outputs"] = _write_outputs(
-            args, browser_path, records_meta, target_hits, fingerprint, baseline_id, js_dir
+            args, browser_path, records_meta, target_hits, related_hits, fingerprint, baseline_id, js_dir
         )
-        logger.info("=== FORENSIC DONE === 抓包 %s 个，目标命中 %s，已写入 capture.json",
-                    len(records_meta), len(target_hits))
+        logger.info("=== FORENSIC DONE === 抓包 %s 个，目标命中 %s，关联材料 %s，已写入 capture.json",
+                    len(records_meta), len(target_hits), len(related_hits))
         return result
     finally:
         # 取证结束（成功或异常）一律主动关闭浏览器，避免残留进程 / profile 锁
@@ -1079,15 +1322,15 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         prog="forensic_ruyipage.py",
         description="ruyiPage 通用取证：抓包 + JS 收集 + 指纹基线（严格有头/定制内核）。",
     )
-    p.add_argument("--url", required=True, help="目标页面 URL")
+    p.add_argument("--url", default="", help="目标页面 URL")
     p.add_argument("--browser-path", default="", help="ruyiPage 定制 Firefox 可执行文件；缺省自动解析 managed runtime（禁系统回退）")
     p.add_argument("--case-dir", default=".", help="项目根目录（其下应有 case/ 和 result/ 两个平级子目录），默认当前目录")
     p.add_argument("--project-dir", default="", help="用户工程目录（tools/ 所在）。未传时从 --case-dir / 当前目录向上查找 tools/；安装模式下 skill 安装目录无 tools/，靠此定位定制 Firefox runtime")
     p.add_argument("--out-dir", default="", help="取证输出目录，默认 <case-dir>/case/forensic")
     p.add_argument("--profile-dir", default="", help="独立浏览器 profile，默认 <case-dir>/case/tmp/ruyipage-profile")
     p.add_argument("--fp-dir", default="", help="智能指纹 base_dir，默认 <case-dir>/case/tmp/fingerprint")
-    p.add_argument("--targets", default="", help="目标接口子串过滤（逗号分隔，可传多个）；指定后若未捕获到非 OPTIONS 2xx 目标响应则退出码非 0，作为 Step 1 缺失硬信号；抓包始终抓全部。签名密钥/配置来源接口（如 B 站 nav 下发 wbi_img）也要加入，否则其响应体不进 target-hits.json，无法从证据反推密钥")
-    p.add_argument("--targets-regex", default="", help="目标接口正则过滤（逗号分隔）；与 --targets 同样参与取证成功判定")
+    p.add_argument("--targets", default="", help="终态接口 URL 子串过滤（逗号分隔，可传多个替代终态）；任一非 OPTIONS 2xx 命中即结束取证，抓包始终覆盖全会话")
+    p.add_argument("--targets-regex", default="", help="终态接口 URL 正则过滤（逗号分隔）；与 --targets 为 OR 关系")
     p.add_argument("--human-algorithm", default="windmouse", help="拟人算法：windmouse / bezier，默认 windmouse")
     p.add_argument("--window-size", default="1366,900", help="窗口尺寸 wxh，默认 1366,900")
     p.add_argument("--require-country", default="", help="smart_fingerprint require_country（ISO-2）；缺省不校验出口国家（适配代理出口 IP 与目标国家不一致）")
@@ -1095,9 +1338,16 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--proxy-auth", default="", help="出口代理认证 user:pass（透传 proxy_user/proxy_pwd），可选；账号密码只写 fpfile，不写业务脚本/交付物")
     p.add_argument("--manual-geo", default="", help="地理探测失败时的 manual_geo（JSON 字符串或文件路径）")
     p.add_argument("--no-fp", action="store_true", help="跳过 smart_fingerprint（禁用智能指纹）")
-    p.add_argument("--wait", type=int, default=120, help="完成判定的总超时秒：目标命中即提前结束 / 未命中到点自动关闭，默认 120；验证码/登录等需人工操作的场景建议调大（如 300）")
+    p.add_argument("--wait", type=int, default=120, help="等待首次终态目标命中的超时秒；命中后另执行完整 --target-settle 收尾窗口，未命中到点自动关闭，默认 120；验证码/登录等需人工操作的场景建议调大（如 300）")
     p.add_argument("--settle", type=int, default=5, help="未指定 --targets 时的静默窗口：包数不再增长且连续 N 秒无新包视为抓包完成，默认 5")
-    p.add_argument("--max-body-bytes", type=int, default=1048576, help="target-hits 响应体截断阈值，默认 1MB")
+    p.add_argument("--target-settle", type=int, default=3, help="终态接口首次出现 HTTP 2xx 后继续抓取的秒数，用于接收后置回调或额外业务重试；脚本无法通用判断响应体中的业务成功码，预期可能重试时请调大，默认 3")
+    p.add_argument("--body-inline-bytes", type=int, default=1024 * 1024, help="请求体/响应体在 JSON 中完整内联或预览的最大原始字节数，默认 1MB；超过后完整内容单独落盘")
+    p.add_argument("--max-body-bytes", type=int, default=10 * 1024 * 1024, help="普通请求体/响应体完整保留的单体上限，默认 10MB；超过后仅留预览并显式标记")
+    p.add_argument("--max-wasm-bytes", type=int, default=50 * 1024 * 1024, help="WASM 完整原始文件的单体上限，默认 50MB；WASM 不保存不可执行的半包")
+    p.add_argument("--max-target-total-bytes", type=int, default=100 * 1024 * 1024, help="全部终态命中 body 的总保留预算，默认 100MB")
+    p.add_argument("--max-related-packets", type=int, default=60, help="终态前关联动态 body 的最大包数，默认 60；从终态向前优先保留")
+    p.add_argument("--max-related-total-bytes", type=int, default=100 * 1024 * 1024, help="终态前关联动态 body 的总保留预算，默认 100MB")
+    p.add_argument("--no-related-bodies", action="store_true", help="关闭终态前关联动态 body 自动保存，仅保留 JS/目标接口响应体")
     p.add_argument("--click", default="", help="导航后拟人点击的 CSS 选择器")
     p.add_argument("--scroll", type=int, default=0, help="导航后滚动像素数")
     p.add_argument("--manual-pause", action="store_true", help="导航后暂停，等待手动完成登录/业务再继续；AI 后台运行遇非交互 stdin（EOF）时自动退化为等待 --wait，不阻塞")
@@ -1105,7 +1355,18 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--dry-run", action="store_true", help="只检测环境并打印计划，不启动浏览器")
     p.add_argument("--json", action="store_true", help="输出 JSON")
     p.add_argument("--markdown", action="store_true", help="输出 Markdown（默认）")
+    p.add_argument("--self-test", action="store_true", help="运行本地过滤与终态判定自测，不启动浏览器")
     a = p.parse_args(argv)
+    if not a.self_test and not a.url:
+        p.error("--url 为必填项（--self-test 除外）")
+    if a.wait < 0 or a.settle < 0 or a.target_settle < 0:
+        p.error("--wait/--settle/--target-settle 不能为负数")
+    if a.body_inline_bytes < 0 or a.max_body_bytes <= 0 or a.max_wasm_bytes <= 0:
+        p.error("body 内联预览不能为负数，普通 body/WASM 单体上限必须为正数")
+    if a.body_inline_bytes > a.max_body_bytes:
+        p.error("--body-inline-bytes 不能大于 --max-body-bytes")
+    if a.max_target_total_bytes < 0 or a.max_related_packets < 0 or a.max_related_total_bytes < 0:
+        p.error("目标/关联总预算与关联包数不能为负数")
     if not a.json and not a.markdown:
         a.markdown = True
     a.case_dir = os.path.abspath(a.case_dir)
@@ -1116,8 +1377,204 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return a
 
 
+class _SelfTestPacket:
+    def __init__(self, value: Dict[str, Any]):
+        self.value = value
+
+    def to_dict(self, include_bodies: bool = False) -> Dict[str, Any]:
+        return dict(self.value)
+
+
+def run_self_test() -> int:
+    """不依赖 ruyipage 的核心回归测试，覆盖终态 OR 语义与关联材料筛选。"""
+    import tempfile
+    from types import SimpleNamespace
+
+    defaults = parse_args(["--self-test"])
+    assert defaults.body_inline_bytes == 1024 * 1024, "JSON 内联预览默认值错误"
+    assert defaults.max_body_bytes == 10 * 1024 * 1024, "普通 body 默认上限错误"
+    assert defaults.max_wasm_bytes == 50 * 1024 * 1024, "WASM 默认上限错误"
+    assert defaults.max_related_total_bytes == 100 * 1024 * 1024, "关联总预算默认值错误"
+
+    header_only = {
+        "url": "https://api.example.com/login",
+        "method": "POST",
+        "request_headers": {"referer": "https://example.com/captcha/verify"},
+    }
+    assert not match_targets(header_only, ["captcha/verify"], []), "target 不应匹配 Referer 头"
+
+    records = [
+        {"url": "https://example.com/login", "method": "GET", "response_status": 200, "response_headers": {"content-type": "text/html"}},
+        {"url": "https://api.example.com/login/submit", "method": "OPTIONS", "response_status": 204, "response_headers": {}},
+        {"url": "https://captcha.example.com/load", "method": "GET", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+        {"url": "https://captcha.example.com/verify", "method": "POST", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+        {"url": "https://cdn.example.com/site.css", "method": "GET", "response_status": 200, "response_headers": {"content-type": "text/css"}},
+        {"url": "https://api.example.com/login/submit", "method": "POST", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+    ]
+    related = _select_related_indices(records, [1, 5], 60)
+    assert related == [2, 3], f"关联候选筛选或 OPTIONS 终态处理错误：{related}"
+
+    # 多次终态提交时必须以最后一次有效提交为锚点，保留两次提交之间
+    # 重新触发的验证码/风控链路，而不是只保留首次提交之前的材料。
+    retry_records = [
+        {"url": "https://captcha.example.com/load?attempt=1", "method": "GET", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+        {"url": "https://captcha.example.com/verify?attempt=1", "method": "POST", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+        {"url": "https://api.example.com/login/submit", "method": "POST", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+        {"url": "https://captcha.example.com/load?attempt=2", "method": "GET", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+        {"url": "https://captcha.example.com/verify?attempt=2", "method": "POST", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+        {"url": "https://api.example.com/login/submit", "method": "POST", "response_status": 200, "response_headers": {"content-type": "application/json"}},
+    ]
+    retry_related = _select_related_indices(retry_records, [2, 5], 60)
+    assert retry_related == [0, 1, 3, 4], f"多次终态提交未保留最后一次验证码链：{retry_related}"
+
+    packets = [_SelfTestPacket(records[0]), _SelfTestPacket(records[5])]
+    assert _target_reached(packets, ["/login/submit"], []), "最终业务接口应触发终态"
+    assert not _target_reached([_SelfTestPacket(records[0])], ["/login/submit"], []), "未到终态不应提前结束"
+
+    serialized, saved = _serialize_packet_bodies(
+        {"url": "https://api.example.com/x", "method": "POST", "request_body": "12345", "response_body": "abcdef"},
+        4,
+        6,
+    )
+    assert saved == 6 and serialized.get("response_body_truncated"), "关联 body 总预算/截断失效"
+
+    records[2]["response_body"] = '{"challenge":"fresh"}'
+    records[3]["request_body"] = "w=encrypted"
+    records[3]["response_body"] = '{"ticket":"fresh"}'
+    records[5]["request_body"] = "ticket=fresh"
+    records[5]["response_body"] = '{"code":0}'
+    with tempfile.TemporaryDirectory() as root:
+        out_dir = os.path.join(root, "case", "forensic")
+
+        large_json = ('{"data":"' + ("x" * (2 * 1024 * 1024)) + '"}').encode("utf-8")
+        large_record, large_saved = _serialize_packet_bodies(
+            {
+                "url": "https://api.example.com/config.json",
+                "method": "GET",
+                "response_headers": {"Content-Type": "application/json"},
+                "response_body": large_json,
+            },
+            10 * 1024 * 1024,
+            20 * 1024 * 1024,
+            inline_limit=1024,
+            max_wasm_bytes=50 * 1024 * 1024,
+            out_dir=out_dir,
+            capture_index=7,
+        )
+        large_path = os.path.join(out_dir, large_record["response_body_saved_to"])
+        with open(large_path, "rb") as f:
+            assert f.read() == large_json, "大 JSON 外部落盘内容不完整"
+        assert large_saved == len(large_json), "大 JSON 预算计数错误"
+        assert large_record.get("response_body_complete") is True, "大 JSON 不应被标记为截断证据"
+        assert large_record.get("response_body_preview_truncated") is True, "大 JSON 应仅截断 JSON 内预览"
+        json.dumps(large_record, ensure_ascii=False)
+
+        wasm_body = b"\x00asm\x01\x00\x00\x00" + (b"\xff" * (2 * 1024 * 1024))
+        wasm_record, wasm_saved = _serialize_packet_bodies(
+            {
+                "url": "https://cdn.example.com/security/module.wasm",
+                "method": "GET",
+                "response_headers": {"Content-Type": "application/wasm"},
+                "response_body": wasm_body,
+            },
+            10 * 1024 * 1024,
+            20 * 1024 * 1024,
+            inline_limit=1024,
+            max_wasm_bytes=50 * 1024 * 1024,
+            out_dir=out_dir,
+            capture_index=8,
+        )
+        wasm_path = os.path.join(out_dir, wasm_record["response_body_saved_to"])
+        with open(wasm_path, "rb") as f:
+            assert f.read() == wasm_body, "WASM 必须完整逐字节落盘"
+        assert wasm_path.endswith(".wasm") and wasm_saved == len(wasm_body), "WASM 路径或预算计数错误"
+        assert wasm_record.get("response_body_file_type") == "wasm", "WASM 类型标记错误"
+        assert wasm_record.get("response_body_complete") is True, "完整 WASM 被误标为截断"
+        assert wasm_record.get("response_body_sha256") == hashlib.sha256(wasm_body).hexdigest(), "WASM SHA-256 错误"
+
+        omitted_record, _ = _serialize_packet_bodies(
+            {
+                "url": "https://api.example.com/oversized.json",
+                "method": "GET",
+                "response_headers": {"content-type": "application/json"},
+                "response_body": b"x" * 2048,
+            },
+            1024,
+            4096,
+            inline_limit=128,
+            max_wasm_bytes=4096,
+            out_dir=out_dir,
+            capture_index=9,
+        )
+        assert omitted_record.get("response_body_complete") is False, "超单体上限 body 不应标记完整"
+        assert omitted_record.get("response_body_omitted_reason") == "body-size-limit", "超限原因标记错误"
+        assert not omitted_record.get("response_body_saved_to"), "超限 body 不应写入半包文件"
+
+        budget_record, _ = _serialize_packet_bodies(
+            {
+                "url": "https://cdn.example.com/security/budget.wasm",
+                "method": "GET",
+                "response_headers": {"content-type": "application/wasm"},
+                "response_body": wasm_body,
+            },
+            10 * 1024 * 1024,
+            1024,
+            inline_limit=128,
+            max_wasm_bytes=50 * 1024 * 1024,
+            out_dir=out_dir,
+            capture_index=10,
+        )
+        assert budget_record.get("response_body_omitted_reason") == "total-budget", "总预算不足原因标记错误"
+        assert not budget_record.get("response_body_saved_to"), "预算不足时禁止保存不可执行的 WASM 半包"
+
+        import gzip
+        decoded_payload = b'{"decoded":true}'
+        decoded_record, _ = _serialize_packet_bodies(
+            {
+                "url": "https://api.example.com/compressed.json",
+                "method": "GET",
+                "response_headers": {"content-type": "application/json", "content-encoding": "gzip"},
+                "response_body": gzip.compress(decoded_payload),
+            },
+            10 * 1024 * 1024,
+            20 * 1024 * 1024,
+            inline_limit=1024,
+            max_wasm_bytes=50 * 1024 * 1024,
+            out_dir=out_dir,
+            capture_index=11,
+        )
+        assert decoded_record.get("response_body") == decoded_payload.decode("utf-8"), "压缩响应未保存解码 payload"
+        assert decoded_record.get("response_body_content_decoded") == "gzip", "解码来源标记错误"
+        assert decoded_record.get("response_body_sha256") == hashlib.sha256(decoded_payload).hexdigest(), "解码 payload 哈希错误"
+
+        args = SimpleNamespace(
+            case_subdir=os.path.join(root, "case"),
+            out_dir=out_dir,
+            url="https://example.com/login",
+            no_related_bodies=False,
+            body_inline_bytes=1024,
+            max_related_packets=60,
+            max_related_total_bytes=1024 * 1024,
+            max_target_total_bytes=1024 * 1024,
+            max_body_bytes=10 * 1024 * 1024,
+            max_wasm_bytes=50 * 1024 * 1024,
+        )
+        classified = _classify_packets([_SelfTestPacket(r) for r in records], args, ["/login/submit"], [])
+        _, _, target_hits, related_hits, _, _, _ = classified
+        assert len(target_hits) == 2 and len(related_hits) == 2, "终态/前置材料分类错误"
+        assert {h.get("related_reason") for h in related_hits} == {"flow-url"}, "关联材料原因标注错误"
+        no_target = _classify_packets([_SelfTestPacket(r) for r in records], args, [], [])
+        assert len(no_target[2]) == 0, "未指定 targets 时不应把所有包当成目标包"
+
+    print("forensic_ruyipage.py 自测通过：终态 OR、URL 匹配、多次终态回溯、完整 body/WASM 落盘、预算拒绝半包、分类落盘")
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
+
+    if args.self_test:
+        return run_self_test()
 
     ok, ver, err = detect_ruyipage()
     if not ok:
@@ -1152,6 +1609,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         "humanAlgorithm": args.human_algorithm,
         "smartFingerprint": not args.no_fp,
         "targets": [s for s in args.targets.split(",") if s.strip()],
+        "targetSettle": args.target_settle,
+        "relatedBodies": not args.no_related_bodies,
+        "bodyInlineBytes": args.body_inline_bytes,
+        "maxBodyBytes": args.max_body_bytes,
+        "maxWasmBytes": args.max_wasm_bytes,
+        "maxTargetTotalBytes": args.max_target_total_bytes,
+        "maxRelatedPackets": args.max_related_packets,
+        "maxRelatedTotalBytes": args.max_related_total_bytes,
         "dryRun": args.dry_run,
     }
 
@@ -1179,7 +1644,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(render_markdown(result))
     if not result["ok"]:
         print(
-            "[未通过] 取证目标未达成：指定了 --targets/--targets-regex，但未捕获到目标接口的非 OPTIONS 2xx 响应，"
+            "[未通过] 取证终态未达成：指定了 --targets/--targets-regex，但未捕获到终态接口的非 OPTIONS 2xx 响应，"
             "Step 1 缺失。请重采（--click/--scroll/--manual-pause）或由用户提供 cURL/HAR/原始请求文本，"
             "不得转源码搜索。",
             file=sys.stderr,
@@ -1197,7 +1662,23 @@ def render_markdown(r: Dict[str, Any]) -> str:
     L.append(f"- baselineId：{r.get('baselineId')}")
     L.append(f"- 抓包总数：{r.get('packetCount')}")
     L.append(f"- JS 文件数：{r.get('jsFileCount')}")
-    L.append(f"- 目标命中数：{r.get('targetHitCount')}（验收通过 {r.get('acceptedTargetCount')}）")
+    L.append(f"- 终态目标命中数：{r.get('targetHitCount')}（非 OPTIONS 2xx {r.get('acceptedTargetCount')}）")
+    target_body = r.get("targetBodyCapture") or {}
+    body_policy = r.get("bodyPolicy") or {}
+    L.append(
+        f"- body 策略：JSON 内联/预览 {body_policy.get('inlineBytes', 0)}B，普通单体 {body_policy.get('maxBodyBytes', 0)}B，"
+        f"WASM 单体 {body_policy.get('maxWasmBytes', 0)}B"
+    )
+    L.append(
+        f"- 终态 body：完整 {target_body.get('completeBytes', 0)}B，外部文件 {target_body.get('externalFileCount', 0)}，"
+        f"未完整 {target_body.get('incompleteBodyCount', 0)}（总预算 {target_body.get('maxTotalBytes', 0)}B）"
+    )
+    related = r.get("relatedCapture") or {}
+    L.append(
+        f"- 关联动态材料：{r.get('relatedHitCount', 0)} 包，完整 {related.get('completeBytes', 0)}B，"
+        f"外部文件 {related.get('externalFileCount', 0)}，未完整 {related.get('incompleteBodyCount', 0)}"
+        f"（候选 {related.get('candidateCount', 0)}，总预算 {related.get('maxTotalBytes', 0)}B）"
+    )
     doc = r.get("entryDocument")
     if doc:
         L.append(f"- 入口页面：{doc.get('saved_to')}（{doc.get('size')}B，状态 {doc.get('status')}）")
@@ -1211,12 +1692,13 @@ def render_markdown(r: Dict[str, Any]) -> str:
         L.append("- [警告] 部分 JS 落盘缺失（0B）：以下 JS 未拿到响应体，定位关键资源时注意补采。")
     if r.get("getTimedOut"):
         L.append("- [警告] page.get 超时（页面 load 未完成），但已捕获流量并已落盘；验收以实际抓包为准，非取证失败")
+    incomplete_bodies = target_body.get("incompleteBodyCount", 0) + related.get("incompleteBodyCount", 0)
+    if incomplete_bodies:
+        L.append(f"- [警告] 有 {incomplete_bodies} 个 body 因单体上限或总预算未完整保存；JSON 已标注 omitted_reason，分析前应调大对应参数重采")
     L.append(f"- 取证验收：{r.get('acceptance')}")
-    if r.get("missingTargets"):
-        L.append(f"- [未命中目标] {', '.join(r['missingTargets'])}：多 targets 按全部命中判定，以下接口无非 OPTIONS 2xx 响应（Step 1 不完整，请重采或补采）")
     if r.get("acceptance") in ("NO_TARGET", "PARTIAL"):
         L.append("")
-        L.append("[未通过] 取证目标未达成：指定 --targets/--targets-regex 后未捕获到目标接口的非 OPTIONS 2xx 响应（Step 1 缺失）。")
+        L.append("[未通过] 终态目标未达成：指定 --targets/--targets-regex 后未捕获到终态接口的非 OPTIONS 2xx 响应（Step 1 缺失）。")
         L.append("请重采（--click/--scroll/--manual-pause）或由用户提供 cURL/HAR/原始请求文本，不得转源码搜索。")
     if r.get("onlyOptionsWarning"):
         L.append(f"- [警告] 仅捕获到 OPTIONS 预检，未捕获真实业务响应：{r['onlyOptionsWarning']}")
@@ -1228,7 +1710,7 @@ def render_markdown(r: Dict[str, Any]) -> str:
         for h in r["targetHitsSummary"]:
             L.append(f"- `{h.get('method')} {h.get('status')}` {h.get('url')}")
     else:
-        L.append("- 无（未指定 --targets 或没有命中）")
+        L.append("- 无（未指定终态 --targets 或没有命中）")
     L.append("")
     L.append("## JS 文件")
     if r.get("jsFiles"):
@@ -1242,6 +1724,9 @@ def render_markdown(r: Dict[str, Any]) -> str:
     out = r.get("outputs", {})
     L.append(f"- 全部抓包：{out.get('captureJson')}")
     L.append(f"- 目标命中：{out.get('targetHitsJson')}")
+    L.append(f"- 关联材料：{out.get('relatedHitsJson')}")
+    L.append(f"- 完整 body 目录：{out.get('bodyDir')}")
+    L.append(f"- 完整 WASM 目录：{out.get('wasmDir')}")
     if doc:
         L.append(f"- 入口页面：{doc.get('saved_to')}")
     L.append(f"- JS 目录：{out.get('jsDir')}")

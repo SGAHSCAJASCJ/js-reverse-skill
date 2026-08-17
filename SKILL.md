@@ -1,6 +1,6 @@
 ---
 name: js-reverse-skill
-version: 2.3.43
+version: 2.3.44
 description: >
   网页端 JavaScript 加密参数逆向与纯协议还原。逆向还原浏览器请求中加密参数、签名、token、
   cookie、设备指纹的生成逻辑；适用于各类动态参数的生成逻辑分析，覆盖标准算法、自定义混淆、
@@ -171,23 +171,23 @@ URL 不是证据。脚本确认文件真实存在并可归类，才允许跳过�
 网络取证：
 
 ```powershell
-# 已知/疑似目标接口时必须加 --targets 过滤；需要登录/点击/验证码时在窗口内提示用户操作。
-# --targets 逗号分隔可传多个；签名密钥/配置来源接口（如 B 站 nav 下发 wbi_img、时间同步接口 time-millis/serverTime）
-# 也要加进 --targets，否则其响应体不进 target-hits.json，后续无法从证据确认响应格式。
-# 注意：capture.json 是纯请求元数据（不存响应体），响应体只落盘到两处：
-#   ① target-hits.json（--targets 命中接口）② case/js/original/（JS 资源）。
-#   需要确认某接口响应体时（如 serverTimestamp 来源接口的 data 格式），必须把它加进 --targets，
-#   不要从 capture.json 里找响应体——它没有。
-# 窗口默认 --wait 120，登录场景可加 --manual-pause 暂停等待（AI 后台运行遇非交互 stdin 时自动退化为等待 --wait，不阻塞）；窗口不够可调大 --wait。
-# 验证码场景应一次会话抓全 load → verify 三段链，--targets 列全该验证码的全部接口；
-# 接口名因厂商/版本而异，以实际抓包链路为准，厂商接口矩阵见 references/captcha/captcha-providers.md；
-# 禁止分多次重采——challenge 强绑定 Session，每次新会话 profile 必然失效。
-python scripts/forensic_ruyipage.py --url <target-url> --case-dir <project-root> --targets team_info --markdown
+# 已知目标接口时必须加 --targets；它表示本次流程的终态接口（如最终登录/业务提交接口），
+# 任一目标 URL 的非 OPTIONS 2xx 响应命中后进入短暂收尾窗口并结束取证。
+# 抓包从页面打开前覆盖到终态：capture.json 保存全量请求元数据；终态之前最近的 API/JSON、
+# 验证码/风控资源与 WASM 等动态材料会受 60 包/100MB 默认预算限制自动关联；普通 body 默认单体完整保存上限 10MB，WASM 默认 50MB。
+# JSON 只内联/预览 1MB；超过该预览阈值的完整 body 写入 case/forensic/bodies/，WASM 写入 case/forensic/wasm/，不会把不可解析的半包当作完整证据。
+# 因此不要求用户预先知道或列全验证码 load/verify 等中间接口。
+# 注意：capture.json 是纯请求元数据（不存响应体），响应体按用途落盘到四类位置：
+#   ① target-hits.json / related-hits.json（元数据、小 body 或预览）
+#   ② case/forensic/bodies/（大 body 完整文件）③ case/forensic/wasm/（完整 WASM）④ case/js/original/（JS 资源）。
+# 自动筛选不等于保存所有响应体：大页面不会逐包拉 body；图片/字体/视频等非动态静态资源仍不自动保存。
+# 首次终态等待默认 --wait 120，登录场景可加 --manual-pause 暂停等待（AI 后台运行遇非交互 stdin 时自动退化为等待 --wait，不阻塞）；窗口不够可调大 --wait。终态命中后另完整执行 --target-settle，不占用 --wait 余额。
+python scripts/forensic_ruyipage.py --url <target-url> --case-dir <project-root> --targets <最终业务接口关键词> --markdown
 ```
 
 取证会自动保存入口页面 HTML 到 `case/forensic/document.html`（含 412/JS challenge 页内联脚本，是 acw_sc__v2 等 challenge cookie 的强制证据），无论是否指定 `--targets`。
 
-目标请求未命中 = Step 1 缺失，禁止转源码搜索继续。指定了 `--targets/--targets-regex` 时，脚本按**全部命中**判定：每个目标接口都必须捕获到非 OPTIONS 2xx 响应才 `PASS` 并退出码 0；多 targets 部分命中（如验证码初始化接口命中但 verify 接口未命中）报告 `PARTIAL` 并在报告中列出未命中目标，完全未命中报告 `NO_TARGET`，两者均**退出码非 0**，停在 EVIDENCE_GATE。全部命中判定保证验证码场景一次会话列全 targets 时，脚本会等到用户完成滑动、全链路接口都出现才收尾关浏览器，不会抓到初始化接口就提前关闭。若需用户交互，重采时提示用户操作，或请其提供 cURL/HAR/原始请求文本；命中并落盘后再回 EVIDENCE_GATE。JS 源码关键词定位只能作辅助假设。
+终态目标请求未命中 = Step 1 缺失，禁止转源码搜索继续。指定 `--targets/--targets-regex` 时只按 URL 匹配；多个目标表示替代终态，任一目标捕获到非 OPTIONS 2xx 响应即 `PASS` 并退出码 0。命中后默认继续抓取 3 秒，随后保存全量元数据、终态 body、关联动态 body 与 JS。这里的 HTTP 2xx 只表示目标请求已取证，不表示响应体中的业务结果成功；通用脚本无法猜测各站点业务码。若一次登录可能因验证码或业务校验失败而重新提交，应调大 `--target-settle`，保证额外重试仍在同一会话内被捕获；关联材料以最后一次已捕获的有效终态向前回溯。body 若超过 JSON 内联预览阈值，必须读取对应 `saved_to` 完整文件；若报告 `*_complete=false`，说明受单体上限或总预算影响，不能拿预览替代原始证据。只出现 OPTIONS/非 2xx 报告 `PARTIAL`，完全未命中报告 `NO_TARGET`，两者均退出码非 0。验证码是最终业务接口的前置链路时，用户只提供最终接口；分析阶段从同一会话的 `related-hits.json`、`capture.json` 与完整 body/WASM 文件、RuyiTrace 向前回溯 load → verify，不把验证码中间接口当成额外终态门禁。若需用户交互，提示用户在窗口完成操作，或请其提供 cURL/HAR/原始请求文本；终态命中并落盘后再回 EVIDENCE_GATE。JS 源码关键词定位只能作辅助假设。
 
 Windows 下若 Python 脚本输出仍现编码异常，用 `PYTHONUTF8=1` 前缀兜底（PowerShell：`$env:PYTHONUTF8="1"`）；仓库脚本已内置 UTF-8 强制与 emoji 安全化，正常无需手动加。
 
