@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2.3.45 - 2026-08-17
+
+### 修复
+- **import_ruyitrace_log.js 多文件合并 + API 字段修正（P0）**：`--input` 支持多次传入，合并统计多个 NDJSON（用于 domtrace 多进程文件）；api 字段补 `evt.interface`（RuyiTrace NDJSON 实际用 `interface`/`member` 表示调用对象，原 `evt.api/name/path` 读取恒空，导致 API 统计恒空、分类恒 other、质量判定失效）。
+- **capture_ruyitrace_log.js 主日志多进程合并（P0）**：RuyiTrace 一次采集按进程写多个 `domtrace/trace_process_<pid>.ndjson`，`process_type` 为 `tab`/`content` 的才是业务 JS，`parent` 是浏览器父进程/内核活动。原 `listNdjsonFiles` 按 mtime 倒序取 `logs[0]` 作主日志，会漏掉真正内容进程、误取 parent 内核空壳。改为合并所有非 parent 的 domtrace 文件作主日志，target-signal 在合并全量上判定。
+- **trace 质量判定补「未覆盖页面 JS」/「API 全空」重度不足信号**：import_ruyitrace_log.js 新增「质量判定」段——stack.file 无任何 http/https 页面脚本（全 resource:// / file:// / self-hosted 内核路径）或有效 API 占比过低时输出重度不足，进入 TRACE_RETRY，不再把「只采到内核进程」当有效 trace。
+
+### 优化
+- **TRACE_RETRY 降级补充补「拦截 JS 响应注入日志」**：验证码/重度混淆场景推荐在 ruyipage 拦截目标 SDK 的 JS 响应，往加密入口注入 `window.__log` 捕获真实明文/key/密文后逐字段 diff，比盲试 RSA 字节序/编码/填充快得多。来源：geetest slide-popup 案例 trace 两次未命中后，模型靠盲试 + 临时 Hook 才定位到「所有请求复用同一 AES key + 掩码 base64」，该手段本应在降级补充阶段就指引。
+
 ## 2.3.44 - 2026-08-17
 
 ### 修复

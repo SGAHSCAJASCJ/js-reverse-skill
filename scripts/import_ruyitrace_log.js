@@ -8,7 +8,7 @@ const crypto = require('crypto');
 
 function parseArgs(argv) {
   const args = {
-    input: '',
+    inputs: [],
     caseDir: '',
     name: '',
     maxExamples: 10,
@@ -22,7 +22,7 @@ function parseArgs(argv) {
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     const nextVal = (fb) => (i + 1 < argv.length && typeof argv[i + 1] === 'string' && !argv[i + 1].startsWith('-')) ? argv[++i] : fb;
-    if (a === '--input') args.input = nextVal('');
+    if (a === '--input') args.inputs.push(nextVal(''));
     else if (a === '--case-dir' || a === '--dir') args.caseDir = nextVal('');
     else if (a === '--name') args.name = nextVal('');
     else if (a === '--max-examples') args.maxExamples = Number(nextVal('10'));
@@ -46,9 +46,10 @@ function usage() {
   return `用法：
   node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir . --markdown
   node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir . --truncation-threshold 3900 --json
-  node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir . --target-signal handshake --target-signal /api/verify --markdown
+  node scripts/import_ruyitrace_log.js --input <trace.ndjson> --input <trace2.ndjson> --case-dir . --markdown
 
 说明：--case-dir 指项目根目录（其下应有 case/ 和 result/ 两个平级子目录），默认当前目录。复制 RuyiTrace NDJSON 日志到 <case-dir>/case/ruyi-trace/logs/，生成 <case-dir>/case/notes/ruyitrace-summary.md，并标记接近 4000 / 4096 字符的字段为“疑似被 RuyiTrace 截断”。
+--input <文件>（可多次）：指定要导入的 NDJSON；传入多个文件时合并统计（用于 domtrace 多进程文件、或主 DOM trace + 分类日志合并）。多文件合并后目标信号与质量判定均在合并全量上判定。
 --target-signal <信号>（可多次）：扫描日志是否命中目标接口 URL / 关键词，未命中时退出码非 0，作为“目标路径未覆盖”的硬信号，不得当作采集完成。
 --no-summary-write：不覆盖写入 notes/ruyitrace-summary.md。capture_ruyitrace_log.js 对 cookie/storage/event 等分类日志导入时使用，避免分类日志覆盖主 DOM trace 摘要。`;
 }
@@ -125,7 +126,7 @@ function walkStrings(value, visitor, currentPath = '') {
 }
 
 function collectTruncationSignals(evt, lineNo, threshold, maxExamples, state) {
-  const api = evt.api || evt.name || evt.path || '';
+  const api = evt.api || evt.name || evt.path || evt.interface || '';
   walkStrings(evt, (fieldPath, value) => {
     const visibleLength = value.length;
     if (visibleLength < threshold) return;
@@ -196,45 +197,62 @@ function sanitizeLongStrings(value, threshold, currentPath = '') {
   return root.out;
 }
 
-async function summarizeNdjson(file, options) {
+async function summarizeNdjson(files, options) {
   const apiCounts = new Map();
   const typeCounts = new Map();
   const categoryCounts = new Map();
   const fileCounts = new Map();
   const examples = [];
   const truncationState = { totalSuspectedFields: 0, maxVisibleLength: 0, byFieldPath: new Map(), byApi: new Map(), examples: [] };
-  let lines = 0, parsed = 0, invalid = 0;
+  let lines = 0, parsed = 0, invalid = 0, pageJsStack = 0;
 
-  const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
   const targetHits = options.targetSignals.map((s) => ({ signal: s, hits: 0, sampleLine: 0 }));
-  for await (const raw of rl) {
-    const line = raw.replace(/^\uFEFF/, '').trim();
-    if (!line) continue;
-    lines++;
-    let evt;
-    try { evt = JSON.parse(line); parsed++; } catch { invalid++; continue; }
-    if (targetHits.length) {
-      const text = JSON.stringify(evt).toLowerCase();
-      for (const t of targetHits) {
-        if (text.includes(t.signal.toLowerCase())) {
-          t.hits++;
-          if (!t.sampleLine) t.sampleLine = lines;
+  for (const file of files) {
+    const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+    for await (const raw of rl) {
+      const line = raw.replace(/^\uFEFF/, '').trim();
+      if (!line) continue;
+      lines++;
+      let evt;
+      try { evt = JSON.parse(line); parsed++; } catch { invalid++; continue; }
+      if (targetHits.length) {
+        const text = JSON.stringify(evt).toLowerCase();
+        for (const t of targetHits) {
+          if (text.includes(t.signal.toLowerCase())) {
+            t.hits++;
+            if (!t.sampleLine) t.sampleLine = lines;
+          }
         }
       }
+      // RuyiTrace NDJSON 用 interface/member 表示调用的对象/成员，api/name/path 是兼容旧格式的兜底字段
+      const api = evt.api || evt.name || evt.path || evt.interface || '';
+      inc(apiCounts, api);
+      inc(typeCounts, evt.t || evt.type || '');
+      inc(categoryCounts, classifyApi(api));
+      const stack = Array.isArray(evt.stack) ? evt.stack : [];
+      for (const s of stack) {
+        if (s && s.file) {
+          inc(fileCounts, s.file);
+          if (/^https?:\/\//i.test(s.file)) pageJsStack++;
+        }
+      }
+      collectTruncationSignals(evt, lines, options.truncationThreshold, options.maxTruncationExamples, truncationState);
+      if (examples.length < options.maxExamples) examples.push(sanitizeLongStrings(evt, options.truncationThreshold));
     }
-    const api = evt.api || evt.name || evt.path || '';
-    inc(apiCounts, api);
-    inc(typeCounts, evt.t || evt.type || '');
-    inc(categoryCounts, classifyApi(api));
-    const stack = Array.isArray(evt.stack) ? evt.stack : [];
-    for (const s of stack) if (s && s.file) inc(fileCounts, s.file);
-    collectTruncationSignals(evt, lines, options.truncationThreshold, options.maxTruncationExamples, truncationState);
-    if (examples.length < options.maxExamples) examples.push(sanitizeLongStrings(evt, options.truncationThreshold));
   }
+  const apiEmpty = apiCounts.get('(空)') || 0;
+  const quality = {
+    fileCount: files.length,
+    apiEmptyRatio: parsed ? apiEmpty / parsed : 0,
+    pageJsStack,
+    hasPageJs: pageJsStack > 0,
+  };
   return {
     lines,
     parsed,
     invalid,
+    fileCount: files.length,
+    quality,
     topApis: top(apiCounts, 30),
     topTypes: top(typeCounts, 20),
     topCategories: top(categoryCounts, 20),
@@ -258,7 +276,29 @@ async function summarizeNdjson(file, options) {
 }
 
 function renderMarkdown(result) {
-  const lines = ['# RuyiTrace 日志导入摘要', '', `- 原始日志：${result.input}`, `- 复制后日志：${result.copiedTo}`, `- 行数：${result.summary.lines}`, `- 成功解析：${result.summary.parsed}`, `- 解析失败：${result.summary.invalid}`];
+  const inputs = Array.isArray(result.inputs) ? result.inputs : [result.input];
+  const copied = Array.isArray(result.copiedTo) ? result.copiedTo : [result.copiedTo];
+  const lines = ['# RuyiTrace 日志导入摘要', ''];
+  if (inputs.length > 1) {
+    lines.push(`- 合并日志文件数：${inputs.length}`);
+    lines.push('- 原始日志：');
+    for (const f of inputs) lines.push(`  - ${f}`);
+    lines.push('- 复制后日志：');
+    for (const f of copied) lines.push(`  - ${f}`);
+  } else {
+    lines.push(`- 原始日志：${inputs[0]}`);
+    lines.push(`- 复制后日志：${copied[0]}`);
+  }
+  lines.push(`- 行数：${result.summary.lines}`, `- 成功解析：${result.summary.parsed}`, `- 解析失败：${result.summary.invalid}`);
+  lines.push('', '## 质量判定');
+  const q = result.summary.quality || {};
+  if (!q.hasPageJs) {
+    lines.push('- [重度不足] **未覆盖页面 JS**：stack.file 无任何 http/https 页面脚本（全为浏览器内核 resource:// / file:// / self-hosted 路径），疑似只采集到浏览器内核/父进程，未命中目标页面，按 TRACE_RETRY 处理（查因→重试/转手动/降级补充）。');
+  } else if (q.apiEmptyRatio > 0.95) {
+    lines.push(`- [重度不足] **有效 API 调用占比过低**（api 为空记录占比 ${(q.apiEmptyRatio * 100).toFixed(1)}%），疑似采集不完整或字段缺失，按 TRACE_RETRY 处理。`);
+  } else {
+    lines.push('- [通过] 已覆盖页面 JS，API 调用统计正常。');
+  }
   lines.push('', '## API 类别统计');
   for (const item of result.summary.topCategories) lines.push(`- ${item.key}：${item.count}`);
   lines.push('', '## 高频 API');
@@ -311,22 +351,26 @@ function renderMarkdown(result) {
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) { console.log(usage()); return; }
-  if (!args.input) throw new Error('必须提供 --input');
+  if (!args.inputs.length) throw new Error('必须提供 --input');
   if (!args.caseDir) throw new Error('必须提供 --case-dir');
-  const input = path.resolve(args.input);
+  const inputs = args.inputs.map((p) => path.resolve(p));
   const caseDir = path.resolve(args.caseDir);
   const caseSubdir = path.join(caseDir, 'case');
-  if (!exists(input)) throw new Error(`日志文件不存在：${input}`);
+  for (const input of inputs) if (!exists(input)) throw new Error(`日志文件不存在：${input}`);
   fs.mkdirSync(caseSubdir, { recursive: true });
   const logDir = path.join(caseSubdir, 'ruyi-trace', 'logs');
   const notesDir = path.join(caseSubdir, 'notes');
   fs.mkdirSync(logDir, { recursive: true });
   fs.mkdirSync(notesDir, { recursive: true });
-  const dstName = safeName(args.name || path.basename(input) || `trace-${Date.now()}.ndjson`);
-  const copiedTo = path.join(logDir, dstName.endsWith('.ndjson') ? dstName : `${dstName}.ndjson`);
-  fs.copyFileSync(input, copiedTo);
+  const copiedTo = inputs.map((input) => {
+    const base = inputs.length === 1 && args.name ? args.name : path.basename(input);
+    const dstName = safeName(base || `trace-${Date.now()}.ndjson`);
+    const dst = path.join(logDir, dstName.endsWith('.ndjson') ? dstName : `${dstName}.ndjson`);
+    fs.copyFileSync(input, dst);
+    return dst;
+  });
   const summary = await summarizeNdjson(copiedTo, args);
-  const result = { input, copiedTo, summary };
+  const result = { inputs, copiedTo, summary };
   const md = renderMarkdown(result);
   if (!args.noSummaryWrite) fs.writeFileSync(path.join(notesDir, 'ruyitrace-summary.md'), md, 'utf8');
   if (args.json) console.log(JSON.stringify(result, null, 2));

@@ -108,17 +108,19 @@ node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir <project-
 
 | 等级 | 判定信号（来自 `ruyitrace-summary.md`） | 处理 |
 |---|---|---|
-| 重度不足 | 摘要输出「未发现 stack.file」/ 成功解析极低（建议 < 10 条）/ topApis 找不到目标参数 writer 附近调用 | 必须进入 TRACE_RETRY，不得推进 |
+| 重度不足 | 摘要输出「未发现 stack.file」/ 成功解析极低（建议 < 10 条）/ topApis 找不到目标参数 writer 附近调用 / **质量判定输出「未覆盖页面 JS」**（stack.file 无任何 http/https 页面脚本，全为浏览器内核 resource:// / file:// / self-hosted 路径，疑似只采到 parent 内核进程）/ **有效 API 调用占比过低（api 字段几乎全空）** | 必须进入 TRACE_RETRY，不得推进 |
 | 轻度不足 | 有栈但覆盖不全 / 截断风险表非空 | 可进入 CASE_LOOKUP，但须在分析时降级补充 |
 
 阈值用建议值，AI 可按目标站点复杂度自主判断上调或下调，但「无 stack.file」是硬性重度不足信号，不得自行放宽。
+
+> **多进程 trace 合并**：RuyiTrace 一次采集会按进程写多个 `domtrace/trace_process_<pid>.ndjson`——`process_type` 为 `tab`/`content` 的内容进程才是业务 JS，`parent` 是浏览器父进程/内核活动（`resource://gre/modules/*`、`builtin-addons/*` 等，不含页面 JS，参与 target-signal 必然误报）。`capture_ruyitrace_log.js` 会把所有非 parent 的 domtrace 文件合并导入，`ruyitrace-summary.md` 反映合并全量；手动导入多文件用 `import_ruyitrace_log.js --input a --input b ...` 合并统计。只取单个进程文件（尤其 mtime 最新的那个）会漏掉真正的业务 JS 调用，把有效 trace 误判为空。
 
 #### TRACE_RETRY 处理顺序（按序降级，不回退）
 
 1. **查失败原因**：`--duration` 不够 / 未触发目标业务动作 / 需要登录或验证码 / trace Firefox 配置异常（`MOZ_DOM_TRACE` 未生效、用错内核等）。
 2. **自动 trace 重试一次**：修正参数后重跑 `capture_ruyitrace_log.js`。
 3. **转手动 trace**：让用户在 trace Firefox 里操作触发目标参数生成路径（见下方方式二）。
-4. **降级补充**：用 `run_with_trace.js`、Proxy trace、Hook 或断点补充。仅当 NDJSON 缺失/未覆盖当前路径/结论不足时使用，不得把降级补充当作首轮手段。
+4. **降级补充**：用 `run_with_trace.js`、Proxy trace、Hook 或断点补充。仅当 NDJSON 缺失/未覆盖当前路径/结论不足时使用，不得把降级补充当作首轮手段。验证码/重度混淆场景推荐「拦截 JS 响应注入日志」：在 ruyipage 里拦截目标 SDK 的 JS 响应，往加密入口附近注入 `window.__log = <明文/key/密文中间值>`，拿到真实明文+密钥+密文后与本地实现逐字段 diff——这比盲试 RSA 字节序/编码/填充快得多，是定位「算法对了但服务端不认」的最直接手段（见 `references/captcha/captcha-motion-encryption.md` 加密入口定位）。
 5. **全部失败**：走 `FORENSIC_CAPTURE` 已有证据继续，但必须在 `最终项目总结.md` 声明 trace 未覆盖及已尝试手段。
 
 #### 与现有规则的对应关系（避免重复执行）

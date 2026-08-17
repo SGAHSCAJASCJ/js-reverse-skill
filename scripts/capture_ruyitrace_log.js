@@ -177,6 +177,26 @@ function listNdjsonFiles(dir, sinceMs) {
   });
 }
 
+// 读 NDJSON 首行识别 process_type：parent=浏览器父进程/内核活动（不含页面 JS，参与 target-signal 必然误报），
+// tab/content=页面内容进程（真正的业务 JS 调用）。首行 parse 失败或缺失 process_type 返回空串。
+function readProcessType(file) {
+  try {
+    const fd = fs.openSync(file, 'r');
+    let firstLine = '';
+    try {
+      const buf = Buffer.alloc(8192);
+      const n = fs.readSync(fd, buf, 0, 8192, 0);
+      firstLine = buf.slice(0, n).toString('utf8').split('\n')[0];
+    } finally {
+      fs.closeSync(fd);
+    }
+    const evt = JSON.parse(firstLine);
+    return evt && evt.process_type ? String(evt.process_type) : '';
+  } catch {
+    return '';
+  }
+}
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -284,9 +304,11 @@ function killProcessTree(pid, profileDir, firefoxExe) {
   });
 }
 
-function importLog(caseDir, file, markdown, targetSignals, writeSummary) {
+function importLog(caseDir, files, markdown, targetSignals, writeSummary) {
   const script = path.join(__dirname, 'import_ruyitrace_log.js');
-  const args = [script, '--input', file, '--case-dir', caseDir, '--truncation-threshold', '3900', markdown ? '--markdown' : '--json'];
+  const list = Array.isArray(files) ? files : [files];
+  const args = [script, '--case-dir', caseDir, '--truncation-threshold', '3900', markdown ? '--markdown' : '--json'];
+  for (const f of list) args.push('--input', f);
   if (writeSummary === false) args.push('--no-summary-write');
   for (const s of targetSignals || []) args.push('--target-signal', s);
   const ret = spawnSync(process.execPath, args, { encoding: 'utf8', windowsHide: true });
@@ -361,14 +383,31 @@ async function capture(args, plan) {
   }
   result.logs = listNdjsonFiles(plan.outDir, startedAt);
   if (args.importAfter && result.logs.length) {
-    // 目标信号只在主 DOM trace 日志上判定（logs[0]：domtrace/ 主日志优先，其次 mtime 倒序）：
-    // cookie/storage/event/descriptor/eval/wasm 等分类日志不含业务目标接口路径，逐文件硬门禁
-    // 必然误报。分类日志仍导入做摘要（不带 --target-signal），但不写 summary 文件——
-    // ruyitrace-summary.md 只反映主 DOM trace 日志，避免被分类日志覆盖。
-    result.importResults = result.logs.map((file, idx) => {
-      const isMain = idx === 0;
-      return importLog(plan.caseDir, file, args.markdown, isMain ? args.targetSignals : [], isMain);
+    // 主 DOM trace = domtrace/ 下 process_type 非 parent 的内容进程文件，合并导入（RuyiTrace 多进程各写一个
+    // domtrace 文件：tab/content 进程才是业务 JS，parent 是浏览器父进程/内核活动）。按 mtime 取单个文件会漏掉
+    // 真正的业务 JS 调用、或误取 parent 内核空壳（resource://gre/modules 等，不含页面 JS，参与 target-signal
+    // 必然误报）。分类日志（cookie/storage/event/descriptor/eval/wasm）不含业务目标接口路径，逐文件硬门禁必然误报，
+    // 只导入做摘要（不带 --target-signal、不写 summary）。ruyitrace-summary.md 只反映主 DOM trace 合并结果。
+    const isDomtrace = (f) => /[\\/]domtrace[\\/]/.test(f);
+    const domFiles = result.logs.filter(isDomtrace);
+    const catFiles = result.logs.filter((f) => !isDomtrace(f));
+    const mainFiles = domFiles.filter((f) => {
+      const pt = readProcessType(f);
+      return pt && pt !== 'parent';
     });
+    // 识别不出非 parent 的 domtrace 文件（异常或全 parent）时退化为全部 domtrace 文件，
+    // 交由 import_ruyitrace_log 的质量判定（无页面 JS → 重度不足）兜底报错。
+    const effectiveMain = mainFiles.length ? mainFiles : domFiles;
+    result.importResults = [];
+    result.logLabels = [];
+    if (effectiveMain.length) {
+      result.importResults.push(importLog(plan.caseDir, effectiveMain, args.markdown, args.targetSignals, true));
+      result.logLabels.push(`主 DOM trace（合并 ${effectiveMain.length} 个进程文件）`);
+    }
+    for (const file of catFiles) {
+      result.importResults.push(importLog(plan.caseDir, file, args.markdown, [], false));
+      result.logLabels.push(path.basename(file));
+    }
   }
   return result;
 }
@@ -418,7 +457,7 @@ function renderMarkdown(obj) {
   if (result.importResults && result.importResults.length) {
     lines.push('', '## 导入结果');
     result.importResults.forEach((imp, idx) => {
-      const label = result.logs && result.logs[idx] ? path.basename(result.logs[idx]) : `#${idx + 1}`;
+      const label = result.logLabels && result.logLabels[idx] ? result.logLabels[idx] : (result.logs && result.logs[idx] ? path.basename(result.logs[idx]) : `#${idx + 1}`);
       lines.push(`- ${label} 导入是否成功：${imp.ok ? '是' : '否'}`);
       if (imp.stdout.trim()) lines.push('', '```text', imp.stdout.trim(), '```');
       if (imp.stderr.trim()) lines.push('', '```text', imp.stderr.trim(), '```');
