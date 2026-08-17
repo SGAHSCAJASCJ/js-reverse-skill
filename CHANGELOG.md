@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2.3.46 - 2026-08-17
+
+### 修复
+- **TRACE_CAPTURE 出口门禁复检（P0-1）**：新增 `scripts/check_trace_gate.js`，状态机内复检 Step 2（RuyiTrace NDJSON）是否真实产出。GATE-2 入口门禁只判定初始证据路由，TRACE_CAPTURE → CASE_LOOKUP 转换此前无脚本接住——AI 可声明「已采集 trace」但实际跳过 RuyiTrace 直接转静态分析 / EXTERNAL_LOOKUP 拼凑方案（geetest slide-popup 案例正是如此：声明跑 RuyiTrace 却全程没跑，最终用 4 个外部仓库拼凑 final.js）。现在 TRACE_CAPTURE / TRACE_RETRY 出口必须复跑 `check_trace_gate.js`，退出码 0（`step2.evidence=true`）才可进 CASE_LOOKUP，退出码 1 停在 TRACE_CAPTURE。脚本复用 `check_evidence.js` 的 `check()` 判定 `step2.evidence`，透传 `--require-target-signal` 同时卡目标信号命中；自测 5 项断言（step1-only/both/target-signal 未命中/step2-only/空目录）。
+- **IMPLEMENT 硬前置补 Step 2 缺失约束**：Step 2 缺失（`check_trace_gate.js` 退出码 1）时不得进入 IMPLEMENT，不得以 EXTERNAL_LOOKUP 网络方案、边界声明、同族算法替代或 mock 填补 Step 2 证据缺口；轻量路径豁免前提是 Step 1 + Step 2 齐备，Step 2 未产出不构成豁免条件。
+
+### 变更
+- SKILL.md 第 4 节状态机 TRACE_CAPTURE / TRACE_RETRY 出口加「出口门禁复检通过」；状态机图后与 4.2 节加「TRACE_CAPTURE 出口门禁复检」小节；4.4 节 IMPLEMENT 硬前置补 Step 2 缺失约束。
+- `references/workflow/trace-flow.md`「Trace 质量判定与重试」节加「TRACE_CAPTURE 出口门禁复检」子节，明确「Step 2 是否真产出（出口门禁）」与「Step 2 产出后质量是否达标（质量判定）」是两件事，不混淆。
+- `scripts/README.md` 网络取证与日志采集类补 `check_trace_gate.js` 索引，脚本总数 53→54。
+
+> 本次是 2.3.22（文本规则必须有脚本兜底）+ 2.3.7（脚本信号必须由 SKILL.md 文本接住）两条原则在「状态机节点转换」位置的回归修复：状态机内部节点转换此前全是纯文本规则、无脚本复检，AI 可「声明通过」但实际跳过关键步骤。
+
 ## 2.3.45 - 2026-08-17
 
 ### 修复

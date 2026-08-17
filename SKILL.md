@@ -1,6 +1,6 @@
 ---
 name: js-reverse-skill
-version: 2.3.45
+version: 2.3.46
 description: >
   网页端 JavaScript 加密参数逆向与纯协议还原。逆向还原浏览器请求中加密参数、签名、token、
   cookie、设备指纹的生成逻辑；适用于各类动态参数的生成逻辑分析，覆盖标准算法、自定义混淆、
@@ -105,11 +105,11 @@ EVIDENCE_GATE
 STEP2_ONLY → CASE_LOOKUP
 FORENSIC_CAPTURE → TRACE_CAPTURE
 TRACE_CAPTURE
-  ├─ 采集成功 + 质量达标 → CASE_LOOKUP
+  ├─ 采集成功 + 质量达标 + 出口门禁复检通过 → CASE_LOOKUP
   ├─ 质量不足 → TRACE_RETRY
   └─ 采集失败 → 转手动 trace
 TRACE_RETRY
-  ├─ 重试达标 → CASE_LOOKUP
+  ├─ 重试达标 + 出口门禁复检通过 → CASE_LOOKUP
   ├─ 仍不足 → 降级补充，标 trace 未覆盖
   └─ 全部失败 → 用 FORENSIC_CAPTURE 证据继续 + 总结声明 trace 缺失
 CASE_LOOKUP
@@ -127,6 +127,14 @@ REAL_VERIFY
   └─ sign-only → SIGN_ONLY_DELIVER
 DELIVER / SIGN_ONLY_DELIVER → CLEANUP → DONE
 ```
+
+**TRACE_CAPTURE / TRACE_RETRY 出口门禁（不可跳过）**：进入 CASE_LOOKUP 前必须复跑出口门禁脚本，确认 Step 2（RuyiTrace NDJSON）真实产出：
+
+```powershell
+node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --require-target-signal <目标接口URL或环境API/写入点> --markdown
+```
+
+退出码 0（Step 2 已具备）才可进入 CASE_LOOKUP；退出码 1（Step 2 缺失）停在 TRACE_CAPTURE / TRACE_RETRY。声明「已采集 trace」不等于 Step 2 已产出，以脚本退出码为准——防止「声明不执行」直接跳到 EXTERNAL_LOOKUP 拼凑方案。详见 4.2 节「TRACE_CAPTURE 出口门禁复检」。
 
 激活后立即建立以下 11 项 TODO 并随状态推进勾选：
 
@@ -210,6 +218,14 @@ node scripts/capture_ruyitrace_log.js --url <target-url> --case-dir <project-roo
 
 **TRACE_CAPTURE 质量判定与 TRACE_RETRY**：采集到 NDJSON 不等于达标。摘要显示「未发现 stack.file」、成功解析极低、topApis 找不到目标参数 writer、质量判定「未覆盖页面 JS」（stack.file 全为浏览器内核路径，无 http/https 页面脚本）或「有效 API 调用占比过低」（api 字段几乎全空），均按重度不足处理并进入 TRACE_RETRY。RuyiTrace 一次采集按进程写多个 `domtrace/trace_process_<pid>.ndjson`，主日志须合并所有 tab/content 进程文件（排除 parent 内核进程），只取单个文件（尤其 mtime 最新的）会把有效 trace 误判为空。完整降级顺序与验证码特化判定见 `references/workflow/trace-flow.md`。
 
+**TRACE_CAPTURE 出口门禁复检（不可跳过）**：采集声明完成、进入 CASE_LOOKUP 前必须复跑出口门禁脚本，确认 Step 2（RuyiTrace NDJSON）真实产出。这是状态机内复检，不是 GATE-2 入口门禁的重复——GATE-2 判定初始证据路由到 TRACE_CAPTURE，出口门禁确认 TRACE_CAPTURE 是否真把 Step 2 补上了：
+
+```powershell
+node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --require-target-signal <目标接口URL或环境API/写入点> --markdown
+```
+
+退出码 0（Step 2 已具备：NDJSON 存在 + 关联目标域 + 命中目标信号）才可进入 CASE_LOOKUP；退出码 1（Step 2 缺失）停在 TRACE_CAPTURE / TRACE_RETRY。声明「已采集 trace」不等于 Step 2 已产出——AI 可能声明跑 RuyiTrace 但实际转去做静态分析 / EXTERNAL_LOOKUP，出口门禁用脚本退出码硬卡，防止「声明不执行」绕过 Step 2 直接拼凑交付。FORENSIC_CAPTURE → TRACE_CAPTURE 路径同样适用：FORENSIC_CAPTURE 补采后必须通过出口门禁才进 CASE_LOOKUP。STEP2_ONLY 路径（用户已提供 NDJSON）Step 2 本就具备，出口门禁直接通过。
+
 `--target-signal` 命中的是 trace 覆盖得到的「环境 API / 签名写入点」，不是网络请求 URL，判定分两类：
 
 - 信号是环境 API（`fetch`、`XMLHttpRequest.send`、`handshake`、参数名等）未命中 → 目标路径未触发，是硬信号，进入 TRACE_RETRY，不得自行放宽。
@@ -250,7 +266,7 @@ node scripts/write_stage_report.js --case-dir <project-root> --stage <阶段> --
 
 **上下文防耗尽检查点（硬约束）**：TRACE_ANALYZE / IMPLEMENT / REAL_VERIFY 任一阶段消耗大量步骤（20+ 步未推进）或上下文接近耗尽时，先回看上条两份文件是否已覆盖当前崩溃点：未覆盖先补全再继续；已覆盖仍打转时落阶段报告。判定标准：trace 已定位到关键资源/入口，或当前节点已消耗 20+ 步仍未推进（TRACE_ANALYZE 未进 IMPLEMENT、IMPLEMENT 黑盒调试打转、REAL_VERIFY 反复排查未定位根因）。
 
-**IMPLEMENT 硬前置条件**：必须满足「trace 质量达标（含目标信号命中）」或「用户明确确认轻量路径」。两条均不满足时停在 TRACE_ANALYZE，不得以 mock、猜测或实验性实现替代证据。EXTERNAL_LOOKUP 的假设若与本次 trace 定位的 builder/writer 冲突，以 trace 为准，禁止先去测未被 trace 证明的 SDK 导出接口。
+**IMPLEMENT 硬前置条件**：必须满足「trace 质量达标（含目标信号命中）」或「用户明确确认轻量路径」。两条均不满足时停在 TRACE_ANALYZE，不得以 mock、猜测或实验性实现替代证据。EXTERNAL_LOOKUP 的假设若与本次 trace 定位的 builder/writer 冲突，以 trace 为准，禁止先去测未被 trace 证明的 SDK 导出接口。**Step 2 缺失（check_trace_gate.js 退出码 1）时不得进入 IMPLEMENT**：不得以 EXTERNAL_LOOKUP 网络方案、边界声明、同族算法替代或 mock 填补 Step 2 证据缺口；轻量路径豁免的前提是 Step 1 + Step 2 齐备（见 4.3），Step 2 未产出不构成豁免条件。
 
 ## 5. CASE_LOOKUP
 

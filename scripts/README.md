@@ -1,6 +1,6 @@
 # 脚本索引
 
-本目录包含 53 个可执行脚本（46 个 JavaScript、7 个 Python），按功能分为 9 类。以下索引以 `scripts/` 当前实际文件为准，不包含 `README.md`。
+本目录包含 54 个可执行脚本（47 个 JavaScript、7 个 Python），按功能分为 9 类。以下索引以 `scripts/` 当前实际文件为准，不包含 `README.md`。
 
 本文中的 `<project-root>` 指项目根目录，其下包含平级的 `case/` 与 `result/` 目录。需要 case 目录的脚本使用 `<project-root>/case`，需要项目根目录的脚本直接使用 `<project-root>`。`forensic_ruyipage.py` 与 `capture_ruyitrace_log.js` 会在 `--case-dir` 下创建 `case/`，因此必须传入 `<project-root>`。`check_session_resume`/`check_fingerprint_fixture`/`check_trace_api_coverage` 已归一化，传 `<project-root>` 或 `<project-root>/case` 均可。
 
@@ -28,11 +28,12 @@
 | `write_stage_report.js` | 以 UTF-8 写入中文命名阶段报告 | `node scripts/write_stage_report.js --case-dir <project-root> --stage 需求信息确认 --markdown` |
 | `check_stage_reports.js` | 检查阶段报告中文文件名、UTF-8、必要阶段及动态字段 | `node scripts/check_stage_reports.js --case-dir <project-root> --require-stage 需求信息确认 --markdown` |
 
-## 网络取证与日志采集（4 个）
+## 网络取证与日志采集（5 个）
 
 | 脚本 | 功能 | 典型用法 |
 |------|------|---------|
 | `check_evidence.js` | 验证取证材料真实性并输出 none / step1-only / step2-only / both 路由；Step 1 只认有效 capture 网络记录或用户 HAR、cURL、原始 HTTP 请求文本，Step 2 只认有效 NDJSON | `node scripts/check_evidence.js --case-dir <project-root> --url <目标URL> --inputs <材料路径> --markdown` |
+| `check_trace_gate.js` | TRACE_CAPTURE / FORENSIC_CAPTURE 出口门禁：复检 Step 2（RuyiTrace NDJSON）是否真实产出，防止「声明已采集 trace」但实际跳过 RuyiTrace 直接进 CASE_LOOKUP/EXTERNAL_LOOKUP；复用 check_evidence.js 判定 step2.evidence，退出码 0=Step 2 已具备可进 CASE_LOOKUP，1=缺失停在 TRACE_CAPTURE | `node scripts/check_trace_gate.js --case-dir <project-root> --url <目标URL> --require-target-signal <环境API/写入点/目标接口URL> --markdown` |
 | `forensic_ruyipage.py` | ruyiPage 通用取证：以最终业务接口为终态，抓全会话元数据并完整落盘大 body/WASM、JS 与指纹基线 | `python scripts/forensic_ruyipage.py --url <目标URL> --case-dir <project-root> --targets "login/submit" --browser-path <定制Firefox> --markdown` |
 | `capture_ruyitrace_log.js` | 自动采集或手动导入 RuyiTrace NDJSON 日志（默认 `--duration 120` 秒；`--target-signal` 可多次，导入后未命中目标接口则退出码非 0） | `node scripts/capture_ruyitrace_log.js --url <目标URL> --case-dir <project-root> --target-signal handshake --ruyitrace-home <RuyiTrace目录> --import-after --markdown` |
 | `import_ruyitrace_log.js` | 导入 RuyiTrace NDJSON，生成摘要并标记截断字段；`--target-signal` 扫描目标接口命中情况，未命中退出码非 0 | `node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir <project-root> --target-signal handshake --markdown` |
@@ -40,6 +41,8 @@
 首次终态等待默认 `--wait 120` 秒：`--targets` 应填写最终登录/业务提交等终态接口；多个目标按 OR 处理，任一非 OPTIONS 2xx 命中后另完整抓取 `--target-settle`（默认 3 秒）并关闭浏览器，未命中到点自动关闭。HTTP 2xx 仅代表目标请求已取证，不代表站点业务码成功；预计会出现失败后重试时应调大 `--target-settle`，关联材料会以最后一次已捕获的有效终态向前回溯。JSON 默认只内联 1MB 预览；超过预览阈值的普通 body 完整写入 `case/forensic/bodies/`（默认单体上限 10MB），WASM 完整写入 `case/forensic/wasm/`（默认单体上限 50MB），关联动态材料总预算默认 100MB。`target-hits.json`/`related-hits.json` 的 `*_complete`、`*_saved_to`、`*_sha256` 字段决定是否有完整证据，不能把预览当作原始 body。指定 `--targets/--targets-regex` 后，若未捕获到非 OPTIONS 2xx 终态响应，脚本退出码非 0（报告 `NO_TARGET` 或 `PARTIAL`），作为 Step 1 缺失硬信号。目标请求需要登录 / 点击 / 验证码等手动触发时，浏览器打开期间应提示用户操作（登录场景可加 `--manual-pause`）；窗口不够可调大 `--wait`。终态接口未命中时，JS 源码搜索只能作辅助假设，不能替代 Step 1 网络记录。
 
 `check_evidence.js` 退出码是硬信号：任何步骤缺失证据（missing 非空）或材料格式错误（errors 非空）时退出 `1`；两步证据齐全退出 `0`。调用方（含 AI）必须按退出码 + 输出文本判定，不能只看输出文本。JS、截图、指纹基线和 `ruyitrace-summary.md` 可展示为辅助材料，但不能分别替代 Step 1 网络记录或 Step 2 NDJSON。可运行 `node scripts/check_evidence.js --self-test` 执行内置自测。`--require-target-signal <信号>`（可多次）要求 Step 1 capture 命中目标接口的非 OPTIONS 2xx 响应（用户 HAR/cURL 命中目标 URL/关键词），Step 2 NDJSON 出现目标接口 URL / 关键词，未命中按对应步骤缺失处理——防止“同域无关请求”或“页面加载日志”冒充“目标路径已触发”。
+
+`check_trace_gate.js` 是 TRACE_CAPTURE / FORENSIC_CAPTURE 出口门禁：状态机内复检，复用 `check_evidence.js` 的 `check()` 判定 `step2.evidence`。退出码 0=Step 2 已具备（可进 CASE_LOOKUP），1=Step 2 缺失（停在 TRACE_CAPTURE / TRACE_RETRY）。GATE-2 入口门禁判定初始证据路由，出口门禁确认 TRACE_CAPTURE 是否真把 Step 2 补上——防止 AI 声明“已采集 trace”但实际跳过 RuyiTrace 直接转静态分析 / EXTERNAL_LOOKUP 拼凑方案。`--require-target-signal` 透传，target-signal 命中的是 trace 记录的环境 API/写入点，不是网络请求 URL。可运行 `node scripts/check_trace_gate.js --self-test` 执行内置自测。
 
 ## Trace 分析与运行时闭环（9 个）
 

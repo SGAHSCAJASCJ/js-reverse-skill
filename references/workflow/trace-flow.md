@@ -104,6 +104,18 @@ node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir <project-
 
 采集到 NDJSON ≠ 质量达标。导入后必须先按质量标准判定，未达标不得推进 `CASE_LOOKUP`。
 
+#### TRACE_CAPTURE 出口门禁复检（不可跳过，先于质量判定）
+
+进入 CASE_LOOKUP 前必须复跑出口门禁脚本，确认 Step 2（RuyiTrace NDJSON）真实产出。这是状态机内复检，防止 AI 声明「已采集 trace」但实际跳过 RuyiTrace 直接转静态分析 / EXTERNAL_LOOKUP 拼凑方案：
+
+```powershell
+node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --require-target-signal <目标接口URL或环境API/写入点> --markdown
+```
+
+退出码 0（Step 2 已具备：NDJSON 存在 + 关联目标域 + 命中目标信号）才可进入 CASE_LOOKUP；退出码 1（Step 2 缺失）停在 TRACE_CAPTURE / TRACE_RETRY，不得进入 CASE_LOOKUP / EXTERNAL_LOOKUP，不得以边界声明或 mock 替代。FORENSIC_CAPTURE → TRACE_CAPTURE 路径同样适用：FORENSIC_CAPTURE 补采后必须通过出口门禁才进 CASE_LOOKUP。STEP2_ONLY 路径（用户已提供 NDJSON）Step 2 本就具备，出口门禁直接通过。
+
+本脚本只卡 Step 2 是否真产出（`check_evidence.js` 的 `step2.evidence`）；产出后的质量是否达标见下方「质量判定标准」。两件事不混淆：Step 2 未产出 = 出口门禁退出码 1 = 停在 TRACE_CAPTURE；Step 2 已产出但质量不足 = 进 TRACE_RETRY。
+
 #### 质量判定标准
 
 | 等级 | 判定信号（来自 `ruyitrace-summary.md`） | 处理 |
