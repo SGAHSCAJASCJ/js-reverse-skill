@@ -144,7 +144,7 @@ Windows 下后续手动运行 Python 脚本一律用环境检查选定的解释�
 - 使用 jsdom / happy-dom / domino 等 DOM 模拟库时，不得联网加载目标页生成参数（HTML 用本地字符串、脚本取自本 case 落盘产物、不开 `resources: 'usable'`、不传目标站 `url`）；仅动态挑战类目标（如瑞数）确需在线执行官方 JS 时例外，走 `references/env/runtime-frameworks.md` 的 sdenv 路径并在最终总结标注联网依赖。
 - 交付入口必须是 Node.js `final.js` 或 Python `final.py`，运行时只使用 HTTP、TLS、密码学、序列化和必要的最小 JS 沙箱能力。
 - 通用模板不得在 `templates/` 中预填真实厂商的接口名、字段名、HTTP 方法、JSONP、加密结构、凭据字段或默认轨迹；平台细节必须由本 case 的抓包、RuyiTrace 与成功样本驱动，落在 case adapter/result 中。
-- 厂商知识分级（T1 识别指纹 / T2 协议语义）不得越界：识别信号（参数名↔算法族映射、厂商 Cookie/组件名、响应码特征）不得进入通用 workflow/质量文档，只留在标注过的识别参考（`references/crypto/algorithm-families.md`、`references/network/ip-risk-control.md`）与分类脚本（`scripts/classify_verify.py`）；协议知识（字段语义、加密结构、接口链、实测轨迹参数）不得离开 `references/captcha/captcha-providers.md` 厂商知识库、`cases/*.md` 与 case adapter（带验证日期）；通用文档引用只写「见 <知识库/案例>」指针，不得复制具体参数。
+- 厂商知识分级（T1 识别指纹 / T2 协议语义）不得越界：识别信号（参数名↔算法族映射、厂商 Cookie/组件名、响应码特征）不得进入通用 workflow/质量文档，只留在标注过的识别参考（`references/crypto/algorithm-families.md`、`references/network/ip-risk-control.md`）与分类脚本（`scripts/classify_verify.py`）；协议知识（字段语义、加密结构、接口链、实测轨迹参数）不得离开 `references/captcha/` 验证码厂商知识库、`cases/*.md` 与 case adapter（带验证日期）；通用文档（含相关案例表）不得出现具体厂商名、目标平台名或协议参数，引用只写「见 <知识库/案例>」指针。
 - 交付物不得依赖 skill 仓库路径、临时脚本、系统浏览器 profile 或用户机器上的登录态。
 - 关键 Cookie / 凭据必须区分静态配置、运行时生成值、服务端下发值、会话绑定值和**设备级凭据**（设备级凭据只走上述迫不得已 + 用户确认的例外路径）；禁止把成功样本中的动态秘密直接复制进代码。
 

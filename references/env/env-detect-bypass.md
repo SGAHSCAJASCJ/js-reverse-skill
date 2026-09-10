@@ -431,7 +431,7 @@ JSON.stringify({
 
 **取证侧影响**：ruyipage / RuyiTrace 均为 Firefox 内核，命中内核级检测时取证浏览器无法触发目标路径（签名不生成、目标请求 400/403 且与 UA、Cookie 无关）。此时按 SKILL.md 状态机进入 `BLOCKED_FORENSIC`：输出卡点与检测证据对齐用户，不要无限换姿势重试取证，也不要跳过 Step 2 静默推进。
 
-> **跨内核证据不可混用**：ruyipage 与 RuyiTrace 是**不同的定制 Firefox 构建**，同一份目标 JS 在两者下可能走出不同分支、产出不同值（9air 实证：同一 fm.js 在 ruyipage 下产出 `tddf`，在 RuyiTrace 下只产出 26 字符 deviceId）。同一 case 只用一种内核取证；跨内核结论必须用同一内核单独复核后才能采信。
+> **跨内核证据不可混用**：ruyipage 与 RuyiTrace 是**不同的定制 Firefox 构建**，同一份目标 JS 在两者下可能走出不同分支、产出不同值（实证：同一份目标 JS 在一个内核下产出完整设备标识、在另一个内核下只产出 26 字符 deviceId）。同一 case 只用一种内核取证；跨内核结论必须用同一内核单独复核后才能采信。
 
 **补环境侧机会**：Node 的 `eval.toString()` 恰为 Chrome 单行格式——检测 Chrome 内核的分支在 Node 沙箱**天然走对**（match5 即靠此路径纯协议还原，Node 补环境无需伪造该检测项，保持默认即通过）；反过来检测 Firefox 内核的站点则不适合 Node 路线。判断顺序：先在取证浏览器内采样确认检测项，再决定取证降级方式与补环境方向。
 
