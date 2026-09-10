@@ -2,7 +2,7 @@
 
 加密逻辑在 WebAssembly 中实现时的环境补全方案。模板参考 `templates/wasm-loader/`。
 
-## 适用条件
+## 触发条件
 
 - 加密函数通过 WebAssembly 实现
 - WASM 有明确的导出函数接口

@@ -248,6 +248,7 @@ if __name__ == "__main__":
 - [ ] 如存在动态 HTML / JS / challenge，已生成 `case/notes/resource-manifest.json`，并运行 `check_dynamic_resources.js --require-runtime-refresh` 通过。
 - [ ] 动态快照未复制进 `result/`；最终入口会运行时刷新当前资源。
 - [ ] Cookie、token、Authorization、localStorage 等敏感值已脱敏或仅由用户本地配置，不明文写入报告。
+- [ ] 若交付物注入**设备级凭据**（沙箱无法自生成的目标参数），已确认属迫不得已、已取得用户确认，并在最终总结标注来源、有效期与不可自生成原因；否则按 §3 红线违规处理。
 - [ ] 临时 trace、hook、日志、HAR、截图、Profile、缓存和测试文件已清理。
 - [ ] `case/tmp/` 下的调试/抓包/提取脚本已清理。
 - [ ] 已运行 `check_code_quality.js`、`check_fingerprint_fixture.js`，已生成 UTF-8 `result/最终项目总结.md`，并运行 `check_final_artifact.js` 和 `clean_case.js --dry-run`，且已手动复核 NativeProtect 保护证据。

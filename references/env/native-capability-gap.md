@@ -2,7 +2,7 @@
 
 本文件用于补环境阶段遇到"纯 JS、当前 C++ Addon 方案都无法可靠表达目标浏览器行为"的场景。遇到这类问题时，不要继续硬凑 JS fallback，不要假装 C++ Addon 已经解决，也不要把当前报错消失写成稳定结论。
 
-## 读取时机
+## 触发条件
 
 - 目标检测点涉及浏览器引擎级特殊语义，例如 `document.all` 的 HTMLDDA、内部槽 brand check、不可检测对象、跨 Realm 行为、DataCloneError、Error stack、不可通过普通 JS 控制的 `typeof` / `Boolean` / `== null` 行为。
 - 已确认纯 JS fallback 无法满足真实浏览器行为。
