@@ -3,6 +3,15 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.107 - 2026-09-10
+
+### MCP 部分：profile 语义统一 + 隐私授权边界 + 工具名核对 + 重复收敛
+
+- **profile 语义统一**：原「连接用户真实浏览器」（绝对规则 8 ④、SKILL §4、browser-acquisition、decision-tree 阻塞点 8）与「chrome-devtools-mcp 专属 profile」（SKILL §7 1a、common-pitfalls 采样纪律）口径矛盾 → 统一为「连接真实 Chrome 内核浏览器」，并在新增专节区分两种接入模式（独立 profile 优先 / 附加用户运行中的浏览器须额外告知）。
+- **新增「浏览器 MCP 隐私与授权边界」**（`references/tooling/browser-acquisition.md`）：接入模式、采集范围（只采目标站产物落盘 `case/`，不得读取/外传其它站点数据）、连接前告知（与 `--guard mcp` 同一次确认）、跨内核证据**互补对照 ≠ 混用等同**（样本记 `baselineId`）；MCP 兜底取证行挂指针。
+- **工具名核对**：`SKILL.md` §7 1a 的 `evaluateOnCallFrame` 改为「工具名以所连 MCP 实际暴露为准（如 `evaluate_script`）；不支持帧内求值时用 `get_paused_info` + 逐帧 `step` 读作用域」；卡死处置改为先按 CommandLine 确认实例 profile 来源再操作。
+- **收敛**：`common-pitfalls.md` 重复的 BLOCKED_FORENSIC 三选一改为指向 `decision-tree.md` 阻塞点 8 的指针。
+
 ## 2.3.106 - 2026-09-10
 
 ### 通用文档清除厂商/平台名（T1/T2 越界）+ 新增防漂移检查脚本

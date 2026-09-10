@@ -47,7 +47,7 @@ node scripts/state_machine.js --case-dir <project-root> --set <NODE> --note "<�
 node scripts/state_machine.js --case-dir <project-root> --guard replay
 # 外部题解/文章检索前必过（细则见 4 节「外部检索时序」）
 node scripts/state_machine.js --case-dir <project-root> --guard external
-# 浏览器 MCP 连接用户真实浏览器兜底取证前必过（BLOCKED_FORENSIC 取证须用户确认；DIAGNOSE 双对照浏览器侧须已过 BLOCKED_FORENSIC）
+# 浏览器 MCP 连接真实 Chrome 内核浏览器兜底取证前必过（BLOCKED_FORENSIC 取证须用户确认；DIAGNOSE 双对照浏览器侧须已过 BLOCKED_FORENSIC）
 node scripts/state_machine.js --case-dir <project-root> --guard mcp
 # 进入每个节点前聚合跑该节点必验门禁；输出含 FAIL 或需参数缺失时停在当前节点
 node scripts/gate.js --case-dir <project-root> --at <NODE> --url <目标URL> --inputs <材料路径> --markdown
@@ -134,7 +134,7 @@ Windows 下后续手动运行 Python 脚本一律用环境检查选定的解释�
 5. 最终交付必须能在无浏览器、无显示器、无 X11 的环境中独立运行。
 6. 默认完成真实 API 验证；只有用户明确要求“只输出参数”“不发真实请求”时才允许 sign-only 模式。
 7. 不记录、提交或硬编码用户密钥、完整登录 Cookie、Authorization、验证码答案或其他秘密材料。
-8. 取证只允许四个来源：① ruyipage 定制 Firefox（经 `scripts/forensic_ruyipage.py`）② RuyiTrace（经 `scripts/capture_ruyitrace_log.js`）③ 用户手动提供材料 ④ 浏览器 MCP 连接用户真实浏览器（**仅 BLOCKED_FORENSIC 降级兜底**：取证浏览器被引擎级检测拒绝且 `--ua` 覆盖无效时，经用户确认并过 `--guard mcp` 后放行；Chrome 等非 Firefox 内核与定制 Firefox 互补，match14 实证引擎检测不拦真实浏览器。产物必须落盘 `case/`——成功样本 Cookie/指纹/JS/网络记录，后续分析只认落盘产物；只取证不交付，纯协议红线不变）。常规取证不得手写 fetch/curl/requests 抓取目标页面或下载目标 JS，不得使用系统 Chrome/Edge/Firefox、Playwright/Puppeteer/Selenium 或浏览器 MCP 取证（④ 不满足前置条件时同样禁止）。也不得用 jsdom / happy-dom / domino 等 DOM 模拟库**联网加载目标页**取证（`JSDOM.fromURL()`、`new JSDOM(..., { url, resources: 'usable' })` 会真去拉取页面与子资源）：这是绕过本条的第五种取证通道，拿到的是"页面自己算出的值"而非可审计算法，且必然暴露 `jsdom/x.y.z` UA 与残缺 DOM 指纹被检测。DOM 模拟库不得联网加载目标页取证：HTML 由本地字符串构造、脚本来自 ①②③④ 落盘产物、不开 `resources: 'usable'`、不传目标站 `url` 触发网络加载。
+8. 取证只允许四个来源：① ruyipage 定制 Firefox（经 `scripts/forensic_ruyipage.py`）② RuyiTrace（经 `scripts/capture_ruyitrace_log.js`）③ 用户手动提供材料 ④ 浏览器 MCP 连接真实 Chrome 内核浏览器（**仅 BLOCKED_FORENSIC 降级兜底**：取证浏览器被引擎级检测拒绝且 `--ua` 覆盖无效时，经用户确认并过 `--guard mcp` 后放行；Chrome 等非 Firefox 内核与定制 Firefox 互补，match14 实证引擎检测不拦真实浏览器。产物必须落盘 `case/`——成功样本 Cookie/指纹/JS/网络记录，后续分析只认落盘产物；只取证不交付，纯协议红线不变）。常规取证不得手写 fetch/curl/requests 抓取目标页面或下载目标 JS，不得使用系统 Chrome/Edge/Firefox、Playwright/Puppeteer/Selenium 或浏览器 MCP 取证（④ 不满足前置条件时同样禁止）。也不得用 jsdom / happy-dom / domino 等 DOM 模拟库**联网加载目标页**取证（`JSDOM.fromURL()`、`new JSDOM(..., { url, resources: 'usable' })` 会真去拉取页面与子资源）：这是绕过本条的第五种取证通道，拿到的是"页面自己算出的值"而非可审计算法，且必然暴露 `jsdom/x.y.z` UA 与残缺 DOM 指纹被检测。DOM 模拟库不得联网加载目标页取证：HTML 由本地字符串构造、脚本来自 ①②③④ 落盘产物、不开 `resources: 'usable'`、不传目标站 `url` 触发网络加载。
 
 ## 3. 纯协议红线
 
@@ -182,7 +182,7 @@ BLOCKED_FORENSIC（取证被目标站检测阻断，与工具缺失不同）
   ├─ UA 类检测 → 用 forensic_ruyipage.py --ua 覆盖后重采 → 达成则 TRACE_CAPTURE
   ├─ UA 覆盖无效的引擎级检测（eval.toString/Error.stack/引擎特征等，取证细则见
   │   references/env/env-detect-bypass.md 内核级差异检测）→ 输出卡点对齐用户后三选一：
-  │   ① 用户确认后用浏览器 MCP 连接用户真实浏览器取证（先过 --guard mcp；成功样本
+  │   ① 用户确认后用浏览器 MCP 连接真实 Chrome 内核浏览器取证（先过 --guard mcp；成功样本
   │      Cookie/指纹/JS/网络记录落盘 case/，按用户材料归类走 MATERIALS_FALLBACK 校验；
   │      match14 实证：Firefox 取证全 400，MCP 真实 Chrome 拿到 200 成功样本与指纹基线）
   │   ② 用户提供真实浏览器 cURL/HAR 走 MATERIALS_FALLBACK
@@ -553,14 +553,14 @@ node scripts/compare_fixture.js --fixture case/fixtures/<样本>.fixture.json --
 至少保留一份脱敏验证摘要和可复现命令；不得输出完整 Authorization、Cookie、Token、密钥或验证码答案。401/403/412/429 先诊断，不得用浏览器自动化或硬编码成功样本绕过。验证码交付在此之上追加两项记录：手动成功样本基线（`node scripts/check_success_baseline.js`，要求与豁免条件见 `references/captcha/verification-workflow.md`）与逐次尝试 attempts 复盘（`node scripts/check_verification_attempts.js`）；成功标准以「verify 返回通过凭据且业务接口消费凭据返回正确业务数据」为准，视觉答案正确不算通过。
 
 **403/风控码分层定位协议（硬约束：下「连接层拦截 / 纯协议不可绕过」结论前必须完成）**：用「签名来源 × 连接来源」双对照定位拦截层，完整矩阵见 `references/network/ip-risk-control.md`：
-1a. **算法中间值断点采样（DIAGNOSE 双对照浏览器侧合法用途，match22 实证）**：沙箱与真机"同输入不同输出"且常规探针够不到闭包中间值时，用浏览器 MCP 调试器（set_breakpoint_on_text 文本锚点 + get_paused_info + evaluateOnCallFrame）在真机断点 dump 调度表/轮表/中间字，与沙箱同断点 dump 逐字 diff——第一处分歧即环境分支点。约束：①须 `--guard mcp` 且用户知情；②**22.js 类代码在第 2 次计算时反调试死循环（渲染进程卡死），采样一次/会话**，采样前规划全部 dump 项；卡死勿杀用户 Chrome，先查 CommandLine 确认 chrome-devtools-mcp 专属 profile；③MCP 断点跨 reload 易丢，每次 list_breakpoints 确认；④evaluateOnCallFrame 的 objectId 会在 resume 后失效，须在单次 pause 内完成全部取值。
+1a. **算法中间值断点采样（DIAGNOSE 双对照浏览器侧合法用途，match22 实证）**：沙箱与真机"同输入不同输出"且常规探针够不到闭包中间值时，用浏览器 MCP 调试器（set_breakpoint_on_text 文本锚点 + get_paused_info + evaluateOnCallFrame）在真机断点 dump 调度表/轮表/中间字，与沙箱同断点 dump 逐字 diff——第一处分歧即环境分支点。约束：①须 `--guard mcp` 且用户知情；②**22.js 类代码在第 2 次计算时反调试死循环（渲染进程卡死），采样一次/会话**，采样前规划全部 dump 项；卡死勿杀非本次 MCP 拉起的 Chrome 进程，先按 CommandLine 确认该实例 profile 来源（独立 profile / 附加用户浏览器）再处置；③MCP 断点跨 reload 易丢，每次 list_breakpoints 确认；④暂停帧内取值在 resume 后失效，须在单次 pause 内完成全部取值（工具名以所连 MCP 实际暴露为准，如 `evaluate_script`；不支持帧内求值时用 `get_paused_info` + 逐帧 `step` 读作用域）。
 
 1. **正向对照**：浏览器**新鲜**签名 + 纯协议客户端（curl_cffi 等）重放 → 200 ⇒ 连接层无问题，问题在自己的签名内容；403 ⇒ 连接层嫌疑才成立。内嵌 serverTime/时间戳的签名有有效期，对照必须用采集后立即重放的新鲜样本并记录采集→重放延迟；**用过期样本得到的 403 不构成任何结论**（实战误判：某电商 40002 被误判为连接层风控）。**签名内时间戳先做 T 偏移矩阵再谈其他（match25 实证）**：token 含 `+new Date`/`Date.now()` 派生的时间戳且服务端 403 时，对 now 做 ±N 偏移（如 −100s~+30s 十几档）各生成 token 请求，看通过区间——若**全过**说明服务端不校验时间窗口，直接冻结 Date=now（getTime 返回的服务器时间戳）生成最稳，无需时间补偿/重试；若存在窗口则按区间中值冻结并保持 getTime→生成→请求 <1s。不要凭直觉加 LEAD_MS 补偿（match24 规则 31 同精神：先量边界再动手）。**对照客户端本身也可能是变量（match19 实证）**：按三级客户端阶梯逐级测——Node 默认栈 → 跨栈普通客户端（curl/requests）→ 指纹客户端（Python `curl_cffi` 固定 impersonate 档位 / Node `CycleTLS`、`impers`）——若浏览器 200、唯独 Node 400 是窄黑名单；普通栈全 400 **不等于**回内容层，必须先用指纹客户端排除"浏览器指纹白名单"才能下内容层结论；交付遵循最低可用栈。判读矩阵与交付选择见规则 27；"错误文案不指示病因层"（同是 `token failed`，match9 是 m-cookie 缺失、match19 是 Node 指纹被拉黑、**match28 是站点限流**——短窗口连续请求约第 3 页起 403、但单请求/第 1/2 页 200，先做单请求诊断（fresh now+token 发一次 page=1）区分，200 即签名正确、问题在请求节奏；应对=页间 3s + getTime 后 300ms + 冷却 3~4 分钟（恢复期长勿连跑）+ 采集与提交解耦（`--submit --answer <总和>` 单请求提交），见规则 37/反模式 36）。
 2. **反向对照**：自己的签名 + 真实浏览器连接（取证阶段 ruyipage `add_preload_script` hook XHR.open 替换目标参数，hook 必须带执行标记并验证）→ 403 ⇒ 服务端校验签名内容，与连接无关。
 3. 定位为「签名内容被校验」后，用**对齐探针法**测量 SDK 实际内嵌的环境检测并逐位对齐（见 `references/env/env-detect-bypass.md`），不要先假设需要复现 canvas/行为轨迹等完整浏览器指纹。
 4. **对照必须在健康 session 下做，且一次只改一个变量**：连续失败会触发站点惩罚机制（惩罚期内连浏览器基线请求都被拒，对照数据全部作废）；每组对照前先复刻一次确定成功的基线请求，失败即冷却后重做。HTTP 200 + 业务层风控文案时先按 `references/network/ip-risk-control.md` 会话状态类风控专节（蜜月期窗口/"频率墙"误判警示/失败惩罚）排查。
 
-**引擎检测 case 的双对照浏览器侧**：取证浏览器被引擎级检测拒绝的 case（state 已过 BLOCKED_FORENSIC），双对照的浏览器侧——正向的「浏览器新鲜签名」与反向的「真实浏览器连接」——经 `--guard mcp` 用浏览器 MCP 连接用户真实浏览器执行（站点只接受真实内核时 ruyipage 无法承担该角色，match14 语境）；hook 必须带执行标记并验证、样本新鲜度与 `captureToReplayMs` 记录要求不变，对照产物落盘 `case/` 供审计。未经 BLOCKED_FORENSIC 的 case 浏览器侧一律用 ruyipage，不得借双对照名义引入 MCP。**取证浏览器毒化证据常在分析阶段才齐备**（match21 实证：取证/复现阶段只看到 400 token failed，黑盒自洽但被拒 + 同输入真机对拍不一致之后才确认内核级毒化）——此时把证据落盘 `case/notes/` 后走 `DIAGNOSE → BLOCKED_FORENSIC`（2.3.87 起合法转移），补登记后再回 DIAGNOSE 用 `--guard mcp`。
+**引擎检测 case 的双对照浏览器侧**：取证浏览器被引擎级检测拒绝的 case（state 已过 BLOCKED_FORENSIC），双对照的浏览器侧——正向的「浏览器新鲜签名」与反向的「真实浏览器连接」——经 `--guard mcp` 用浏览器 MCP 连接真实 Chrome 内核浏览器执行（站点只接受真实内核时 ruyipage 无法承担该角色，match14 语境）；hook 必须带执行标记并验证、样本新鲜度与 `captureToReplayMs` 记录要求不变，对照产物落盘 `case/` 供审计。未经 BLOCKED_FORENSIC 的 case 浏览器侧一律用 ruyipage，不得借双对照名义引入 MCP。**取证浏览器毒化证据常在分析阶段才齐备**（match21 实证：取证/复现阶段只看到 400 token failed，黑盒自洽但被拒 + 同输入真机对拍不一致之后才确认内核级毒化）——此时把证据落盘 `case/notes/` 后走 `DIAGNOSE → BLOCKED_FORENSIC`（2.3.87 起合法转移），补登记后再回 DIAGNOSE 用 `--guard mcp`。
 
 未完成上述对照，不得宣布连接层风控结论，不得转而交付浏览器内核取数方案（取证浏览器脚本放进 `case/` 也算交付违规）。双对照结果写入 `result/验证记录.json` 顶层 `riskLayerDiagnosis` 字段（`forwardControl`/`reverseControl`/`conclusion`，正向必须含 `captureToReplayMs` 采集→重放延迟，反向必须含 `hookVerified: true`），并过门禁：
 

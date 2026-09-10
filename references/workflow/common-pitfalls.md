@@ -198,7 +198,7 @@ signer 通常持有 vm context / WASM 实例 / 请求序号计数器 / Cookie �
 **为什么不成立**：证据已表明取证被内核级检测阻断，闷头补环境是在错误前提下推进；"再试一轮"没有诊断依据（后证实死循环根因是缺 `XMLHttpRequest.DONE` 静态属性导致 MD5 分组步长退化——vm 沙箱补齐后一次跑通，卡点从来不是"环境补不齐"而是"没诊断就盲补"）；摇摆本身最耗步骤。
 
 **正确做法**：
-1. 取证持续 4xx：先 `forensic_ruyipage.py --ua` 排除 UA 检测；无效则按内核级差异检测采样定位；定位到引擎级检测 → `BLOCKED_FORENSIC` 对齐用户（用户确认后浏览器 MCP 连真实浏览器兜底取证 / 用户提供 cURL/HAR / 确认降级，见 SKILL.md §4 BLOCKED_FORENSIC），把路线选择权交还用户。
+1. 取证持续 4xx：先 `forensic_ruyipage.py --ua` 排除 UA 检测；无效则按内核级差异检测采样定位；定位到引擎级检测 → `BLOCKED_FORENSIC`（三选一与准入见 `references/workflow/decision-tree.md` 阻塞点 8，隐私边界见 `references/tooling/browser-acquisition.md`），把路线选择权交还用户。
 2. 补环境死循环：`vm.Script(...).runInContext(ctx, {timeout})` 定位是否纯 CPU 死循环 → Proxy 探测 window 缺失属性 → 按缺失清单补齐。**禁止插桩 while(1)/for 定位空转**（破坏字符串字面量、破坏 native 检测、定位不准——match10 实测 5 个控制流循环都进入但定位失败，改 Proxy 探测才定位到）。
 3. 触发 20+ 步止损线：落阶段报告 + 输出卡点与方向；"问 vs 不问"摇摆超过 2 轮即视为已触发，执行防耗尽检查点动作序列。
 4. 取证探针：优先标准脚本参数（`--ua`/`--cookie`/`--click`）；确需手写时方法名先内省（`dir(page)`），禁止按 Playwright API 习惯猜。
@@ -384,7 +384,7 @@ $.ajax = function () {
 
 **正确做法**：
 1. **分支指纹快速判定**：SDK 暴露构造器/入口对象时（`window.SM3`/`window.sm3Digest` 等），对比 `new XXX().reg`（IV 类常量数组）与探针函数输出（`strToBytes('abc')`）——诱饵分支常出现"数组某项重复"（IV[1]=IV[4]）或"魔改特征消失"（偶数化变标准 ASCII）；一次调用即可判定，不用等真实请求。
-2. **真机成功样本同输入对拍**：MCP 连用户真实浏览器取一个成功请求样本（token + 其 Accept-Time），在沙箱/纯算里用同一输入重算对比——不一致即分支差异，停止在算法层枚举。
+2. **真机成功样本同输入对拍**：MCP 连真实 Chrome 内核浏览器取一个成功请求样本（token + 其 Accept-Time），在沙箱/纯算里用同一输入重算对比——不一致即分支差异，停止在算法层枚举。
 3. **检测清单获取**：Chrome MCP `navigate_page` 的 `initScript` 在文档脚本前包装 `Function.prototype.toString` 记录被检测目标（match3.js 检测 Object/Document/Window/Location/FocusEvent/Node/HTMLDocument/print 及 DOM 方法，各 ×3 一致性三连测），diff 沙箱与真机的目标集，缺失项即环境修复点。
 4. **桩 nativize**：每个桩函数 `defineProperty` 伪装 `name` 与自有 `toString`（返回 `function X() { [native code] }`）；缺失构造器（Window/print/FocusEvent 等）用 native 样式空壳补齐；`document instanceof HTMLDocument` 等 instanceof 分支需补原型链（`HTMLDocProto = Object.create(Document.prototype)` + `setPrototypeOf(document, HTMLDocProto)`，注意 `HTMLDocument.prototype = document` 会循环 __proto__）。
 5. **修复判定用分支指纹而非真实请求**：每次补环境后先看 `new SM3().reg` 是否收敛到真机值（不消耗请求额度），全部收敛再上真实请求。
@@ -407,7 +407,7 @@ match27 算法本身没变（同一 RSA），错的是**喂给算法的数值常
 
 **形态二（base64 字母表环境分支）**：AES 输出（Z.ciphertext）双侧**逐字节一致**但密文串不同 → 差异只在编码层：base64 字母表（编码表组装状态机）随环境分叉（如"混元表 abcd…hiA-Z…j-z" vs "a-z,A-Z,0-9"）。**检测**：同 Z.ct 双侧密文串逐字符 diff——若仅大小写/字母置换差异即字母表分支。**修复**：用已知 (Z.ct↔密文串) 配对 + blob 结构假设（如 OpenSSL "Salted__"‖salt‖ct）反推两侧字母表全排列，源码补丁暴露哈希器与密文串（inject `globalThis.__hd=this,globalThis.__hs=String(i),` 于编码调用点前），桥内位置翻译（sb[i]→ch[i]）后重算摘要，token 与真机一致闭环。
 
-**采样纪律（match22 实证）**：此类代码第 2 次计算在调试器挂接时反调试死循环（渲染进程卡死）——MCP 调试采样**一次/会话**，采样前规划全部 dump 项；卡死先查进程 CommandLine 确认 MCP 专属 profile 再杀渲染进程；MCP 断点跨 reload 易丢；evaluateOnCallFrame 的 objectId 在 resume 后失效（单次 pause 内完成全部取值）；文本锚点断点用函数**尾部唯一长片段**反向定位（通用序言 find() 会命中别的函数）。
+**采样纪律（match22 实证）**：此类代码第 2 次计算在调试器挂接时反调试死循环（渲染进程卡死）——MCP 调试采样**一次/会话**，采样前规划全部 dump 项；卡死先查进程 CommandLine 确认该实例 profile 来源（独立 profile / 附加用户浏览器）再处置；MCP 断点跨 reload 易丢；evaluateOnCallFrame 的 objectId 在 resume 后失效（单次 pause 内完成全部取值）；文本锚点断点用函数**尾部唯一长片段**反向定位（通用序言 find() 会命中别的函数）。
 
 ## 反模式 31：toString 自引用解码器被 AST 重写破坏——产物能跑但解出的全是垃圾，或轮转死循环（match23 实证）
 

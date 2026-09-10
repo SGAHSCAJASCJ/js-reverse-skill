@@ -22,7 +22,7 @@
 | ruyiPage 网络取证 | 需补 Step 1（无有效 capture.json / HAR / cURL / 请求文本） | `python scripts/forensic_ruyipage.py --url <目标URL> --case-dir <project-root> --markdown` |
 | RuyiTrace 日志采集 | 需补 Step 2（无有效 NDJSON） | `node scripts/capture_ruyitrace_log.js --url <目标URL> --case-dir <project-root> --import-after --markdown` |
 | 用户手动材料 | 用户提供了真实存在的文件 | 先过 `check_evidence.js` 门禁，按可跳过步骤跳过取证 |
-| 浏览器 MCP 兜底取证 | 仅 BLOCKED_FORENSIC：引擎级检测拒绝取证浏览器且 `--ua` 无效，经用户确认 + `node scripts/state_machine.js --case-dir <project-root> --guard mcp` | 连接用户真实浏览器采成功样本/Cookie/指纹/JS 落盘 `case/`，按用户材料走 check_evidence 校验（SKILL.md 绝对规则 8 ④；DIAGNOSE 双对照浏览器侧同守卫，须已过 BLOCKED_FORENSIC） |
+| 浏览器 MCP 兜底取证 | 仅 BLOCKED_FORENSIC：引擎级检测拒绝取证浏览器且 `--ua` 无效，经用户确认 + `node scripts/state_machine.js --case-dir <project-root> --guard mcp` | 连接真实 Chrome 内核浏览器采成功样本/Cookie/指纹/JS 落盘 `case/`，按用户材料走 check_evidence 校验（SKILL.md 绝对规则 8 ④；DIAGNOSE 双对照浏览器侧同守卫，须已过 BLOCKED_FORENSIC）；准入/授权/隐私边界见下节 |
 
 > ⚠️ **URL ≠ 证据**：仅提供目标 URL / 接口 URL / JS URL 不构成任何取证材料，仍须走完整两步取证。用户手动提供材料时，先用 `node scripts/check_evidence.js --case-dir <project-root> --url <目标URL> --inputs <材料路径> --markdown` 验证文件真实存在，并以门禁输出的可跳过步骤为准（cURL/HAR/JS 只能跳过 Step 1；Step 2 RuyiTrace 日志采集需 NDJSON 才能跳过）。
 
@@ -219,3 +219,12 @@ ruyiPage 的价值在于使用 Firefox + WebDriver BiDi，并配合其 managed r
 - 登录态 Profile 默认保留并在最终总结中说明处置，用户明确要求删除才删，不为此询问。
 - 不要把真实 Cookie / token 明文写入公开笔记。
 - 优先保存脱敏后的请求样本。
+
+## 浏览器 MCP 隐私与授权边界
+
+MCP 走 Chrome 内核（与 ruyipage / RuyiTrace 的定制 Firefox 互补，见 SKILL.md 绝对规则 8 ④）。接入前必须满足：
+
+- **接入模式**：优先让 MCP 拉起**独立 profile**；只有必须复用用户已登录的浏览器时才附加到用户正在运行的实例，此时须**额外告知并取得用户确认**。
+- **采集范围**：只采目标站产物（成功样本 Cookie / 指纹 / JS / 网络记录）落盘 `case/`；不得读取、复制或外传目标站之外的数据（其它站点 Cookie / Storage、书签、密码、历史、扩展数据）。
+- **连接前告知**：明确告知用户将与浏览器建立调试通道、可能触及当前 profile 数据，取得确认后再连；与 `--guard mcp` 的用户确认是同一次确认。
+- **跨内核证据**：MCP 样本属 Chrome 内核，与 Firefox 取证样本只能**互补对照**，不得混用等同；样本同样记 `baselineId`（见上「指纹基线一致性硬约束」）。
