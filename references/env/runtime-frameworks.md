@@ -7,10 +7,10 @@
 ## 核心规则
 
 1. **默认不使用补环境框架**——纯 Node.js vm 沙箱 + 手动补环境，检测面最小。
-2. AI 根据题型自动判断是否需要升级：
+2. AI 根据题型自动判断是否需要升级（判定可自动，**启用框架须用户确认**）：
    - 纯算法 → 不需要框架
    - JSVMP 行为型（抖音/TikTok 类）→ 多数情况纯 vm 够用，搬运 SDK 直接运行
-   - JSVMP 签名型（瑞数类）→ 检测 `typeof document.all` 等原生行为时，需升级 sdenv
+   - JSVMP 签名型（瑞数类）→ 检测 `typeof document.all` 等原生行为时，建议升级 sdenv
    - 极端检测（多维度交叉验证）→ 可能需要 sdenv
 3. **用户可显式覆盖**——高级用户可指定框架，但不强制选择。
 4. 可选项：不使用（默认）、Node.js 内置 vm、sdenv、jsEnv。
@@ -43,7 +43,7 @@ node scripts/analyze_trace_complexity.js --case-dir <project-root> --markdown
 ## 框架说明
 
 - **Node.js 内置 vm**：用户明确选择时需显式构造干净 context，不得暴露 `process`、`Buffer`、`require`、`module`、`global`，也不得把 vm 当强安全边界。
-- **sdenv**：用户明确选择时需自行安装（魔改 jsdom + C++ V8 扩展）。必须先确认 sdenv 项目路径、版本、入口模块和初始化函数；未提供文档时只能生成待适配模板，不能虚构 API。
+- **sdenv**：用户明确选择时需自行安装（魔改 jsdom + C++ V8 扩展）。必须先确认 sdenv 项目路径、版本、入口模块和初始化函数；未提供文档时只能生成待适配模板，不能虚构 API。sdenv 属 jsdom 系，其 `jsdomFromUrl` 会联网加载目标页——联网边界以 SKILL.md 绝对规则 8 与第 3 节纯协议红线为准，采用前先确认满足离线/授权要求。
 - **jsEnv**：用户明确选择时需自行实现或安装。必须先确认项目路径、版本、入口模块和初始化函数；未提供文档时只能生成待适配模板，不能虚构 API。
 - **其他运行时或 native 扩展**：仅在目标证据表明纯 vm 无法表达所需行为，且用户提供了可用构建和 API 契约时启用。实现选择必须服从行为基线和交付可运行性，不要求默认优先某类 addon。
 

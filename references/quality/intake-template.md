@@ -33,20 +33,11 @@
 
 ### 反爬类型（自动判断，用户可覆盖）
 
-skill 根据 FORENSIC_CAPTURE 抓包结果 + JS 文件特征自动判断：
-- JS 文件 <50KB + 无 while-switch + 标准 md5/aes 特征 → 纯算还原
-- JS 文件含 WASM 加载 → WASM 加载
-- JS 文件含 webmssdk / a_bogus → 行为型补环境
-- 响应码 412 循环 → 签名型补环境
-- JS 文件含 _0x 前缀 → 纯混淆（AST 反混淆后判断）
-
-详细识别标准见 `references/workflow/decision-tree.md`「反爬类型识别」。
+按 `references/workflow/decision-tree.md`「反爬类型识别」判定并回填。
 
 ### TLS 指纹客户端（自动选择，用户可覆盖）
 
-- 纯算无 TLS 检测：标准 fetch/requests
-- 有 TLS 检测：Node.js curl-cffi-node / Python curl_cffi / cyCronet
-- 不发真实请求：只输出本地 sign/参数
+按 `references/network/tls-validation.md`「工具选择」自动选择；纯算无 TLS 检测用标准 fetch/requests，不发真实请求时只输出本地 sign/参数。
 
 ### 请求详情（skill 抓包获取）
 

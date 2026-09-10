@@ -1,6 +1,8 @@
 # 题型决策树
 
 > **触发条件**：不确定走哪个路径、哪个还原模式时读
+>
+> 本文只定还原路径（A/B/C/D）；补环境框架选择见 `references/env/runtime-frameworks.md`（默认不用，启用须用户确认）。
 
 ## 6 题型决策表
 
@@ -11,7 +13,7 @@
 | 3. 自定义算法 | 算法不可直接提取（自定义MD5/混淆无法静态还原） | B vm 沙箱执行原 JS | ruyipage 取证 + RuyiTrace 定位 + vm 沙箱 |
 | 4. WASM 加密 | 加密逻辑在 WebAssembly | C WASM 加载 | ruyipage 取证 + RuyiTrace 定位 + WASM 加载（不需补环境） |
 | 5. JSVMP 行为型 | webmssdk / byted_acrawler，200 正常，JS 需完整浏览器环境 | D 环境伪装 | ruyipage 取证 + RuyiTrace 采集 + 补环境 |
-| 6. JSVMP 签名型 | 瑞数 / Akamai，412 循环，JS 需完整浏览器环境 | D 补环境（sdenv） | ruyipage 取证 + RuyiTrace 采集 + sdenv 补环境 |
+| 6. JSVMP 签名型 | 瑞数 / Akamai，412 循环，JS 需完整浏览器环境 | D 补环境 | ruyipage 取证 + RuyiTrace 采集 + 补环境 |
 
 ## 6 阻塞点
 
@@ -39,7 +41,7 @@
   │
   ├─ 反爬类型判断（FORENSIC_CAPTURE ruyipage 抓包后识别）
   │   ├─ 412 循环 → 签名型（瑞数/Akamai）
-  │   │   → 直接路径 D 补环境（sdenv 纯 Node.js）
+  │   │   → 直接路径 D 补环境（框架选择见 runtime-frameworks，默认不用）
   │   │   → 只能走源码级插桩（AST mode）
   │   │   → 前三板斧禁用（会破坏签名）
   │   │
@@ -59,7 +61,7 @@
 ```
 
 **路径选择总结**：
-- 签名型 JSVMP（412）→ 路径 D（sdenv 补环境）
+- 签名型 JSVMP（412）→ 路径 D 补环境（框架选择见 runtime-frameworks，默认不用）
 - 行为型 JSVMP（200+webmssdk）→ 路径 D（补环境）
 - 算法可纯算提取（无 JSVMP）→ 路径 A
 - 算法不可提取但 JS 可 vm 执行（无 JSVMP）→ 路径 B（vm 沙箱）
@@ -73,7 +75,7 @@
 ### 签名型反爬（环境即签名）
 - **特征**：redirect_chain 反复 412/302 → 200；加载 `sdenv*.js` / `acmescripts*.js`；`FSSBBIl1UgzbN7N` / `NfBCSins2OywS`
 - **典型**：瑞数 / Akamai / Shape Security
-- **路径**：路径 D 补环境（sdenv 纯 Node.js）
+- **路径**：路径 D 补环境（框架选择见 runtime-frameworks，默认不用）
 
 ### 行为型反爬（参数签名 + 拦截器）
 - **特征**：HTTP 200 正常加载；加载 `webmssdk` / `byted_acrawler`；签名参数 X-Bogus / a_bogus
