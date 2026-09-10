@@ -205,7 +205,7 @@ vmpzl 类混淆，**无需解 LZ 压缩、无需读字节码、无需逐 opcode 
 GUI 内置两个层次的现成组合（源码确认）：
 
 - **「常规采集」快捷开关**（GUI 一键，日常推荐）：`MOZ_DOM_TRACE=1` + `JSCALL_TRACE=1` + `JSCALL_LIMIT=0` + `JSCALL_FLUSH_INTERVAL=8` + `JSCALL_SHALLOW=1` + `HTTP_PACKET_TRACE=1` + `EXCEPTION_TRACE=1` + `EXCEPTION_LIMIT=0` + `EXCEPTION_FLUSH_INTERVAL=1`。
-- **题型预设**：A 加密函数（另加 `SHALLOW_DEPTH=2`、`MAX_VALUE_BYTES=131072`）、B 脚本整体抓值、C opcode 看穿 VM（`STACK=1`+`STACK_FULL=1`+`STACK_SLOTS=4`，必补 `OPCODE_URL` 与 PC 窗口）、D 反爬 VM(Turnstile)（`TARGET_ONLY=1`+`DETAIL_SCRIPT_URL=challenges.cloudflare.com`+`SHALLOW=1`）、E 重型 JSVM 定位（`OPCODE_LIMIT=4000000` 做硬保险）、F WebSocket 帧、jsvmp autodetect（含 `MIN_BYTECODE=128`+`MIN_SPAN=200`）。
+- **题型预设**：A 加密函数（另加 `SHALLOW_DEPTH=2`、`MAX_VALUE_BYTES=131072`）、B 脚本整体抓值、C opcode 看穿 VM（`STACK=1`+`STACK_FULL=1`+`STACK_SLOTS=4`，必补 `OPCODE_URL` 与 PC 窗口）、D 反爬 VM(某无感挑战)（`TARGET_ONLY=1`+`DETAIL_SCRIPT_URL=challenges.cloudflare.com`+`SHALLOW=1`）、E 重型 JSVM 定位（`OPCODE_LIMIT=4000000` 做硬保险）、F WebSocket 帧、jsvmp autodetect（含 `MIN_BYTECODE=128`+`MIN_SPAN=200`）。
 
 | 场景 | 推荐开关组合 |
 |---|---|
@@ -214,7 +214,7 @@ GUI 内置两个层次的现成组合（源码确认）：
 | **不知函数名 / 名字被混淆** | `JSCALL_TRACE`+`JSCALL_SCRIPT_URL=xxx`+`DETAIL_SCRIPT_URL=xxx`+`SHALLOW`+`DEEP_LONG_STR=512` |
 | **排除无用 JS** | `JSCALL_TRACE`+`JSCALL_SCRIPT_URL_EXCLUDE=analytics;telemetry` |
 | **看穿自建字节码 VM** | `JSCALL_TRACE`+`OPCODE_URL=xxx`+`OPCODE_STACK`+`OPCODE_OPERANDS`+`OPCODE_LIMIT` |
-| **反爬 VM（Turnstile 等时延敏感）** | `JSCALL_SCRIPT_URL=xxx`+`DETAIL_SCRIPT_URL=xxx`+`SHALLOW`，**带 JIT 跑（勿禁）**，避免深序列化 |
+| **反爬 VM（某无感挑战 等时延敏感）** | `JSCALL_SCRIPT_URL=xxx`+`DETAIL_SCRIPT_URL=xxx`+`SHALLOW`，**带 JIT 跑（勿禁）**，避免深序列化 |
 | **还原 jsvmp 指令流**（已知槽） | `JSVMP_TRACE`+`SCRIPT_URL`+`DISPATCH_PC`+`PC_SLOT`(+`KEY_SLOT`/`BRANCH_PC`/`DUMP_BYTECODE`/`CONST_SLOT`) |
 | **还原 jsvmp（不知槽，自动）** | `JSVMP_TRACE`+`SCRIPT_URL`+`AUTODETECT`(+重混淆站点加 `MIN_BYTECODE=128`+`MIN_SPAN=200`) |
 | **抓 WebSocket 帧** | `TRACE_FILE`+`WS_TRACE=1` |
@@ -356,6 +356,6 @@ set MOZ_DOM_API_CRYPTO_RANDOM_VALUES=seeded:0xfedcba9876543210
 firefox.exe
 ```
 
-Cloudflare/挑战页默认建议：不需要就别设 `MOZ_DOM_API_OVERRIDE`；时间类优先 `native` 或 `increment`，不要长期 `fixed`；随机类优先 `seeded`；只开启当前需要 trace 的 API。
+某 CDN 风控/挑战页默认建议：不需要就别设 `MOZ_DOM_API_OVERRIDE`；时间类优先 `native` 或 `increment`，不要长期 `fixed`；随机类优先 `seeded`；只开启当前需要 trace 的 API。
 
 参数语义细节（源码确认）：`sequence` 最多读取 32 个值，耗尽后重复最后一个；`pattern` 支持连续十六进制或逗号分隔，最多读取 64 字节并循环填充；`seed` 支持十进制或 `0x` 十六进制；`performance.now` 覆盖后仍保持非负、不倒退；`crypto.getRandomValues` 保持返回原 TypedArray。

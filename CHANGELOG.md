@@ -3,6 +3,15 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.106 - 2026-09-10
+
+### 通用文档清除厂商/平台名（T1/T2 越界）+ 新增防漂移检查脚本
+
+- **清除越界**：21 篇通用文档的叙述与举例里的具体厂商名、目标平台名改为通用指代（抖音→某短视频平台、瑞数→某签名型风控、拼多多→某电商、猿人学→某教学靶场、Cloudflare/Akamai→某 CDN 风控 等）；保留 `cases/` 指针与域名等路由键，不改案例文件。
+- **保留（规则允许）**：`cases/`、`references/captcha/`（验证码厂商知识库）、识别参考（`crypto/algorithm-families.md`、`network/ip-risk-control.md`、`env/env-iframe.md`、`rendering/font-anti-crawl.md`、`rendering/image-content-reversal.md`，后四者自带「知识分级」声明）、`deobfuscation/obfuscation-identify.md`（表内为 assets 真实子目录名）。
+- **新增 `scripts/check_vendor_leakage.js`**：扫描非豁免文档的厂商/平台词表，命中即 FAIL（`--self-test` 覆盖）。已登记进 `scripts/README.md`（计数 64→65 同步）。
+- 说明：纯 SDK/组件名（`webmssdk`、`byted_acrawler`、`TCaptcha`、`smcp` 等）属 CI 层识别信号，不在词表内；`微信/QQ/UC` 等浏览器标识按功能性词汇保留。
+
 ## 2.3.105 - 2026-09-10
 
 ### 清除通用文档中的厂商/平台名（T1/T2 越界）；修正规则知识库路径

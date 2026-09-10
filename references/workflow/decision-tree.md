@@ -15,7 +15,7 @@
 | 3. 自定义算法 | 算法不可直接提取（自定义MD5/混淆无法静态还原） | B vm 沙箱执行原 JS | ruyipage 取证 + RuyiTrace 定位 + vm 沙箱 |
 | 4. WASM 加密 | 加密逻辑在 WebAssembly | C WASM 加载 | ruyipage 取证 + RuyiTrace 定位 + WASM 加载（不需补环境） |
 | 5. JSVMP 行为型 | webmssdk / byted_acrawler，200 正常，JS 需完整浏览器环境 | D 环境伪装 | ruyipage 取证 + RuyiTrace 采集 + 补环境 |
-| 6. JSVMP 签名型 | 瑞数 / Akamai，412 循环，JS 需完整浏览器环境 | D 补环境 | ruyipage 取证 + RuyiTrace 采集 + 补环境 |
+| 6. JSVMP 签名型 | 某签名型风控 / 某 CDN 风控，412 循环，JS 需完整浏览器环境 | D 补环境 | ruyipage 取证 + RuyiTrace 采集 + 补环境 |
 
 ## 6 阻塞点
 
@@ -42,12 +42,12 @@
 识别到 JSVMP（200KB+ / while-switch / 字节码数组）
   │
   ├─ 反爬类型判断（FORENSIC_CAPTURE ruyipage 抓包后识别）
-  │   ├─ 412 循环 → 签名型（瑞数/Akamai）
+  │   ├─ 412 循环 → 签名型（某签名型风控/某 CDN 风控）
   │   │   → 直接路径 D 补环境（框架选择见 runtime-frameworks，默认不用）
   │   │   → 只能走源码级插桩（AST mode）
   │   │   → 前三板斧禁用（会破坏签名）
   │   │
-  │   └─ 200 正常 → 行为型（抖音/TikTok）
+  │   └─ 200 正常 → 行为型（某短视频平台/某海外短视频平台）
   │       → 直接路径 D 环境伪装（搬运 SDK + 补环境）
   │       → 四板斧全开
   │       → 路径 D 是标准打法，不存在"先 A 后 D"
@@ -76,12 +76,12 @@
 
 ### 签名型反爬（环境即签名）
 - **特征**：redirect_chain 反复 412/302 → 200；加载 `sdenv*.js` / `acmescripts*.js`；`FSSBBIl1UgzbN7N` / `NfBCSins2OywS`
-- **典型**：瑞数 / Akamai / Shape Security
+- **典型**：某签名型风控 / 某 CDN 风控 / 某风控厂商
 - **路径**：路径 D 补环境（框架选择见 runtime-frameworks，默认不用）
 
 ### 行为型反爬（参数签名 + 拦截器）
 - **特征**：HTTP 200 正常加载；加载 `webmssdk` / `byted_acrawler`；签名参数 X-Bogus / a_bogus
-- **典型**：TikTok / 抖音 / 字节系
+- **典型**：某海外短视频平台 / 某短视频平台 / 某内容平台系
 - **路径**：路径 D 环境伪装（补环境，JS 需完整浏览器环境）
 
 ### 纯混淆（无环境检测）

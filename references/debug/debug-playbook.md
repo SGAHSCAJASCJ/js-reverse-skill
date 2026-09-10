@@ -13,7 +13,7 @@
   │   │   ├─ 有风控响应头（cf-mitigated / x-vc-bdturing）→ IP 风控（见 ip-risk-control.md）
   │   │   ├─ 有 challenge JS → 参考 web-verify-patcher
   │   │   └─ 无风控头 → 查签名/Cookie/UA（见下方"200 但异常"分支）
-  │   ├─ 412 → Akamai/瑞数 sensor 失效
+  │   ├─ 412 → 某 CDN 风控/某签名型风控 sensor 失效
   │   │   └─ 查 high-strength-detection.md（10 步高强度排查顺序）
   │   └─ 5xx → 服务端错误或 IP 被封（见 ip-risk-control.md）
   │
@@ -37,7 +37,7 @@
 | 故障树总览 | `debug/debug-playbook.md`（本文件顶部） | 任何请求失败 | 决策树定位分支 |
 | 请求失败 6 步 | `debug/debug-playbook.md`（下方） | 协议脚本请求异常 | Cookie/前置/时间戳/Header/环境/频率 |
 | 签名 7 环节对比 | `debug/debug-playbook.md`（下方） | 签名值不一致 | 输入/排序/时间戳/随机串/密钥/中间摘要/输出 |
-| 高强度 10 步 | `quality/high-strength-detection.md` | Cloudflare/Akamai/DataDome/Kasada | 高强度检测场景的排查顺序 |
+| 高强度 10 步 | `quality/high-strength-detection.md` | 多家高强度风控（CDN/WAF/无感挑战） | 高强度检测场景的排查顺序 |
 | 静默失败 12 项 | `network/node-leakage.md` | 200 但空 body / 结果不一致 | Node 泄露 + 静默失败清单 |
 | silent-failure-checklist | `case/notes/silent-failure-checklist.md`（由 `scripts/init_env_case.js` 自动生成；case/ 指 per-project 工作目录，非 skill 根目录的 cases/） | 签名通过服务端不认 | 12 项 + 项目特定排查 |
 
@@ -278,7 +278,7 @@
 | 实时对比 | `evaluate_js` | 在浏览器中执行还原后的签名函数，与脚本输出对比 |
 | Cookie 归因 | `analyze_cookie_sources` | 辨识 Cookie 是 HTTP Set-Cookie 还是 JS document.cookie 写的 |
 | 源码级插桩 | `instrument_jsvmp_source` + `get_instrumentation_log` | 对 VMP 做 HTTP 层源码改写，hot_keys 暴露环境指纹集 |
-| 首屏挑战 | `navigate(pre_inject_hooks=[...])` | RS/Akamai 412 挑战页 hook 预注入 |
+| 首屏挑战 | `navigate(pre_inject_hooks=[...])` | RS/某 CDN 风控 412 挑战页 hook 预注入 |
 | hook 重载 | `reload_with_hooks` | 重载使 persistent hook 先于页面 JS 执行 + 清日志 |
 | 运行时探针 | `get_runtime_probe_log` | 快速摸底页面在读什么 / 调什么（低开销） |
 | trace 属性访问 | `trace_property_access` | 追踪目标对象属性访问路径 |

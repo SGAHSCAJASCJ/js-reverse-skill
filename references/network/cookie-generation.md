@@ -237,8 +237,8 @@ function isCookieExpired(response) {
 
 | 案例文件 | 关联点 |
 |---------|--------|
-| `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | 瑞数6 412 挑战：`Set-Cookie` 下发 `acw_tc` + `XxxS`，JSVMP 生成 `XxxT` 写入 `document.cookie`，三 Cookie 组合通过验证 |
-| `cases/universal-vmp-source-instrumentation.md` | 通用 VMP cookie 生成方法论：覆盖 RS 412 / Akamai `_abck` / `ttwid` / `msToken` 等多场景的 source/entry/builder/writer 分析 |
+| `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | 某签名型风控6 412 挑战：`Set-Cookie` 下发 `acw_tc` + `XxxS`，JSVMP 生成 `XxxT` 写入 `document.cookie`，三 Cookie 组合通过验证 |
+| `cases/universal-vmp-source-instrumentation.md` | 通用 VMP cookie 生成方法论：覆盖 RS 412 / 某 CDN 风控 `_abck` / `ttwid` / `msToken` 等多场景的 source/entry/builder/writer 分析 |
 | `cases/jsvmp-xhr-interceptor-env-emulation.md` | `ttwid` Cookie 由浏览器 JS 生成后写入，纯协议无法直接获取，需补环境或调试浏览器导出 |
 | `cases/yuanrenxue-match13-eval-cookie.md` | 服务端下发脚本型：`/api2/13` 返回字符串加法混淆的 `document.cookie=` 语句，eval 落盘取 builder + 定向求值器解码，令牌一次性禁缓存 |
 | `cases/jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md` | `msToken` / `ttwid` 等 Cookie 字段作为 JSVMP 签名输入参与双签名生成 |

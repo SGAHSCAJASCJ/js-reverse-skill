@@ -340,7 +340,7 @@ try {
 
 ## 沙箱执行侧输出劫持
 
-混淆/反调试代码（如 jsjiami v5）可能主动**覆写 console 方法**（`console.log = noop` 或直接清空），作为反调试手段之一。浏览器里表现为 DevTools 无输出；**Node vm 沙箱里执行后同样生效**——挑战代码跑完 exit 0 但 `console.log(m)` 输出为空，极易误判"代码没执行/结果为空"（猿人学 match9 实测）。
+混淆/反调试代码（如 jsjiami v5）可能主动**覆写 console 方法**（`console.log = noop` 或直接清空），作为反调试手段之一。浏览器里表现为 DevTools 无输出；**Node vm 沙箱里执行后同样生效**——挑战代码跑完 exit 0 但 `console.log(m)` 输出为空，极易误判"代码没执行/结果为空"（某教学靶场 match9 实测）。
 
 识别与应对：
 

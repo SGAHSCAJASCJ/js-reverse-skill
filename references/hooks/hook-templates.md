@@ -37,7 +37,7 @@ ruyiPage: hook_function(function_path="目标函数", hook_code="...", position=
 4. **使用 `console.log` 输出**：通过 `get_console_logs` 收集结果
 5. **使用 `console.trace`**：在关键点输出调用栈
 6. **使用 Proxy 代替直接覆写**：更隐蔽，不改变 `typeof` 结果
-7. **首屏挑战页需在页面脚本执行前装好 Hook**：RS/Akamai 首包挑战在 hook 装好前就跑完了，必须让 hook 先装再加载目标页面
+7. **首屏挑战页需在页面脚本执行前装好 Hook**：RS/某 CDN 风控 首包挑战在 hook 装好前就跑完了，必须让 hook 先装再加载目标页面
 8. **装完 hook 想让它先于页面 JS 跑**：带 hook 重新加载页面，同时清理各类 hook 日志变量
 
 ## Hook 模板库

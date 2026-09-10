@@ -30,7 +30,7 @@ case 文件的价值随实战次数指数级增长：第一次分析某站点写
 ## 三、JSVMP 路径选择
 
 ### 8. JSVMP 先选路径再动手
-识别到 JSVMP 后立即在路径 A（算法追踪）和路径 D（环境伪装/补环境）间决策，不要边做边换。签名型反爬只能走源码级插桩（`instrumentation mode="ast"`）；可在 Node 中加载执行的 JSVMP 优先走路径 D。RS 5/6、Akamai sensor_data、webmssdk 这类"算法全在 opcode dispatch 循环内"的 VMP，`hook_jsvmp_interpreter` 也看不到 switch/case 内部，AST 插桩是唯一能打开黑箱的工具。**反例**：先试路径 D 跑半天发现 JSVMP 有反 jsdom 检测，再换路径 A，前功尽弃。决策依据见规则 2 的寄存器数分析。
+识别到 JSVMP 后立即在路径 A（算法追踪）和路径 D（环境伪装/补环境）间决策，不要边做边换。签名型反爬只能走源码级插桩（`instrumentation mode="ast"`）；可在 Node 中加载执行的 JSVMP 优先走路径 D。RS 5/6、某 CDN 风控 sensor_data、webmssdk 这类"算法全在 opcode dispatch 循环内"的 VMP，`hook_jsvmp_interpreter` 也看不到 switch/case 内部，AST 插桩是唯一能打开黑箱的工具。**反例**：先试路径 D 跑半天发现 JSVMP 有反 jsdom 检测，再换路径 A，前功尽弃。决策依据见规则 2 的寄存器数分析。
 
 ### 9. `String.fromCharCode` 是高频信号
 VM 解释器大量使用 `String.fromCharCode` 构造字符串（绕开字面量静态扫描），该调用的高密度区往往是字符串构造区，紧邻签名算法。`search_code(keyword="String.fromCharCode", script_url=url)` 能快速定位 dispatch 表附近的代码。**示例**：在某 acw_sc VMP 中，`fromCharCode` 调用密集区往后 200 行就是签名入口。注意事项：单纯 hook `fromCharCode` 会触发太多次，应结合寄存器数（见规则 2）过滤到目标函数后再 hook。其它高频信号词：`prototype.open`、`Object.defineProperty`、`toString`、签名函数名（`X-Bogus`、`_signature`）。
@@ -119,7 +119,7 @@ match10 实测：sandbox 预填"看起来完整"的运行时状态快照后，�
 ## 十二、无签名 / 传输层题型
 
 ### 27. 不是每题都有签名——请求侧"无签名"要走三条判据确认后收手，转查传输层与响应层
-默认假设"存在待还原签名"会让简单题变成无解题：猿人学 match 系列已有多题请求侧全明文（match4/7/12/17），把诱饵参数当签名去逆是纯浪费（反模式 27）。IDENTIFY 阶段按下面三条判据确认，全部干净即**明确判定"请求侧无签名"并收手**：
+默认假设"存在待还原签名"会让简单题变成无解题：某教学靶场 match 系列已有多题请求侧全明文（match4/7/12/17），把诱饵参数当签名去逆是纯浪费（反模式 27）。IDENTIFY 阶段按下面三条判据确认，全部干净即**明确判定"请求侧无签名"并收手**：
 1. **网络层**：`case/forensic/target-hits.json` 里目标请求的 URL / 请求体，除业务参数（`page`/`pageSize`/`kw`/分页/搜索词）外**没有任何动态字段**；把可疑参数名拿去 capture.json 全量反查，出现 0 次即未生效。
 2. **trace writer 层**：`XMLHttpRequest.open` / `fetch` / `Headers.set` 的**参数全文**里没有该字段（`search_trace.js --keyword <目标URL>` 直接检索 URL 字面量最快——trace 里的 XHR 记录常被第三方 SDK 淹没，match17 实测前两名高频栈是 transcend-cdn 与 mozilla 站点脚本，目标域脚本只排第三）。
 3. **Cookie/存储层**：`case/ruyi-trace/logs/cookie/*.ndjson` 里目标域**无 JS 写入的 cookie**（只有 `Hm_*` 之类统计 cookie 即视为干净），无 WASM/JSVMP/混淆 SDK 调用，`crypto` 类 trace 条数为个位数且不来自目标域脚本。

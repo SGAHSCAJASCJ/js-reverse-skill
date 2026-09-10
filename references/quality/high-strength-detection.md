@@ -2,7 +2,7 @@
 
 > **交叉引用**：本清单与 `debug/debug-playbook.md`（故障树总览 + 请求失败 6 步）、`network/node-leakage.md`（12 项静默失败）、`network/ip-risk-control.md`（IP 风控识别）互补。请求失败时先查 `debug/debug-playbook.md` 顶部故障树定位分支，本清单用于高强度检测场景的深度排查。
 
-本文件用于从 Cloudflare / Turnstile / Akamai / DataDome / Kasada / Shape / F5 等高强度检测样本中抽象通用补环境要求。它不是任何厂商的专用绕过流程，也不用于生成或伪造 challenge、验证码、访问控制 Cookie 或第三方防护 token；只用于授权范围内的网页端 Node.js 补环境、取证一致性检查和最终请求链验证。
+本文件用于从 多家高强度风控（CDN / WAF / 无感挑战） 等高强度检测样本中抽象通用补环境要求。它不是任何厂商的专用绕过流程，也不用于生成或伪造 challenge、验证码、访问控制 Cookie 或第三方防护 token；只用于授权范围内的网页端 Node.js 补环境、取证一致性检查和最终请求链验证。
 
 > 适用范围：复杂补环境场景必读；一般场景视情况参考。
 
@@ -20,7 +20,7 @@
 
 不得把本文件解释为：
 
-- 生成或伪造 `cf_clearance`、`__cf_bm`、验证码 token、Turnstile token、设备校验 token 或访问控制凭证。
+- 生成或伪造 `cf_clearance`、`__cf_bm`、验证码 token、某无感挑战 token、设备校验 token 或访问控制凭证。
 - 自动破解验证码、绕过登录、绕过 MFA 或绕过访问控制。
 - 把浏览器自动化作为最终交付项目的一部分。
 - 主动分析 JSVMP opcode / 字节码源码；遇到 JSVMP 只围绕环境调用、writer、行为 diff 和请求链推进。

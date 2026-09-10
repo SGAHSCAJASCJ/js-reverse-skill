@@ -35,7 +35,7 @@
 - **详见** `references/network/tls-validation.md`
 
 ## 场景 7：反检测站点分析
-- **特征**：Cloudflare/瑞数/极验等反爬检测
+- **特征**：某 CDN 风控/某签名型风控/某滑块验证码厂商等反爬检测
 - **ruyiPage**（仅取证）：`launch_browser(humanize=true)` → 观察 `redirect_chain` → `inject_hook_preset("debugger_bypass")` → 采集证据后用纯协议代码还原
 
 ## 场景 8：JSVMP + 环境伪装
@@ -90,6 +90,6 @@
 | `cases/sha1-sort-params-zhitongcaijing.md` | 场景 1 实战（标准算法纯算 + 零浏览器路径） |
 | `cases/jsvmp-xhr-interceptor-env-emulation.md` | 场景 8 实战（JSVMP + jsdom 环境伪装） |
 | `cases/jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md` | 场景 8 双签名变体 |
-| `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | 场景 2 + 场景 7（瑞数 RS6 Cookie 生成 + 412 挑战） |
+| `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | 场景 2 + 场景 7（某签名型风控 RS6 Cookie 生成 + 412 挑战） |
 | `cases/yuanrenxue-match13-eval-cookie.md` | 场景 2 下发脚本子型（`eval` 首包写 cookie，服务端令牌无本地算法） |
 | `cases/universal-vmp-source-instrumentation.md` | 场景 8 通用 VMP 方法论 |

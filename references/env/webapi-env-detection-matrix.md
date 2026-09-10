@@ -167,7 +167,7 @@ Promise resolved、Worker 回包出现或 probe 不报错都不能单独视为�
 - `PerformanceObserver.observe()` 对 `buffered` 与非 `buffered` 的差异。
 - `PerformanceObserverEntryList.getEntries()` 回调内容和触发时机。
 - XHR readyState 4 / load / loadend 前后 resource entry 是否可见。
-- image、favicon、Turnstile / third-party script、flow、`/d/`、`/peek` 等资源是否进入正确 timeline。
+- image、favicon、某无感挑战 / third-party script、flow、`/d/`、`/peek` 等资源是否进入正确 timeline。
 - `PerformanceEntry.toJSON()`、paint、mark、resource entry 序列化是否一致。
 
 禁止无条件 synthetic 初始 callback；禁止用插入顺序替代浏览器 `startTime` 排序，除非目标 baseline 证明如此。

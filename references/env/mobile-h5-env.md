@@ -12,7 +12,7 @@
 - UC 浏览器
 - 小米 / 华为 / OPPO / vivo 自带浏览器
 
-**不适用**：App 内 JS（React Native bundle / JSCore）、小程序容器 JS（微信/支付宝/百度小程序）。这些运行在非浏览器 JS 引擎中，API 集与浏览器差异大，超出 skill 边界。
+**不适用**：App 内 JS（React Native bundle / JSCore）、小程序容器 JS。这些运行在非浏览器 JS 引擎中，API 集与浏览器差异大，超出 skill 边界。
 
 ## 移动端 UA 矩阵
 
@@ -332,9 +332,9 @@ win.__wxjs_environment = undefined; // 非小程序环境为 undefined
 | 微信 iOS | `curl_cffi` + `impersonate='safari_ios_17_0'` | iOS 微信用 WKWebView |
 
 **cyCronet 适用场景**：
-- 微信 X5 / 字节系 Android App 内 WebView
+- 微信 X5 / 某内容平台系 Android App 内 WebView
 - Chrome Android（Cronet 是 Chrome 的网络栈）
-- 需要精确模拟 HTTP/2 Akamai fingerprint 的移动端
+- 需要精确模拟 HTTP/2 fingerprint 的移动端
 
 详见 `references/network/tls-validation.md` 的 cyCronet 段。
 

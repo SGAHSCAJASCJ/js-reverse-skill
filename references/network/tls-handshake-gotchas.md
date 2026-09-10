@@ -1,6 +1,6 @@
 # TLS 握手级残差：JA4 已对齐仍被拦的真因
 
-> **触发条件**：DIAGNOSE 三级客户端阶梯已走到第三级，且按 `tls-validation.md` 完成 JA3/JA4/key_share/HTTP2 Akamai/Header 顺序对齐后，真实请求**仍**被风控拦截时。本文只补"对齐后残差"，对齐主流程以 `tls-validation.md` 为准。
+> **触发条件**：DIAGNOSE 三级客户端阶梯已走到第三级，且按 `tls-validation.md` 完成 JA3/JA4/key_share/HTTP2 某 CDN 风控/Header 顺序对齐后，真实请求**仍**被风控拦截时。本文只补"对齐后残差"，对齐主流程以 `tls-validation.md` 为准。
 
 经验源：yazong 博客《TLS/JA4 指纹原理/获取/解析/风控实现与对抗》（2026-09 对照分析入库）。核心认知：**JA3/JA4 不是官方规范，握手包里还有它们没用到的字段；JA4 字符串一致 ≠ 字节级一致**。曾有实测：ja4 两端完全一致、请求仍失败，抓包对才发现差异在记录层。
 

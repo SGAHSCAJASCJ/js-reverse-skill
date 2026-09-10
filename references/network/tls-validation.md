@@ -73,7 +73,7 @@ python -m pip install cycronet
 - 如果两者一致，仍需确认 Header、TLS / HTTP2、Cookie jar 和代理 / 地区是否属于同一会话链路。
 - 如果两者不一致，默认以取证 baseline 为准；cURL 只作为请求结构、参数位置、业务字段和历史现象线索。
 - Chrome cURL 与 Firefox 取证冲突时，不得在 Firefox baseline 的最终请求中保留 Chrome `sec-ch-ua`、`sec-ch-ua-platform`、`sec-ch-ua-mobile`，也不得只修改 UA 后继续使用 Chrome TLS / HTTP2 profile。
-- 最终 `final.js` / `final.py` 的 UA、Accept-Language、Client Hints、Header 顺序、TLS / JA3 / JA4、HTTP/2 Akamai 指纹、Cookie jar 和代理必须来自同一取证 baseline 或经过重新取证确认。
+- 最终 `final.js` / `final.py` 的 UA、Accept-Language、Client Hints、Header 顺序、TLS / JA3 / JA4、HTTP/2 指纹、Cookie jar 和代理必须来自同一取证 baseline 或经过重新取证确认。
 - cURL 中已有的 sign、token、Cookie challenge 值只能作为 fixture / 历史线索；最终项目必须通过补环境后的 signer 和同一 session 请求链生成或刷新。
 - 冲突记录必须写入 `case/notes/sample-baseline-conflict.md`、`case/notes/final-request-validation.md` 和最终总结。
 - 如果用户坚持沿用 cURL 浏览器族，则暂停最终请求验证，要求使用同浏览器族取证工具重新采样 baseline，或让用户明确接受风险；风险确认不得替代成功验证。
@@ -100,16 +100,16 @@ python -m pip install cycronet
 2. 使用已确认的取证工具在同一 baseline 下访问 TLS 指纹检测端点，建议至少采样：
    - `https://tls.peet.ws/api/all`
    - `https://tls.browserleaks.com/json`
-3. 记录真实 Firefox baseline 的 `ja3`、`ja3_hash`、`ja3n_hash`、`ja4`、cipher suites、extension 顺序、supported groups / curves、signature algorithms、delegated credentials、record size limit、key_share、ALPN、HTTP/2 Akamai fingerprint、UA 和请求头。
+3. 记录真实 Firefox baseline 的 `ja3`、`ja3_hash`、`ja3n_hash`、`ja4`、cipher suites、extension 顺序、supported groups / curves、signature algorithms、delegated credentials、record size limit、key_share、ALPN、HTTP/2 fingerprint、UA 和请求头。
 4. 再用 curl_cffi 的候选 profile（例如 `firefox147` 或当前 `firefox` alias）访问同一端点并对比。
 5. 如果裸 profile 与 Firefox baseline 不一致，不允许只改 UA 后继续；必须尝试通过 `ja3`、`akamai`、`extra_fp`、`curl_options` 和 HTTP Header 对齐。
-6. 对齐后再次访问检测端点，只有 `ja3_hash`、`ja3n_hash`、`ja4`、HTTP/2 Akamai fingerprint、关键 TLS 字段和 UA / Header 与 baseline 一致或经过用户确认可接受等价时，才允许进入最终请求验证。
+6. 对齐后再次访问检测端点，只有 `ja3_hash`、`ja3n_hash`、`ja4`、HTTP/2 fingerprint、关键 TLS 字段和 UA / Header 与 baseline 一致或经过用户确认可接受等价时，才允许进入最终请求验证。
 7. 对齐配置必须写入 `case/notes/final-request-validation.md` 和最终总结；如果仍不一致，必须暂停、换客户端或记录用户明确接受的风险，不得伪造成功。
 
 ### 必须对比的字段
 
 - TLS：`ja3`、`ja3_hash`、`ja3n_hash`、`ja4`、TLS version、cipher suites 列表和顺序、TLS extensions 列表和顺序、supported groups / curves、signature algorithms、delegated credentials、record size limit、key_share 数量和顺序、ALPN、ECH / certificate compression 等扩展摘要。
-- HTTP/2：Akamai fingerprint、settings、window update、streams、pseudo-header 顺序。
+- HTTP/2：fingerprint、settings、window update、streams、pseudo-header 顺序。
 - HTTP Header：`User-Agent`、`Accept`、`Accept-Language`、`Accept-Encoding`、`Referer`、`Origin`、`Sec-Fetch-*`、Header 顺序和大小写。
 - Session 与环境：Cookie jar、代理 / IP、timezone、locale、`navigator.userAgent`、`navigator.language/languages`、Firefox 不应伪造 Chrome UA-CH。
 
@@ -187,7 +187,7 @@ def send_with_firefox_aligned_tls(session, method, url, **kwargs):
 
 ### cyCronet / cycronet 的边界
 
-`cyCronet` / `cycronet` 更适合 Chromium / Chrome baseline。即使当前版本提供 `add_tls_profile` / `set_tls_profiles`，通常也主要控制 cipher suites、curves 和部分 extensions，底层仍是 Cronet / Chromium 网络栈，HTTP/2 Akamai 指纹、JA4 结构和 Firefox 的 BoringSSL / NSS 行为可能不同。
+`cyCronet` / `cycronet` 更适合 Chromium / Chrome baseline。即使当前版本提供 `add_tls_profile` / `set_tls_profiles`，通常也主要控制 cipher suites、curves 和部分 extensions，底层仍是 Cronet / Chromium 网络栈，HTTP/2 指纹、JA4 结构和 Firefox 的 BoringSSL / NSS 行为可能不同。
 
 - 取证 baseline 是 Firefox：优先使用 curl_cffi 的 Firefox 对齐流程；不要把 cyCronet 作为 Firefox 对齐首选。
 - 取证 baseline 是 Chrome / Chromium 类工具：可以考虑 cyCronet，并同样先采样 baseline、再对比 JA3 / JA4 / HTTP2 指纹。

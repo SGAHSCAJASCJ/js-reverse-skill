@@ -84,7 +84,7 @@ python scripts/forensic_ruyipage.py --url <目标页> --case-dir <project-root> 
 ### 取证验收标准
 
 - JD `pc_home_feed` 类接口：至少捕获到 URL 包含 `pc_home_feed` 的 2xx 响应，并能看到请求 URL 中的加密 / 风控参数，例如 `h5st`。
-- 美团外卖 `shopList` 类跨域接口：必须区分 `OPTIONS` preflight 与真实业务请求；只有捕获到非 `OPTIONS` 的 2xx `shopList` 响应，才算取证成功。若返回登录 / Yoda / 401 风控信息，应按"需要登录 / 风控验证"流程暂停，不要宣称已绕过。
+- 某本地生活平台 `shopList` 类跨域接口：必须区分 `OPTIONS` preflight 与真实业务请求；只有捕获到非 `OPTIONS` 的 2xx `shopList` 响应，才算取证成功。若返回登录 / Yoda / 401 风控信息，应按"需要登录 / 风控验证"流程暂停，不要宣称已绕过。
 - 用户完成操作后直接关闭 ruyiPage 浏览器窗口，视为明确的手动结束抓包信号：脚本检测到浏览器断连后应立即收尾、分类并落盘已捕获数据，报告 `endReason=browser-closed`，不能把 WebSocket 断连本身判为取证失败，也不要强杀仍在收尾的脚本进程；等待 `FORENSIC DONE` 或最终 JSON / Markdown 输出。浏览器关闭只决定采集生命周期，不放宽上述接口验收：指定终态仍未捕获到非 `OPTIONS` 2xx 时，结果仍为 `NO_TARGET` / `PARTIAL`，Step 1 仍缺失。若进程被不可捕获的硬杀且只残留 `case/forensic/partial-steps.jsonl`，该文件仅是已抓包元数据兜底，说明正常收尾未完成，不能替代 `capture.json` 与完整 body 证据。
 - 等待期间会增量预取 JS、目标和动态 API body，并在收尾阶段复用缓存；报告 `liveBodyPrefetch` 可审计断连前已保住的正文范围。Cookie 报告只保留名称、域、属性和长度摘要，禁止把完整会话值写入 JSON/Markdown。
 
@@ -306,7 +306,7 @@ node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir <project-
 
 ### eval / Function 动态代码捕获的四种用途
 
-混淆框架（瑞数 / JSVMP / 代码组装器）运行时 eval 出的内容是静态分析拿不到的一手证据，按价值排序四类用法：
+混淆框架（某签名型风控 / JSVMP / 代码组装器）运行时 eval 出的内容是静态分析拿不到的一手证据，按价值排序四类用法：
 
 1. **动态代码收集**：引导器流式解密拼出的核心代码、组装器动态构建的函数体，在静态下载的 JS 文件中**不存在**——eval 捕获是获取这类代码的唯一渠道。应把捕获内容保存为 JS 证据文件（进 `case/js/original/` 或 `case/js/extracted/`），作为后续算法分析输入（match10 实测：核心代码完整来自 eval 捕获，比任何静态文件都完整）。
 2. **运行时状态基准对照**：eval 出的完整配置对象与 sandbox 内同名状态做 diff（键数 / 键名 / 结构），直接定位补环境缺口——比 Proxy 探测盲找属性快得多（match10 实测：trace 捕获的完整配置应有 921 个键名，sandbox 内仅 30 个，一对照即锁定缺口）。

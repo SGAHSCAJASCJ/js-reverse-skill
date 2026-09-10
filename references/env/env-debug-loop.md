@@ -322,7 +322,7 @@ self() → is_undefined → object_drop_ref
 2. **正向 403 才继续查连接层**（TLS/Session，路径 E）；**反向 403 = 签名内容层**，进入第 3 步。
 3. **环境检测对齐探针法**（`env-detect-bypass.md`）：注入导出 SDK 检测函数 → 浏览器空白页采样 ground-truth → 沙箱采样 → 逐位 diff → 用运行中 SDK 的解码函数解差异位语义 → 修环境（高频项：Node 泄露全局、plugins 空置、webdriver 自有属性、DOM 方法非 native toString）→ diff 归零后重新真实验证。
 
-实战参照：拼多多 anti_content（`cases/pdd-anti-content-fbez-blackbox.md`）——19 位检测 flag 中 4 位不一致导致 40002，对齐后纯 Node H1 8/8 通过；期间两次误判（过期签名→连接层；未测量就断言需完整指纹）均已固化为 `common-pitfalls.md` 反模式 11/12。
+实战参照：某电商 anti_content（`cases/pdd-anti-content-fbez-blackbox.md`）——19 位检测 flag 中 4 位不一致导致 40002，对齐后纯 Node H1 8/8 通过；期间两次误判（过期签名→连接层；未测量就断言需完整指纹）均已固化为 `common-pitfalls.md` 反模式 11/12。
 
 ### 静默吞错：运行成功但无输出
 
