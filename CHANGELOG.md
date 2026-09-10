@@ -3,6 +3,16 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.103 - 2026-09-10
+
+### 补闭环止损判据 + 跨内核证据规则；TODO 硬门禁去宿主依赖
+
+源自 9air 同盾 case 日志与 TODO 呈现问题的复盘。
+
+- **闭环止损（`runtime-frameworks.md`）**：「何时升级」表后补止损判据——同一检测点连续 2 轮修复仍失败即逐级升级（手补环境面 → 离线 DOM 起底 → native/sdenv），不无限重试、不横向跳浏览器。
+- **跨内核证据规则（`env-detect-bypass.md`）**：9air 实证 ruyipage 与 RuyiTrace 是**不同的定制 Firefox 构建**（同一 fm.js 在 ruyipage 下产出 `tddf`、在 RuyiTrace 下只产出 26 字符 deviceId）。补「跨内核证据不可混用，跨内核结论须同内核单独复核」。
+- **TODO 硬门禁去宿主依赖（SKILL §0.0 + `state_machine.js`）**：权威清单改为「脚本渲染文本 + `state.json.todo`」；宿主 TODO 同步降为**尽力而为**，宿主呈现/折叠差异不再作为违规判据；判定标准改为"回复中必须出现脚本渲染的 11 项清单文本"。
+
 ## 2.3.102 - 2026-09-10
 
 ### 纯协议红线改「只写禁用」形态 + 判据收窄；env-free 前置；案例联网边界标注

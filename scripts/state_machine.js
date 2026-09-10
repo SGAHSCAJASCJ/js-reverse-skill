@@ -163,7 +163,7 @@ function renderTodo(todo) {
     lines.push(`- ${mark[t.status]} ${t.no}. ${t.label}${tail}`);
   }
   lines.push('');
-  lines.push('> 该清单必须同步到宿主 TODO 工具（逐项同名同序，不新建子任务）；宿主无 TODO 工具时把本清单原样输出给用户。');
+  lines.push('> 权威清单 = 本渲染文本 + state.json.todo；宿主有 TODO 工具时尽力同步（逐项同名同序，不新建子任务），宿主呈现/折叠差异不作为违规判据。');
   return lines;
 }
 
