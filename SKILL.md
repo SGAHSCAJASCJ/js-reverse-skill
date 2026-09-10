@@ -134,18 +134,17 @@ Windows 下后续手动运行 Python 脚本一律用环境检查选定的解释�
 5. 最终交付必须能在无浏览器、无显示器、无 X11 的环境中独立运行。
 6. 默认完成真实 API 验证；只有用户明确要求“只输出参数”“不发真实请求”时才允许 sign-only 模式。
 7. 不记录、提交或硬编码用户密钥、完整登录 Cookie、Authorization、验证码答案或其他秘密材料。
-8. 取证只允许四个来源：① ruyipage 定制 Firefox（经 `scripts/forensic_ruyipage.py`）② RuyiTrace（经 `scripts/capture_ruyitrace_log.js`）③ 用户手动提供材料 ④ 浏览器 MCP 连接用户真实浏览器（**仅 BLOCKED_FORENSIC 降级兜底**：取证浏览器被引擎级检测拒绝且 `--ua` 覆盖无效时，经用户确认并过 `--guard mcp` 后放行；Chrome 等非 Firefox 内核与定制 Firefox 互补，match14 实证引擎检测不拦真实浏览器。产物必须落盘 `case/`——成功样本 Cookie/指纹/JS/网络记录，后续分析只认落盘产物；只取证不交付，纯协议红线不变）。常规取证不得手写 fetch/curl/requests 抓取目标页面或下载目标 JS，不得使用系统 Chrome/Edge/Firefox、Playwright/Puppeteer/Selenium 或浏览器 MCP 取证（④ 不满足前置条件时同样禁止）。也不得用 jsdom / happy-dom / domino 等 DOM 模拟库**联网加载目标页**取证（`JSDOM.fromURL()`、`new JSDOM(..., { url, resources: 'usable' })` 会真去拉取页面与子资源）：这是绕过本条的第五种取证通道，拿到的是"页面自己算出的值"而非可审计算法，且必然暴露 `jsdom/x.y.z` UA 与残缺 DOM 指纹被检测。边界：DOM 模拟库只允许**离线**使用——HTML 由本地字符串构造、脚本来自 ①②③④ 落盘产物、不开 `resources: 'usable'`、不传目标站 `url` 触发网络加载（`runScripts: 'dangerously'` 在纯离线输入下不受限）。
+8. 取证只允许四个来源：① ruyipage 定制 Firefox（经 `scripts/forensic_ruyipage.py`）② RuyiTrace（经 `scripts/capture_ruyitrace_log.js`）③ 用户手动提供材料 ④ 浏览器 MCP 连接用户真实浏览器（**仅 BLOCKED_FORENSIC 降级兜底**：取证浏览器被引擎级检测拒绝且 `--ua` 覆盖无效时，经用户确认并过 `--guard mcp` 后放行；Chrome 等非 Firefox 内核与定制 Firefox 互补，match14 实证引擎检测不拦真实浏览器。产物必须落盘 `case/`——成功样本 Cookie/指纹/JS/网络记录，后续分析只认落盘产物；只取证不交付，纯协议红线不变）。常规取证不得手写 fetch/curl/requests 抓取目标页面或下载目标 JS，不得使用系统 Chrome/Edge/Firefox、Playwright/Puppeteer/Selenium 或浏览器 MCP 取证（④ 不满足前置条件时同样禁止）。也不得用 jsdom / happy-dom / domino 等 DOM 模拟库**联网加载目标页**取证（`JSDOM.fromURL()`、`new JSDOM(..., { url, resources: 'usable' })` 会真去拉取页面与子资源）：这是绕过本条的第五种取证通道，拿到的是"页面自己算出的值"而非可审计算法，且必然暴露 `jsdom/x.y.z` UA 与残缺 DOM 指纹被检测。DOM 模拟库不得联网加载目标页取证：HTML 由本地字符串构造、脚本来自 ①②③④ 落盘产物、不开 `resources: 'usable'`、不传目标站 `url` 触发网络加载。
 
 ## 3. 纯协议红线
 
 - 不交付 Playwright、Puppeteer、Selenium、浏览器扩展、浏览器 MCP 或 ruyipage/RuyiTrace 自动化代码。
-- 交付物不得在运行时联网加载目标页再执行其脚本来生成参数（jsdom / happy-dom / domino 类 DOM 模拟库的联网禁令与离线允许边界见绝对规则 8）：脚本与 fixture 都必须来自本 case 取证产物。
-- 不以自动化浏览器完成反爬挑战，不把浏览器抓到的关键 Cookie 作为固定常量。
-- 不把目标网页作为最终签名服务，不通过打开网页、执行页面脚本或读取浏览器状态生成参数。
-- 允许取证阶段使用 ruyipage 定制 Firefox 和 RuyiTrace；允许把取证得到的算法、静态资源、必要 fixture 转化为纯协议实现。
+- 交付物不得使用浏览器、浏览器自动化或浏览器运行态生成参数（含打开网页、执行页面脚本、读取浏览器状态）。
+- 不以自动化浏览器完成反爬挑战；不把浏览器抓到的关键 Cookie 或动态秘密当作固定常量或签名来源。
+- 使用 jsdom / happy-dom / domino 等 DOM 模拟库时，不得联网加载目标页生成参数（HTML 用本地字符串、脚本取自本 case 落盘产物、不开 `resources: 'usable'`、不传目标站 `url`）；仅动态挑战类目标（如瑞数）确需在线执行官方 JS 时例外，走 `references/env/runtime-frameworks.md` 的 sdenv 路径并在最终总结标注联网依赖。
 - 交付入口必须是 Node.js `final.js` 或 Python `final.py`，运行时只使用 HTTP、TLS、密码学、序列化和必要的最小 JS 沙箱能力。
-- 通用模板只提供 provider-neutral 的流程骨架和 adapter 契约；不得在 `templates/` 中预填真实厂商的接口名、字段名、HTTP 方法、JSONP、加密结构、凭据字段或默认轨迹。所有平台细节必须由本 case 的抓包、RuyiTrace 和成功样本驱动，落在 case adapter/result 中。
-- 厂商知识分级（T1 识别指纹 / T2 协议语义）：参数名↔算法族映射、厂商 Cookie/组件名、响应码特征等**识别信号（T1）**只允许保留在标注过的识别参考（如 `references/crypto/algorithm-families.md`、`references/network/ip-risk-control.md`）与分类脚本（`scripts/classify_verify.py`）中；字段语义、加密结构、接口链、实测轨迹参数等**协议知识（T2）**只能存在于 `references/captcha/captcha-providers.md` 厂商知识库、`cases/*.md` 案例与 case adapter，并带验证日期。通用 workflow/质量文档引用 T2 内容时只写「见 <知识库/案例>」指针，不复制具体参数。
+- 通用模板不得在 `templates/` 中预填真实厂商的接口名、字段名、HTTP 方法、JSONP、加密结构、凭据字段或默认轨迹；平台细节必须由本 case 的抓包、RuyiTrace 与成功样本驱动，落在 case adapter/result 中。
+- 厂商知识分级（T1 识别指纹 / T2 协议语义）不得越界：识别信号（参数名↔算法族映射、厂商 Cookie/组件名、响应码特征）不得进入通用 workflow/质量文档，只留在标注过的识别参考（`references/crypto/algorithm-families.md`、`references/network/ip-risk-control.md`）与分类脚本（`scripts/classify_verify.py`）；协议知识（字段语义、加密结构、接口链、实测轨迹参数）不得离开 `references/captcha/captcha-providers.md` 厂商知识库、`cases/*.md` 与 case adapter（带验证日期）；通用文档引用只写「见 <知识库/案例>」指针，不得复制具体参数。
 - 交付物不得依赖 skill 仓库路径、临时脚本、系统浏览器 profile 或用户机器上的登录态。
 - 关键 Cookie 必须区分静态配置、运行时生成值、服务端下发值和会话绑定值；禁止把成功样本中的动态秘密直接复制进代码。
 
