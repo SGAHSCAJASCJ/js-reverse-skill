@@ -20,7 +20,7 @@ description: >
 | GATE-2 证据 | `node scripts/check_evidence.js --case-dir <project-root> --url <目标> --markdown` | 退出码 0 |
 | 取证前速查 | `node scripts/search_cases.js --domain <域名> --signal <信号>` | 提取终态接口/坑点校准参数 |
 | Step 1 网络取证 | `python scripts/forensic_ruyipage.py --url <目标> --targets <终态接口> --markdown`（时间参数一律秒；`--targets` 只写唯一子串，优先带 `?` 参数片段如 `page=1`，避免误命中静态资源，反模式 22） | 终态 2xx + capture.json 落盘 + `target-hits.json` 的 url 就是目标接口 |
-| Step 2 trace | `node scripts/capture_ruyitrace_log.js --url <目标> --evidence-signal <writer写入点> --import-after --markdown`（结束后核对 `case/ruyi-trace/logs/domtrace/` 各文件体积，明显大于摘要行数说明有大进程日志漏导，用 `import_ruyitrace_log.js --input <file>` 合并；带栈 opcode / 交互窗口采集追加 `--gate --gate-after <ms> --gate-duration <ms> --max-log-bytes <n>`，tier-pin 用 `--pref javascript.options.blinterp=false` 等三层 pref，配方见 ruyi-tooling.md「闸门窗口 + 外部驱动采集」） | NDJSON + 摘要"合并文件数"与 domtrace 实际文件数一致 + trace 门禁退出码 0 |
+| Step 2 trace | `node scripts/capture_ruyitrace_log.js --url <目标> --evidence-signal <writer写入点> --import-after --markdown`（漏导核对与 `--gate` 带栈配方见 4.2 节） | NDJSON + 摘要"合并文件数"与 domtrace 实际文件数一致 + trace 门禁退出码 0 |
 | 证据检索 | `search_trace.js --keyword <kw>` / `search_js.js --file <js> --keyword <kw>` | 执行输出的 [WARN]/[STATE] 提示 |
 | 运行混淆 JS | `node scripts/run_with_trace.js --target <js> --entry <fn> --timeout 5000`（默认桩不足时 `--env-module <文件>` 注入自定义环境模块，自动 minimal bootstrap） | 禁手写 vm runner |
 | 混淆反混淆 | `node assets/ast-patterns/scripts/detect-patterns.js <js>` → `run-pipeline.js` | 按 README 分层执行 |
@@ -225,7 +225,7 @@ DIAGNOSE（403/风控码失败的首选入口；双对照细则见第 10 节分�
 DELIVER / SIGN_ONLY_DELIVER → CLEANUP → DONE
 ```
 
-**TRACE_CAPTURE / TRACE_RETRY 出口门禁（不可跳过）**：进入 CASE_LOOKUP 前必须复跑 `node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --require-trace-signal <环境API/写入点> --markdown`，退出码 0（Step 2 已具备且目标 writer 覆盖满足）才放行；NDJSON 已产出但 writer 信号未命中时是「覆盖不足」不是「没有 trace」，进 TRACE_RETRY。完整判定规则、与 GATE-2 的区别、信号语义见 4.2 节「TRACE_CAPTURE 出口门禁复检」。
+**TRACE_CAPTURE / TRACE_RETRY 出口门禁（不可跳过）**：进入 CASE_LOOKUP 前必须复跑 `check_trace_gate.js` 出口复检，退出码 0（Step 2 已具备且目标 writer 覆盖满足）才放行。完整命令、判定规则与信号语义见 4.2 节「TRACE_CAPTURE 出口门禁复检」。
 
 **阶段动作边界（硬约束）**：状态机每个节点只允许该节点的取证/分析动作，**前置阶段不得发起外部重放/对照实验**。
 
@@ -323,7 +323,7 @@ Windows 下若 Python 脚本输出仍现编码异常，用 `PYTHONUTF8=1` 前缀
 node scripts/capture_ruyitrace_log.js --url <target-url> --case-dir <project-root> --evidence-signal <环境API或签名写入点关键词> --end-signal <明确完成事件> --import-after --markdown
 ```
 
-- 信号语义：`--evidence-signal` 只匹配 RuyiTrace 记录的 API/写入点（`Headers.set(<参数>)`、参数名、`XMLHttpRequest.open`）。三类必然不命中、一律不传：①目标接口 URL；②裸 `createElement/appendChild/JSON.stringify/Date.now` 等泛化 API（门禁会拒绝）；③密钥/常量名（会误触发硬阻断）。应选参数写入点/参数名（`noncestr`、`x-zse-96`）。
+- 信号语义：`--evidence-signal` 只匹配 RuyiTrace 记录的 API/写入点（`Headers.set(<参数>)`、参数名、`XMLHttpRequest.open`）。三类必然不命中、一律不传：①目标接口 URL；②裸 `createElement`、`appendChild`、`JSON.stringify`、`Date.now` 等泛化 API（门禁会拒绝）；③密钥/常量名（会误触发硬阻断）。应选参数写入点/参数名（`noncestr`、`x-zse-96`）。
 - `--end-signal` 只控制提前关闭，与 `--evidence-signal` 分离；`--target-signal` 仅兼容旧调用，新流程勿用。目标接口 URL 命中证据由 Step 1（`forensic_ruyipage.py --targets` + `check_evidence.js --require-network-signal`）承担。
 - 定向收窄：默认全量采集仍是首轮与出口门禁基准；已锁定目标脚本/函数、jsvmp 题型或首轮日志过大时，追加 `--trace-env KEY=VALUE` 透传 `MOZ_DOM_*` 开关（先判题型再选最小组合，见 `references/workflow/trace-flow.md`「定向 trace 策略」）。JSVMP 采后核 `case/ruyi-trace/logs/eval/eval_*_eval-direct.js` 是否落盘（落盘即业务逻辑）。
 - 带栈 opcode（`STACK_FULL`）必配 `--gate --gate-after <ms> --gate-duration <ms>` + `--max-log-bytes <n>` + `--pref javascript.options.blinterp=false`（配方见 `ruyi-tooling.md`「闸门窗口」）。
@@ -335,7 +335,7 @@ node scripts/capture_ruyitrace_log.js --url <target-url> --case-dir <project-roo
 
 **TRACE_CAPTURE 质量判定与 TRACE_RETRY**：采集到 NDJSON 不等于达标。摘要显示「未发现 stack.file」、成功解析极低、topApis 找不到目标参数 writer、质量判定「未覆盖页面 JS」（stack.file 全为浏览器内核路径，无 http/https 页面脚本）或「有效 API 调用占比过低」（api 字段几乎全空），均按重度不足处理并进入 TRACE_RETRY。**判定重度不足后必须先执行重采动作（TRACE_RETRY，可调整信号/duration/手动触发方式），重采一次仍不足才允许降级做落盘 JS 静态分析**；禁止跳过重采直接进入源码静态分析——缺 trace 时静态分析极易在「参数来源靠猜」上打转空耗。RuyiTrace 一次采集按进程写多个 `domtrace/trace_process_<pid>.ndjson`，主日志须合并所有 tab/content 进程文件（排除 parent 内核进程），只取单个文件（尤其 mtime 最新的）会把有效 trace 误判为空。完整降级顺序与验证码特化判定见 `references/workflow/trace-flow.md`。
 
-**TRACE_CAPTURE 出口门禁复检（不可跳过）**：采集声明完成、进入 CASE_LOOKUP 前必须复跑出口门禁脚本，确认 Step 2（RuyiTrace NDJSON）真实产出。这是状态机内复检，不是 GATE-2 入口门禁的重复——GATE-2 判定初始证据路由到 TRACE_CAPTURE，出口门禁确认 TRACE_CAPTURE 是否真把 Step 2 补上了：
+**TRACE_CAPTURE 出口门禁复检（不可跳过）**：采集声明完成、进入 CASE_LOOKUP 前必须复跑出口门禁脚本，确认 Step 2（RuyiTrace NDJSON）真实产出。这是状态机内复检（GATE-2 判定初始证据路由，本门禁确认 Step 2 真已补上）：
 
 ```powershell
 node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --require-trace-signal <环境API/写入点> --markdown
@@ -347,8 +347,6 @@ node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --
 
 - 信号是环境 API（`fetch`、`XMLHttpRequest.send`、`handshake`、参数名等）未命中 → 目标路径未触发，是硬信号，进入 TRACE_RETRY，不得自行放宽。
 - 目标是纯网络接口、trace 未覆盖 URL 字面量 → 属预期，不算采集失败，不要反复重试 trace；改用参数写入点（如 `Headers.set("x-zse-96", ...)`）或参数名定位签名链，并显式声明「trace 未覆盖目标接口 URL 字面量；签名链定位依据为 <写入点/关键词>」，写入 `notes/ruyitrace-summary.md`、阶段报告（如已启用）与最终总结；未声明不得进入 IMPLEMENT。目标接口 URL 的命中证据由 Step 1 取证承担（`forensic_ruyipage.py --targets` + `check_evidence.js --require-network-signal`）。
-
-证据信号必须是具体 writer、参数名、callback 注册或带限定对象的 API。裸 `createElement`、`appendChild`、`querySelector`、`JSON.stringify`、`Date.now` 等泛化 API 不能作为目标链路覆盖证据，也不能作为自动结束条件；脚本会直接拒绝。证据信号与自动采集结束信号必须分离。
 
 ### 4.3 EXTERNAL_LOOKUP
 
@@ -481,7 +479,7 @@ node scripts/run_with_trace.js --target case/js/original/<资源名>.js --entry 
 
 **先 trace、后读源码（硬约束）**：进入本节后先跑 `import_ruyitrace_log` 生成摘要，再用 `search_trace --url <target-signal>` 直接定位请求链和 `stack.file:line:col`，最后才按行号/字符偏移切源码片段。**JSVMP 判定后先核对 eval 落盘**：`ls case/ruyi-trace/logs/eval/` 存在 `eval_*_eval-direct.js` 时直接读（vmpzl 系 VM 业务层经 eval 执行反序列化源码，落盘即解混淆后的业务逻辑，**无需手工解 LZ 压缩/字节码**，规则 39/反模式 37）；grep eval 源码里的 `token`/`case 64` 定位请求 data 构造点。禁止在拿到 trace 前先读 8MB 大 bundle 手工猜 webpack module id 或写 probe1~N 静态解析——那会耗尽上下文且命中率低。定位大文件 JS 关键词必须用 `search_js.js`；禁止 grep 单行超 64KB 的压缩 JS、禁止现场手搓 `node -e`（PowerShell 转义翻车）。**响应体非明文（`code` 非 0、`data` 二进制/乱码）时同理**：先查 trace 的 xhrNative 响应记录确认响应形态，再按响应方向四层（response→reader→decoder→parser，见 `references/crypto/crypto-entry.md`）追响应处理链；禁止先搜源码里的密钥串猜解密算法——密钥可能作用于别的字段。
 
-**Windows 写临时脚本规范（探针/runner/补环境脚本一律遵守）**：优先用编辑工具直接写文件；必须用 PowerShell 时一律单引号 here-string `@'...'@`（内部 `$` 不插值）配合 `[IO.File]::WriteAllText($path, $content, [Text.UTF8Encoding]::new($false))` 落盘。禁止双引号 here-string（`$` 插值破坏 JS 语法）、禁止 base64 编码绕路（多一轮转译仍会翻车）、禁止 `node -e` / `python -c` 内联长脚本。写完先跑一次语法检查（`node --check` / `py -3 -m py_compile`）再执行，避免把转义错误误判成目标 JS 的行为。运行混淆 JS 的沙箱需求一律走 `run_with_trace.js`（vm 超时保护 + 环境访问日志），不得手写 vm runner（硬约束见第 7 节）。
+**Windows 写临时脚本规范（探针/runner/补环境脚本一律遵守）**：优先用编辑工具直接写文件；必须用 PowerShell 时一律单引号 here-string `@'...'@`（内部 `$` 不插值）配合 `[IO.File]::WriteAllText($path, $content, [Text.UTF8Encoding]::new($false))` 落盘。禁止双引号 here-string（`$` 插值破坏 JS 语法）、禁止 base64 编码绕路（多一轮转译仍会翻车）、禁止 `node -e` / `python -c` 内联长脚本。写完先跑一次语法检查（`node --check` / `py -3 -m py_compile`）再执行，避免把转义错误误判成目标 JS 的行为。沙箱运行混淆 JS 一律走 `run_with_trace.js`（硬约束见第 7 节）。
 
 **依赖 JS 版本校验（硬约束）**：被挑战代码引用的黑盒 SDK（如 udc.js 类"动态工具 JS"）可能**定期更新**（公钥/算法随版本变化），用旧副本实现会导致签名"格式全对但服务端全拒"且极难排查。进入实现前校验关键依赖 JS 与站点当前版本一致（`curl -s <url> | md5sum` 对比本地副本）；抓取 JS **一律二进制**（`urlopen(url).read()` + `wb` 写回），**禁止** `decode('utf-8', errors='ignore')` 后文本写回——会静默丢字节损坏文件（md5 变化、无报错）。交付脚本对关键依赖内置"启动自动抓取 + hash 对比"。详见 `references/network/dynamic-resource.md` 专节。
 
@@ -501,7 +499,7 @@ node scripts/check_trace_api_coverage.js --case-dir <project-root> --markdown
 node scripts/run_with_trace.js --target <project-root>/case/js/original/<资源名>.js --entry <入口函数> --timeout 5000
 ```
 
-不要在命令行手搓 `python -c` 或引号嵌套 grep NDJSON。默认只观察不修改；仅当 NDJSON 缺失、截断或无法覆盖关键入口时，才使用 Hook 模板，并只注入 ruyipage 定制 Firefox。Hook 必须在目标 SDK 加载前安装，命中后及时移除。
+默认只观察不修改（内联脚本/引号嵌套禁令见第 8 节 Windows 规范）；仅当 NDJSON 缺失、截断或无法覆盖关键入口时，才使用 Hook 模板，并只注入 ruyipage 定制 Firefox。Hook 必须在目标 SDK 加载前安装，命中后及时移除。
 
 环境补齐采用证据驱动的最小集合。只有 trace 显示参与参数或服务端校验的模块才实现；每轮补齐保存输入、中间值、输出和请求结果，禁止一次性伪造大量浏览器 API。环境检测代码不等于服务端约束，未进入关键链路的检测不纳入最终环境。
 
@@ -530,7 +528,7 @@ F. **沙箱 [Unforgeable] 全局绑定对齐 + base64 字母表环境分支（ma
 
 **写请求格式取证（硬约束）**：提交/写入接口的请求格式（Content-Type、body 编码方式、字段名）必须从页面源码（`case/forensic/document.html` 的 form/submit 逻辑）或 capture.json 的真实成功样本取证，**禁止猜测**。常见陷阱：①页面用 jQuery `$.ajax({data: {...}})` 默认表单编码（`application/x-www-form-urlencoded`），AI 误用 `application/json`；②CSRF token 字段名/位置因站点而异；③提交接口路径与数据接口不同域。写请求前必须列出「Content-Type + body 构造依据」并引用 capture/document.html 具体行号，不得凭"通常用 JSON"发起请求（实战：JSON 提交持续被服务端拒，改表单编码即通过）。
 
-进入真实请求前先完成离线回归：把取证阶段抓到的真实样本（同输入参数 + 浏览器侧期望输出）固化为 `case/fixtures/*.fixture.json`，用本地入口以同样输入生成实际输出，逐字段过门禁比对；任一字段不一致先回 IMPLEMENT 排查，不得带着已知偏差发起真实请求。**多请求 case（翻页/批量/序列调用）fixture 至少固化 2 个不同请求序号的样本**（如 page1 与 page2）：计数器/会话状态类 bug 只在第 2+ 样本暴露——match14 的 n 计数器在单样本下与沙箱恒 1 巧合一致（反模式 24），取证阶段即应覆盖 ≥2 序号成功样本：
+进入真实请求前先完成离线回归：把取证阶段抓到的真实样本（同输入参数 + 浏览器侧期望输出）固化为 `case/fixtures/*.fixture.json`，用本地入口以同样输入生成实际输出，逐字段过门禁比对；任一字段不一致先回 IMPLEMENT 排查，不得带着已知偏差发起真实请求。**多请求 case（翻页/批量/序列调用）fixture 至少固化 2 个不同请求序号的样本**（如 page1 与 page2）：计数器/会话状态类 bug 只在第 2+ 样本暴露——match14 的 n 计数器在单样本下与沙箱恒 1 巧合一致（反模式 24；取证侧覆盖要求见 4.2）：
 
 ```powershell
 node scripts/compare_fixture.js --fixture case/fixtures/<样本>.fixture.json --actual case/tmp/<实际输出>.json --field <目标参数> --markdown
@@ -560,7 +558,7 @@ node scripts/compare_fixture.js --fixture case/fixtures/<样本>.fixture.json --
 3. 定位为「签名内容被校验」后，用**对齐探针法**测量 SDK 实际内嵌的环境检测并逐位对齐（见 `references/env/env-detect-bypass.md`），不要先假设需要复现 canvas/行为轨迹等完整浏览器指纹。
 4. **对照必须在健康 session 下做，且一次只改一个变量**：连续失败会触发站点惩罚机制（惩罚期内连浏览器基线请求都被拒，对照数据全部作废）；每组对照前先复刻一次确定成功的基线请求，失败即冷却后重做。HTTP 200 + 业务层风控文案时先按 `references/network/ip-risk-control.md` 会话状态类风控专节（蜜月期窗口/"频率墙"误判警示/失败惩罚）排查。
 
-**引擎检测 case 的双对照浏览器侧**：取证浏览器被引擎级检测拒绝的 case（state 已过 BLOCKED_FORENSIC），双对照的浏览器侧——正向的「浏览器新鲜签名」与反向的「真实浏览器连接」——经 `--guard mcp` 用浏览器 MCP 连接真实 Chrome 内核浏览器执行（站点只接受真实内核时 ruyipage 无法承担该角色，match14 语境）；hook 必须带执行标记并验证、样本新鲜度与 `captureToReplayMs` 记录要求不变，对照产物落盘 `case/` 供审计。未经 BLOCKED_FORENSIC 的 case 浏览器侧一律用 ruyipage，不得借双对照名义引入 MCP。**取证浏览器毒化证据常在分析阶段才齐备**（match21 实证：取证/复现阶段只看到 400 token failed，黑盒自洽但被拒 + 同输入真机对拍不一致之后才确认内核级毒化）——此时把证据落盘 `case/notes/` 后走 `DIAGNOSE → BLOCKED_FORENSIC`（2.3.87 起合法转移），补登记后再回 DIAGNOSE 用 `--guard mcp`。
+**引擎检测 case 的双对照浏览器侧**：取证浏览器被引擎级检测拒绝的 case（state 已过 BLOCKED_FORENSIC），双对照的浏览器侧——正向的「浏览器新鲜签名」与反向的「真实浏览器连接」——经 `--guard mcp` 用浏览器 MCP 连接真实 Chrome 内核浏览器执行（站点只接受真实内核时 ruyipage 无法承担该角色，match14 语境）；hook 必须带执行标记并验证、样本新鲜度与 `captureToReplayMs` 记录要求不变，对照产物落盘 `case/` 供审计。未经 BLOCKED_FORENSIC 的 case 浏览器侧一律用 ruyipage，不得借双对照名义引入 MCP。取证浏览器毒化证据常在分析阶段才齐备（match21 实证见状态机 DIAGNOSE 节点）——落盘 `case/notes/` 后走 `DIAGNOSE → BLOCKED_FORENSIC`（2.3.87 起合法转移），补登记后回 DIAGNOSE 经 `--guard mcp` 用 MCP。
 
 未完成上述对照，不得宣布连接层风控结论，不得转而交付浏览器内核取数方案（取证浏览器脚本放进 `case/` 也算交付违规）。双对照结果写入 `result/验证记录.json` 顶层 `riskLayerDiagnosis` 字段（`forwardControl`/`reverseControl`/`conclusion`，正向必须含 `captureToReplayMs` 采集→重放延迟，反向必须含 `hookVerified: true`），并过门禁：
 
@@ -576,17 +574,7 @@ sign-only 模式必须：标明未完成真实 API 验证；只验证本地输�
 
 ## 11. DELIVER、CLEANUP 与失败处理
 
-交付目录保持单入口和最小依赖：
-
-```text
-result/
-├── final.js 或 final.py
-├── config.json、package.json 或 requirements.txt
-├── 最终项目总结.md
-├── 经验沉淀-<站点>.md
-├── 验证记录.json
-└── src/
-```
+交付目录保持单入口和最小依赖（`result/` 布局见 4.1 节）。
 
 入口被 `require`/`import` 时只导出 API，命令行执行时才运行。**取证落盘的原始 JS 副本（字节码/混淆单行文件）放 `result/src/target/original/`**——这是 `check_code_quality.js` 的取证豁免路径（`src/target/{original,vendor,bundle,bundles}/` 不做压缩/单行长度检查），入口启动时对副本做 sha256 校验防站点改版（match18 实证：直接放 `src/` 会被质量门禁按"压缩代码 + debugger 字面量"判失败）。**写交付文档前先读 `references/quality/final-summary.md`**：最终总结 8 章模板、`FINAL_ARTIFACT_NETWORK_MODE` / `FINAL_ARTIFACT_TLS_FINGERPRINT` 机器标记、`验证记录.json` 的 `mode`/`attempts` 结构契约都在那里逐条定义——不读就写大概率返工（实测两次：总结缺 8 章、验证记录缺 mode/attempts 均被判不合格）。
 
