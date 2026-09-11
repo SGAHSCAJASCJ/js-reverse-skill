@@ -250,6 +250,12 @@ node assets/ast-patterns/scripts/collect-residue-metrics.js output-dir/decoded.j
 
 详细规则文档见 `assets/ast-patterns/` 下的 `pattern-layering.md`、`safe-rewrite-rules.md`、`string-array-and-minimal-eval.md`、`control-flow-and-opcode-patterns.md`、`sequence-normalization.md`。
 
+### 第三方反混淆器（obfuscator.io 家族通用形态）
+
+- `npx deobfuscator <input.js> -o <output.js>`：纯 JS、无 native 依赖，控制流平坦化/字符串数组/死代码一次还原，本地流水线未覆盖时的首选；
+- `webcrack`：功能类似，但依赖 isolated-vm（node-gyp 编译），新版本 Node 下常安装失败——装不上直接换 deobfuscator；
+- 产物只用于阅读定位算法结构，AST 重写产物禁执行（反模式 31）。
+
 ## 输出要求
 
 阶段报告记录：
