@@ -3,6 +3,25 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.113 - 2026-09-12
+
+### 吸纳外部经验库（ima《学习逆向的公众号文章》调研落地）
+
+对 ima 知识库 3,944 篇逆向公众号文章做七轮主题检索（补环境/验证码/风控指纹/AST/AI 辅助/学习路线），去重 ~490 条标题摘要后提炼经验，按「并入现有文档、不新增文件」原则落地 8 处：
+
+- **解混淆还原原语菜单**（`deobfuscation/obfuscation-identify.md`）：新增「残留症状 → 通用还原原语」小节，补类型级流水线跑完后的特征级还原动作映射（变量还原 / 动态字面量提常量折叠 / 函数别名合并 / 调用表达式还原 / 二元表达式折叠 / switch 控制器提取 + 无效分支剔除），与现有 ast-patterns 脚本互引，点明多层混淆逐层套原语优于一次性手写 pass。
+- **jsvmp 插桩优先**（`deobfuscation/vmp-decompile-optional.md`）：穷尽清单增第 5 条「AST 自动插桩（还原前的默认停靠层）」——插桩轨迹层推不出内部逻辑才进完整反编译；方法第 3 步同步收窄。
+- **行为/模型层天花板止损**（`network/ip-risk-control.md`）：新增专节，给出三条判据（双对照 200 / 基线稳定 / 换 IP 换内核失败率不变）+ 排查表（链路完整性：设备注册→上报→业务构成完整序列；字段同源性；行为序列），明确本层不可绕过、据此写结论止损，回应待办 2.3.103 闭环止损判据。
+- **AI 协作纪律**（`workflow/experience-rules.md`）：新增「十八、AI 协作」+ 经验规则 40——大体积材料先脚本聚合再分段阅读、AI 结论必须回落证据坐标、限定 AI 适合/不适合的任务；AI 参与不改变门禁权威。
+- **TLS 选型顺序**（`network/tls-validation.md`）：新增「选型顺序（按成本递增，命中即停）」——默认 curl_cffi 同族模板 → 双对照结论触发时升 Chrome 系网络栈 → JA3 过 JA4 不过时优先升模板版本而非手拼指纹 → BoringSSL/chromium 抽离属高成本进阶。
+- **验证码自训模型**（`captcha/captcha-solving-handoff.md`）：ddddocr/OpenCV 零样本失效题型（图标点选/旋转回归/孪生匹配）的最小自训流程（采集→标注→训练→接入），注明离线准确率 ≠ 通过率。
+- **验证码通道形态**（`captcha/captcha-request-chain.md`）：新增通道变体表（HTTP / wss 帧 / wasm 内编码），纪律：链路表出现「找不到 verify 请求」时先排查通道，不得判无验证提交。
+- **外查检索源优选**（`SKILL.md` §4）：外部检索时序增第 4 条，优先查按平台/题型归类的文章索引库（如 GitHub 公众号文章归档仓库），命中后仍按「标记假设、本次证据为准」处置。
+
+**未实施**：补环境 document.all/jsdom 检测面（`native-capability-gap.md`、`runtime-frameworks.md` 已完整覆盖，遵循收敛原则不重复新增）；高熵指纹分级（价值有限，待随案例沉淀）。
+
+调研报告：`.workbuddy/知识库JS逆向经验分析-2026-09-12.md`。校验：check_routing_benchmarks 29/29、check_vendor_leakage 0 命中、check_skill_consistency 0 问题。
+
 ## 2.3.112 - 2026-09-11
 
 ### SKILL.md 上下文瘦身第三步：档位 1 无风险微调

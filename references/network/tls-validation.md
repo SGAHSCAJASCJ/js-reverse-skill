@@ -44,6 +44,13 @@ node scripts/check_tls_clients.js --python python --markdown
 
 注意：不同机器安装包名、导入名、版本和 API 可能不同。先运行检测脚本，不要在 Skill 中硬编码本机路径或版本。库 API 变动时，以本机安装版本的 README / 官方文档为准。
 
+### 选型顺序（按成本递增，命中即停）
+
+1. **默认层**：curl_cffi（Python）/ curl-cffi-node（Node），impersonate 选与取证浏览器**同族同版本档**（Firefox 取证配 firefox 模板，Chrome 取证配 chrome 模板）。绝大多数站点止于此层；
+2. **升级触发**：与 `ip-risk-control.md` 双对照结论联动——① 正向对照（浏览器新鲜签名 + 纯协议连接）403 且 ② 反向对照（自己的签名 + 浏览器连接）200 ⇒ 连接层嫌疑成立，才考虑升到 Chrome 系网络栈（cyCronet / Chromium 网络模块抽离）；
+3. **JA3 过而 JA4 不过**：JA4 在 JA3 的 ClientHello 基础上叠加了 ALPN、扩展顺序、签名算法等更多维度，同一个 impersonate 模板在不同库的实现差异会被放大。此时优先**升级库/模板版本**，不要手工改字段拼指纹（绝大多数手工拼接与真实浏览器仍有其他维度偏差）；
+4. **进阶（高成本，最后评估）**：自编译 BoringSSL、抽离 chromium 网络模块做 ja4 随机化——仅在明确需要随机化指纹且前两层确认无效时考虑，属独立工程而非本技能默认能力。
+
 ## 安装提示
 
 默认自动安装优先客户端（Node curl-cffi-node / Python curl_cffi），不要求用户选择；执行前先输出一行宣布安装内容（B 档宣布 + 可打断）。环境配置流程参见 `workflow/phase-flow.md` 的 nextRequiredInput 模式。

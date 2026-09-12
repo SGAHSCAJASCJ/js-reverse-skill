@@ -250,6 +250,19 @@ node assets/ast-patterns/scripts/collect-residue-metrics.js output-dir/decoded.j
 
 详细规则文档见 `assets/ast-patterns/` 下的 `pattern-layering.md`、`safe-rewrite-rules.md`、`string-array-and-minimal-eval.md`、`control-flow-and-opcode-patterns.md`、`sequence-normalization.md`。
 
+### 残留症状 → 通用还原原语（类型级流水线跑完后仍不可读时）
+
+先跑 `collect-residue-metrics.js` 看残留症状，再按下表选择原语逐层重跑（同一段代码多层混淆是常态，特征级的逐层还原比一次性手写 pass 省力）：
+
+| 残留症状 | 还原原语 | 备注 |
+|---|---|---|
+| 变量乱名 / 赋值链 | 变量还原 + `rename-identifiers.js` | 串联赋值先展开 |
+| 动态字面量（变量入口赋值后不变） | 提升为常量后常量折叠（`inline-literals.js`） | 「公式化解法」：不变的量按常量代入 |
+| 函数别名复制（多标识符指向同一函数） | 合并别名、调用点统一到保留名 | 折叠前的必要步骤，否则跨名引用断链 |
+| 调用表达式包装（`(0, fn)(...)`、对象方法转发） | 还原为直接调用 | 配合 `inline-dispatchers.js` |
+| 二元表达式展开（`"a"+"b"`、算术混淆） | 常量折叠 | 纯函数可用求值替换 |
+| switch 状态机分发（CFF 残留） | 先提取分发控制器建状态转移映射 → 按真实转移排序 → 剔除不可达/无效分支 | `flatten-array-control-flow.js` + `prune-fake-branches.js`，非数组驱动的 CFF 需按映射手写排序 |
+
 ### 第三方反混淆器（obfuscator.io 家族通用形态）
 
 - `npx deobfuscator <input.js> -o <output.js>`：纯 JS、无 native 依赖，控制流平坦化/字符串数组/死代码一次还原，本地流水线未覆盖时的首选；
