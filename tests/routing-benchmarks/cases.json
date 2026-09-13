@@ -240,51 +240,6 @@
       ]
     },
     {
-      "id": "RB-011",
-      "title": "状态机文本锚点：MATERIALS_FALLBACK 节点与 IMPLEMENT 的 Step 2 前置不得被删",
-      "skillAnchors": [
-        "MATERIALS_FALLBACK",
-        "Step 2 缺失（check_trace_gate.js 退出码 1）时不得进入 IMPLEMENT",
-        "EXTERNAL_LOOKUP 豁免"
-      ],
-      "script": null,
-      "args": [],
-      "files": {},
-      "expectExit": 0
-    },
-    {
-      "id": "RB-012",
-      "title": "T1 识别信号表锚点：主流 SDK/验证码/字体反爬行不得被删",
-      "skillAnchors": [
-        "webmssdk",
-        "h5st",
-        "geetest",
-        "woff"
-      ],
-      "script": null,
-      "args": [],
-      "files": {},
-      "expectExit": 0
-    },
-    {
-      "id": "RB-013",
-      "title": "identify_crypto：32 位 hex 样本必须给出 MD5 族假设（IDENTIFY 特征驱动）",
-      "skillAnchors": [
-        "identify_crypto.js"
-      ],
-      "script": "identify_crypto.js",
-      "args": [
-        "--value",
-        "e10adc3949ba59abbe56e057f20f883e",
-        "--markdown"
-      ],
-      "files": {},
-      "expectExit": 0,
-      "stdoutIncludes": [
-        "MD5"
-      ]
-    },
-    {
       "id": "RB-014",
       "title": "Cookie 归因：capture Set-Cookie × trace cookie 写入双源融合可用",
       "skillAnchors": [
@@ -481,24 +436,6 @@
       ]
     },
     {
-      "id": "RB-023",
-      "title": "identify_crypto：JWT 三段 base64url 结构识别",
-      "skillAnchors": [
-        "identify_crypto.js"
-      ],
-      "script": "identify_crypto.js",
-      "args": [
-        "--value",
-        "eyJhbGciOiJIUzI1NiJ9.eyJhIjoxfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-        "--markdown"
-      ],
-      "files": {},
-      "expectExit": 0,
-      "stdoutIncludes": [
-        "JWT"
-      ]
-    },
-    {
       "id": "RB-024",
       "title": "identify_crypto：base64 包装的 WASM magic bytes 识别（路由到路径 C 整包黑盒）",
       "skillAnchors": [
@@ -515,36 +452,6 @@
       "stdoutIncludes": [
         "WASM"
       ]
-    },
-    {
-      "id": "RB-025",
-      "title": "identify_crypto：UUID v4 形态识别（随机 nonce 判定）",
-      "skillAnchors": [
-        "identify_crypto.js"
-      ],
-      "script": "identify_crypto.js",
-      "args": [
-        "--value",
-        "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
-        "--markdown"
-      ],
-      "files": {},
-      "expectExit": 0,
-      "stdoutIncludes": [
-        "UUID"
-      ]
-    },
-    {
-      "id": "RB-026",
-      "title": "取证与识别硬约束锚点：终态过滤精确性 + 参数名存在≠参数生效不得被删",
-      "skillAnchors": [
-        "禁止用会误命中同号旁路接口的宽正则",
-        "参数名存在 ≠ 参数生效"
-      ],
-      "script": null,
-      "args": [],
-      "files": {},
-      "expectExit": 0
     },
     {
       "id": "RB-027",
@@ -594,10 +501,6 @@
     {
       "id": "RB-029",
       "title": "match23 实证：证据标记 RuyiTrace seq<N> 形态应放行（不因缺『证据』字样 BLOCK）",
-      "skillAnchors": [
-        "check_env_prerequisites.js",
-        "两文件缺一不得开始补环境"
-      ],
       "script": "check_env_prerequisites.js",
       "args": [
         "--case-dir",

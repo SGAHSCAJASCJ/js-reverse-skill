@@ -228,12 +228,14 @@ function runSelfTest() {
   const jwt = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from('{"a":1}').toString('base64url')}.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c`;
   const rj = analyze(jwt, '');
   if (!rj.hypotheses.some((h) => h.family.startsWith('JWT'))) throw new Error('自测失败：JWT 结构未识别');
+  const ru = analyze('3f2504e0-4f89-41d3-9a0c-0305e82c3301', '');
+  if (!ru.hypotheses.some((h) => h.family.startsWith('UUID'))) throw new Error('自测失败：UUID v4 未识别');
   const rn = analyze('1234567890123', '');
   if (!rn.hypotheses.some((h) => /计数器|时间戳/.test(h.family))) throw new Error('自测失败：纯数字样本未给出计数器/时间戳假设');
   if (analyze(crypto.createHash('md5').update('a').digest('hex'), '').hypotheses.some((h) => /计数器/.test(h.family))) {
     throw new Error('自测失败：hex 摘要被误判为纯数字');
   }
-  return { clean: true, tests: 6 };
+  return { clean: true, tests: 7 };
 }
 
 if (require.main === module) {

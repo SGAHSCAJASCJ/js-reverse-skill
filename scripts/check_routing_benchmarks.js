@@ -6,7 +6,8 @@
 //   - files：在临时 caseDir 里还原的证据现场（相对路径 → 内容）；
 //   - script + args：要执行的门禁/工具脚本（{caseDir} 占位符替换）；
 //   - expectExit + stdoutIncludes/stdoutExcludes/outputIncludes：断言退出码与输出关键词；
-//   - skillAnchors：必须在 SKILL.md 中存在的文本锚点（基准与文档双向防漂移）。
+//   - skillAnchors：必须在 skill 语料（SKILL.md + references/**/*.md）中存在的文本锚点
+//     （基准与文档双向防漂移；锚点句可随文本外迁到 references，不要求留在 SKILL.md）。
 // 任何用例失败退出 1；全部通过退出 0。CI 全量运行，改 SKILL.md 门禁语义必须同步改基准。
 
 const fs = require('fs');
@@ -43,7 +44,8 @@ function usage() {
 说明：
 - 基准用例：tests/routing-benchmarks/cases.json（--cases 可覆盖）。
 - 每条用例在独立临时目录还原证据现场，真实执行门禁脚本并断言退出码与输出关键词；
-  skillAnchors 同步断言 SKILL.md 文本锚点存在，防止「改文档不改基准」或「改门禁不改文档」。
+  skillAnchors 同步断言 skill 语料（SKILL.md + references）文本锚点存在，防止「改文档不改基准」或「改门禁不改文档」；
+  script=null 的纯锚点用例只检查锚点不执行脚本（新增需有充分理由，行为断言优先）。
 - 新增 SKILL.md 硬规则时同步加用例；新增用例必须先本地跑通再提交。`;
 }
 
@@ -52,13 +54,17 @@ function loadCases(casesPath) {
   if (!doc || !Array.isArray(doc.cases)) throw new Error('基准文件缺少 cases 数组');
   const seen = new Set();
   for (const c of doc.cases) {
-    for (const field of ['id', 'title', 'skillAnchors']) {
+    for (const field of ['id', 'title']) {
       if (!c[field]) throw new Error(`用例缺少 ${field}：${JSON.stringify(c).slice(0, 120)}`);
     }
+    c.skillAnchors = c.skillAnchors || []; // 可选：行为用例可无锚点
     if (seen.has(c.id)) throw new Error(`用例 id 重复：${c.id}`);
     seen.add(c.id);
     if (c.script != null && !/^scripts\/[A-Za-z0-9_-]+\.(js|py)$/.test(`scripts/${String(c.script).replace(/^scripts\//, '')}`)) {
       throw new Error(`${c.id}：script 必须是 scripts/ 下的脚本文件名`);
+    }
+    if (c.script == null && c.skillAnchors.length === 0) {
+      throw new Error(`${c.id}：script=null 的纯锚点用例必须提供 skillAnchors`);
     }
   }
   return doc.cases;
@@ -74,9 +80,11 @@ function buildFixture(root, files) {
 
 function runCase(acase, skillText, options = {}) {
   const problems = [];
-  // 锚点断言：基准与 SKILL.md 双向防漂移
+  // 锚点断言：基准与 skill 语料（SKILL.md + references 全库）双向防漂移。
+  // 语料含 references —— 锚点句可随文本外迁到 references 而不破坏基准。
+  const corpus = options.refTexts != null ? `${skillText}\n${options.refTexts}` : skillText;
   for (const anchor of acase.skillAnchors || []) {
-    if (!skillText.includes(anchor)) problems.push(`SKILL.md 缺少锚点：「${anchor}」（基准 ${acase.id} 依赖该规则文本）`);
+    if (!corpus.includes(anchor)) problems.push(`SKILL.md/references 均缺少锚点：「${anchor}」（基准 ${acase.id} 依赖该规则文本）`);
   }
   // 纯锚点用例（script=null）：不执行脚本
   if (acase.script == null) {
@@ -119,11 +127,27 @@ function runCase(acase, skillText, options = {}) {
   return { id: acase.id, title: acase.title, ok: problems.length === 0, problems, exitCode, expectExit: acase.expectExit };
 }
 
+function collectRefTexts(root) {
+  const refsDir = path.join(root, 'references');
+  if (!fs.existsSync(refsDir)) return '';
+  const parts = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name.endsWith('.md')) parts.push(fs.readFileSync(full, 'utf8').replace(/^\uFEFF/, ''));
+    }
+  };
+  walk(refsDir);
+  return parts.join('\n');
+}
+
 function runAll(casesPath, filter, skillPath) {
   const cases = loadCases(casesPath);
   const skillText = fs.readFileSync(skillPath, 'utf8').replace(/^\uFEFF/, '');
-  const selected = filter ? cases.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()) || String(c.title).includes(filter)) : cases;
-  const results = selected.map((c) => runCase(c, skillText, { verbose: true }));
+  const refTexts = collectRefTexts(SKILL_ROOT);
+  const selected = filter ? cases.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()) || String(c).title.includes(filter)) : cases;
+  const results = selected.map((c) => runCase(c, skillText, { verbose: true, refTexts }));
   return { total: selected.length, passed: results.filter((r) => r.ok).length, results };
 }
 

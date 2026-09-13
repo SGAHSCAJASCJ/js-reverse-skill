@@ -3,6 +3,20 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.121 - 2026-09-14
+
+### SKILL.md 进一步瘦身 + 锚点/门禁去冗余（81.4→77.9KB；RB 31→25 条）
+
+用户反馈「还是臃肿」+「想改锚点判定和门禁要求」。逐条分析 RB 基准用例与 SKILL.md 被锚点钉死的双覆盖段，删冗余、改机制：
+
+- **RB 锚点机制改造**：`skillAnchors` 命中范围从「仅 SKILL.md」扩为「SKILL.md + references 全库」——锚点句可随文本外迁到 references 而不破坏基准；`loadCases` 允许行为用例无锚点（纯锚点用例必带锚点）。消除文本固化，为后续持续外迁解锁。
+- **RB 用例 31→25**：删 6 条——RB-011/012/026（纯文本锚点用例，守护内容三处覆盖、不测行为）；RB-013/023/025（identify_crypto 功能测试，与 `--self-test` 重复，且自测补 UUID 断言后全覆盖 7 项）；RB-029 与 RB-017 锚点去重。
+- **§7 特征表瘦身**：JSBN limbs/SPKI hex/Salted 盐语义/短名混淆细节/折叠分析案例/covert 隐写示例等实证细节压为「指针 + 一句话」，权威（规则 29/31/35/38、反模式 29/31/37/39/40、match22/26 案例、covert-channel.md）已逐一核实存在。
+- **§4.4 Step 2 例外段**：三例外压缩（MATERIALS_FALLBACK→decision-tree.md 阻塞点#5、BLOCKED_FORENSIC→env-detect-bypass.md、内容还原型三条判据保留行内）。
+- **§4 状态机图 BLOCKED_FORENSIC**：三选一细则与 match14 实证压缩，指针指向 env-detect-bypass.md。
+- **执行速查卡（续接重建）**：命令表（16 行）删——每条命令与通过标准均已双覆盖于正文 0.0/4.2/7/8/10 节与 scripts/README.md，核实无独有信息；保留续接核心（初始化/推进/续接判定/主线/打转信号）+ 命令索引指针。续接用户首要需求（重建主干）不被破坏。
+- 校验：RB 25/25 + self-test PASS、consistency 0 问题 + self-test PASS、vendor_leakage 0、tool_pins schema 通过。
+
 ## 2.3.120 - 2026-09-13
 
 ### SKILL.md 主体瘦身：操作细则外迁，正文只留硬规则 + 指针（88.9→81.4KB，-8.5%）

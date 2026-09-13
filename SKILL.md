@@ -12,25 +12,10 @@ description: >
 
 ## 执行速查卡（上下文压缩/续接后先读这里重建主干）
 
-| 动作 | 命令 | 通过标准 |
-|---|---|---|
-| 启动 | `node scripts/state_machine.js --case-dir <project-root> --init --markdown` | state.json 生成 + 11 项 TODO 同步 |
-| 状态推进 | `node scripts/state_machine.js --case-dir <project-root> --set <NODE> --note "<结论>"` | 合法转换 + TODO 勾选同步 |
-| GATE-1 环境 | `node scripts/check_session_resume.js --case-dir <project-root> --project-dir <project-root> --markdown` | fresh 完整自检 / resume 续接 |
-| GATE-2 证据 | `node scripts/check_evidence.js --case-dir <project-root> --url <目标> --markdown` | 退出码 0 |
-| 取证前速查 | `node scripts/search_cases.js --domain <域名> --signal <信号>` | 提取终态接口/坑点校准参数 |
-| Step 1 网络取证 | `python scripts/forensic_ruyipage.py --url <目标> --targets <终态接口> --markdown`（时间参数一律秒；`--targets` 只写唯一子串，优先带 `?` 参数片段如 `page=1`，避免误命中静态资源，反模式 22） | 终态 2xx + capture.json 落盘 + `target-hits.json` 的 url 就是目标接口 |
-| Step 2 trace | `node scripts/capture_ruyitrace_log.js --url <目标> --evidence-signal <writer写入点> --import-after --markdown`（漏导核对与 `--gate` 带栈配方见 4.2 节） | NDJSON + 摘要"合并文件数"与 domtrace 实际文件数一致 + trace 门禁退出码 0 |
-| 证据检索 | `search_trace.js --keyword <kw>` / `search_js.js --file <js> --keyword <kw>` | 执行输出的 [WARN]/[STATE] 提示 |
-| 运行混淆 JS | `node scripts/run_with_trace.js --target <js> --entry <fn> --timeout 5000`（默认桩不足时 `--env-module <文件>` 注入自定义环境模块，自动 minimal bootstrap） | 禁手写 vm runner |
-| 混淆反混淆 | `node assets/ast-patterns/scripts/detect-patterns.js <js>` → `run-pipeline.js` | 按 README 分层执行 |
-| IMPLEMENT 前 | `node scripts/check_env_prerequisites.js --case-dir <project-root> --markdown` | 退出码 0（两文件达标） |
-| 重放/写请求前 | `node scripts/state_machine.js --case-dir <project-root> --guard replay` | 只在 REAL_VERIFY/DIAGNOSE 放行 |
-| 外部题解检索前 | `node scripts/state_machine.js --case-dir <project-root> --guard external` | 只在 CASE_LOOKUP/EXTERNAL_LOOKUP/DIAGNOSE 放行 |
-| 浏览器 MCP 兜底取证前 | `node scripts/state_machine.js --case-dir <project-root> --guard mcp` | BLOCKED_FORENSIC 取证（须用户确认）；DIAGNOSE 双对照浏览器侧（须已过 BLOCKED_FORENSIC） |
-| 交付前 | `check_final_artifact.js` + `check_code_quality.js` | 退出码 0 |
-
-主线：INTENT_CONFIRM → ENV_READY → EVIDENCE_GATE →（FORENSIC_CAPTURE → TRACE_CAPTURE）→ CASE_LOOKUP → IDENTIFY → TRACE_ANALYZE → IMPLEMENT → REAL_VERIFY → DELIVER → CLEANUP → DONE。打转信号：检索输出 `[WARN] 重复检索` 或 `[STATE]` 提示即执行 §4.4 防耗尽检查点序列。
+- **初始化/推进**：`node scripts/state_machine.js --case-dir <project-root> --init --markdown`（已有 state.json 直接读当前节点，勿重复 init）；`--set <NODE> --note "<结论>"` 推进，命令细则与 TODO 硬门禁见 0.0 节。
+- **续接判定**：`node scripts/check_session_resume.js --case-dir <project-root> --project-dir <project-root> --markdown` 判 resume/fresh（GATE-1，见 0.0 节）。
+- **主线**：INTENT_CONFIRM → ENV_READY → EVIDENCE_GATE →（FORENSIC_CAPTURE → TRACE_CAPTURE）→ CASE_LOOKUP → IDENTIFY → TRACE_ANALYZE → IMPLEMENT → REAL_VERIFY → DELIVER → CLEANUP → DONE。打转信号：检索输出 `[WARN] 重复检索` 或 `[STATE]` 提示即执行 §4.4 防耗尽检查点序列。
+- **命令索引**：全量脚本见 `scripts/README.md`；各节点命令在对应节（取证 4.2 / trace 4.2 / 检索与反混淆 7 / 分析 8 / 验证与交付 10）。
 
 ## 0. 分析前硬门禁（不可跳过）
 
@@ -173,12 +158,11 @@ FORENSIC_CAPTURE
   ├─ 终态目标取证达成（终态 2xx 命中）→ TRACE_CAPTURE
   └─ 目标请求持续被拒且定位到内核级/环境检测阻断 → BLOCKED_FORENSIC
 BLOCKED_FORENSIC（取证被目标站检测阻断，与工具缺失不同）
-  ├─ UA 类检测 → 用 forensic_ruyipage.py --ua 覆盖后重采 → 达成则 TRACE_CAPTURE
-  ├─ UA 覆盖无效的引擎级检测（eval.toString/Error.stack/引擎特征等，取证细则见
-  │   references/env/env-detect-bypass.md 内核级差异检测）→ 输出卡点对齐用户后三选一：
-  │   ① 用户确认后用浏览器 MCP 连接真实 Chrome 内核浏览器取证（先过 --guard mcp；成功样本
-  │      Cookie/指纹/JS/网络记录落盘 case/，按用户材料归类走 MATERIALS_FALLBACK 校验；
-  │      match14 实证：Firefox 取证全 400，MCP 真实 Chrome 拿到 200 成功样本与指纹基线）
+  ├─ UA 类检测 → forensic_ruyipage.py --ua 覆盖后重采 → 达成则 TRACE_CAPTURE
+  ├─ UA 覆盖无效的引擎级检测（eval.toString/Error.stack/引擎特征等，取证细则与
+  │   match14 实证见 references/env/env-detect-bypass.md）→ 输出卡点对齐用户后三选一：
+  │   ① 浏览器 MCP 连真实 Chrome 内核取证（先过 --guard mcp；成功样本落盘 case/，
+  │      按用户材料归类走 MATERIALS_FALLBACK 校验）
   │   ② 用户提供真实浏览器 cURL/HAR 走 MATERIALS_FALLBACK
   │   ③ 用户确认降级（降级义务同 MATERIALS_FALLBACK：经验沉淀与最终总结写明 Step 2 缺失原因）
   └─ 未定位到检测证据不得进入本节点（先按 4.2 重采 / DIAGNOSE 排查）
@@ -370,9 +354,9 @@ node scripts/write_stage_report.js --case-dir <project-root> --stage <阶段> --
 
 **Step 2 缺失（check_trace_gate.js 退出码 1）时不得进入 IMPLEMENT**：不得以 EXTERNAL_LOOKUP 网络方案、边界声明、同族算法替代或 mock 填补 Step 2 证据缺口；轻量路径豁免的前提是 Step 1 + Step 2 齐备（见 4.3），Step 2 未产出不构成豁免条件。**AI 自行判定「trace 采集不到/太难」不构成降级理由**——没有用户确认的 Step 2 缺失一律停在状态机对应节点。例外共三个：
 
-1. **MATERIALS_FALLBACK 节点**（需用户显式确认）：RuyiTrace 工具不可用且自动安装失败 + 用户材料经 check_evidence.js 校验通过，以「Node 直连真实接口、服务端响应反证」替代 Step 2。
-2. **BLOCKED_FORENSIC 节点**（需用户显式确认）：内核级检测使 RuyiTrace 无法触发目标路径，有检测证据且用户已知情，以 Step 1 网络证据 + 落盘 JS 源码分析替代 Step 2。
-3. **内容还原型豁免（无需用户确认）**：请求侧参数全部为明文（page/pageSize/kw 等，无任何待还原的签名/token/指纹参数；判定材料同 IMPLEMENT 路径 E「无签名三条判据」，无 trace 时用其中①网络层+③Cookie/存储层），难点在响应解密/内容还原（字体映射、图片拼装等），且 Step 1 已捕获完整响应证据——此时 Step 2 无证据价值，可在 EVIDENCE_GATE 判定「只有 Step 1」时声明「Step 2 豁免：内容还原型，无运行时签名链路」后跳过 TRACE_CAPTURE 直接 CASE_LOOKUP。请求侧存在任何待还原参数的 case 不得使用本豁免。
+1. **MATERIALS_FALLBACK**（需用户显式确认，材料校验与降级义务细则见 decision-tree.md 阻塞点#5）：RuyiTrace 工具不可用且自动安装失败 + 用户材料经 check_evidence.js 校验通过，以「Node 直连真实接口、服务端响应反证」替代 Step 2。
+2. **BLOCKED_FORENSIC**（需用户显式确认，检测证据要求见 env-detect-bypass.md）：内核级检测使 RuyiTrace 无法触发目标路径，以 Step 1 网络证据 + 落盘 JS 源码分析替代 Step 2。
+3. **内容还原型豁免（无需用户确认）**：请求侧参数全明文（判定材料同 IMPLEMENT 路径 E「无签名三条判据」：①target-hits.json 无动态字段 ②可疑参数名 capture.json 反查 0 次 ③无 JS cookie/WASM/JSVMP）且难点在响应解密/内容还原（字体映射、图片拼装等）、Step 1 已捕获完整响应证据——在 EVIDENCE_GATE 判定「只有 Step 1」时声明「Step 2 豁免：内容还原型，无运行时签名链路」后跳过 TRACE_CAPTURE 直接 CASE_LOOKUP。请求侧存在任何待还原参数的 case 不得使用本豁免。
 
 例外 1、2 的 REAL_VERIFY 不可豁免；三个例外都必须在经验沉淀与最终总结写明取证偏差或判定依据（例外 3 写请求侧明文参数清单 + 响应自包含证据）。
 
@@ -404,23 +388,23 @@ node scripts/search_cases.js --domain <域名> --signal <信号>
 | 信号 | 初始路径 |
 |---|---|
 | md5、sha、aes、hmac、SM2/SM4/SM3 | 定位入口后优先纯算法还原 |
-| 代码碎片含知名库路径/常量（crypto-js 的 ./cipher-core/./evpkdf、`Salted__` 魔数等） | **库家族优先**：原样执行原码 + diff 魔改点（通行解法），标准件不重逆；全量沙箱重建前先评估此路线（match22） |
+| 代码碎片含知名库路径/常量（crypto-js 的 ./cipher-core/./evpkdf 等） | **库家族优先**：原样执行原码 + diff 魔改点，标准件不重逆（match22） |
 | `_0x`、obfuscator.io、控制流平坦化 | AST 反混淆工具链处理（命令入口见下方），再判断是否可纯算 |
-| 200KB+、while-switch、dispatcher、字节码数组 | JSVMP 黑盒执行或最小环境复现，不反编译；**先查 RuyiTrace eval 分类日志落盘源码**（`eval/eval_<pid>_<seq>_eval-direct.js` 落盘即解混淆后的业务逻辑——规则 39/反模式 37/match29）；无 eval 落盘再**扫字节码尾部大数字面量序列**（JSBN limbs / RSA 模数 / 算法常数）判断标准算法族，命中且 padding 确定即转纯算（规则 35，match28） |
-| 128B（1024bit）密文 + 字节码尾部大数字面量 | JSBN/RSA 族：明文格式从 trace `String.charCodeAt` 拼接串逆向；密文编码可能是 JSBN hex2b64（非标准 base64，match28）；确定性 padding → capture 样本本地对拍后再发请求 |
-| 128B（1024bit）密文 + `30819f300d06092a864886f70d01...` 开头的 162 字符 hex（X.509 SPKI）+ 加载期 `crypto.getRandomValues(Uint32Array 256)` | **JSEncrypt 随机 RSA**（match27，规则 38）：SPKI hex 即标准公钥 DER，getRandomValues 是 PKCS#1 随机填充源；`publicEncrypt` 直出，token 每次不同属预期；明文含运行时未知常量 → 候选 X×公钥扫描实证 |
-| WebAssembly、wasm base64、webpack 内嵌 wasm | 先整包黑盒，不默认补完整浏览器、禁止先手撕字节码；带 `__wbg_*` 导入的 wasm-bindgen 模块原样还原 glue，Node 沙箱桩语义陷阱见路径 C 与 env-debug-loop「WASM trap：unreachable」（match20） |
-| 官方包 200 / 重建包（deobf/插桩）必 500——同机同页同输入下唯一变量是 JS 包 | **自同构校验**（SDK 把自身脚本源/wasm 自身字节喂进 wasm 导入）→ 停止环境层修补，转透明边界捕获 + 直接 wasm harness（规则 41~43、反模式 39/40、env-wasm-advanced.md「wasm 边界透明捕获」专节） |
+| 200KB+、while-switch、dispatcher、字节码数组 | JSVMP 黑盒执行或最小环境复现，不反编译；**先查 RuyiTrace eval 分类日志落盘源码**（规则 39/反模式 37/match29），无落盘再扫字节码尾部大数字面量判断标准算法族（规则 35/match28） |
+| 128B（1024bit）密文 + 字节码尾部大数字面量 | JSBN/RSA 族：trace 拼接串逆明文、hex2b64 编码、确定性 padding 样本对拍（规则 35/match28） |
+| 128B 密文 + 162 字符 X.509 SPKI hex + 加载期 `getRandomValues(Uint32Array 256)` | **JSEncrypt 随机 RSA**：SPKI 即公钥 DER，`publicEncrypt` 直出，token 每次不同属预期（规则 38/match27） |
+| WebAssembly、wasm base64、webpack 内嵌 wasm | 先整包黑盒，不默认补完整浏览器、禁止先手撕字节码；wasm-bindgen（`__wbg_*` 导入）原样还原 glue（match20，陷阱见路径 C） |
+| 官方包 200 / 重建包必 500——同机同页同输入下唯一变量是 JS 包 | **自同构校验** → 停止环境层修补，转透明边界捕获 + 直接 wasm harness（规则 41~43/反模式 39/40） |
 | 412 循环、sdenv、挑战 Cookie | 先还原挑战链，再确认业务签名链 |
 | webmssdk、byted_acrawler、bdms、a_bogus、X-Bogus、_signature | trace 定位环境读取和签名写入；注意 `byted_acrawler.sign` 多返回老版 `_signature`，`a_bogus`/`X-Bogus` 由 `bdms` 生成，两者不可混淆 |
 | geetest、smcp、dx-captcha、TCaptcha、NECaptcha、AWSC | 按封装层、答案层、verify 链分别处理 |
 | h5st、js_security_v3、JA3/JA4 | 先确认会话绑定和 TLS 指纹，再实现请求链 |
-| 参数/状态输入在 trace 中无 writer，或依赖页面上一次会话、iframe/worker 上下文、渲染产物 | 浏览器隐蔽信道排查（storage/跨上下文/DOM/CSS 动画终态隐写），见 `references/web/covert-channel.md`；某厂商滑块 `_rand` 类 CSS 动画隐写纯协议可还原 |
-| `Salted__` 魔数（b64 解码 53616c7465645f5f）、keySize/iterations+盐常量碎片、44 字符尾 `=` | OpenSSL Salted 格式：blob="Salted__"‖salt(8)‖ct；key/iv=EvpKDF-MD5(password,salt) 多块链；**盐在 blob 内服务端可提取，随机/恒定均可**（match22，编码细节见案例） |
-| obfuscator **短名混淆**（无 `_0x`：a1/Q/zk）+ 自保护陷阱（`'newState'`/`MKZrLm`）+ 解码器 `charCodeAt(变量+常量)` 求和偏移 | **toString 自引用解码**：解码器以自身 toString 源码为密钥表——AST 反混淆产物禁执行（重写即解出垃圾/轮转死循环，反模式 31），原码执行 + 一行导出桩；detect-patterns 已内置 ob-io 家族与自引用告警 |
-| 多组输入的签名/token **低雪崩**（不同输入仅个位 nibble/字节变化，甚至不同输入同输出） | 结构化魔改哈希（环境分派 IV + 掩码加法器），非标准哈希——优先原码执行 + 环境分支对齐，别去逆标准算法；同输入恒同输出但被拒 → 环境分支（反模式 29/31，规则 29） |
-| 签名/token **成对或周期性相同**（如 page2/3 相同，换 now/page 仍成对） | **先做字节级折叠分析再怀疑环境**：字符级掩码/取模会把相邻字符折叠（match26：`k & 0xfe` 使 '2'/'3' 同字节 → 消息相同 → hash 相同）。真浏览器与服务端重算一致，不是沙箱 bug，无需修复 |
-| @font-face/FontFace、woff/woff2 动态字体、PUA 码点（U+E000–U+F8FF） | CSS/渲染层字体映射反爬（非验证码题型）：先取证字体资源判静态/动态映射，再提取 cmap 映射；映射可能参与签名（见 references/rendering/font-anti-crawl.md） |
+| 参数/状态输入在 trace 中无 writer，或依赖上一次会话、iframe/worker 上下文、渲染产物 | 浏览器隐蔽信道排查，见 `references/web/covert-channel.md` |
+| `Salted__` 魔数、keySize/iterations+盐常量碎片 | OpenSSL Salted 格式：EvpKDF-MD5 派生 key/iv 多块链（match22 案例） |
+| obfuscator **短名混淆**（无 `_0x`）+ 解码器 `charCodeAt(变量+常量)` | **toString 自引用解码**：AST 产物禁执行，原码执行 + 一行导出桩（反模式 31/match23） |
+| 多组输入签名/token **低雪崩**（不同输入仅个位变化甚至同输出） | 结构化魔改哈希或环境分支，优先原码执行 + 环境分支对齐（反模式 29/31、规则 29） |
+| 签名/token **成对或周期性相同**（如 page2/3 相同） | 先做字节级折叠分析（字符级掩码/取模折叠相邻字符，match26），真机与服务端一致时非沙箱 bug |
+| @font-face/FontFace、woff/woff2 动态字体、PUA 码点（U+E000–U+F8FF） | 字体映射反爬：取证字体资源判静态/动态映射再提取 cmap（`references/rendering/font-anti-crawl.md`） |
 
 识别结果必须引用落盘资源、NDJSON 或网络包具体字段，不以站点名称直接定类。
 
