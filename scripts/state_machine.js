@@ -9,7 +9,7 @@
 //    跳过必经节点（如 EVIDENCE_GATE → IMPLEMENT 跳过 CASE_LOOKUP/EXTERNAL_LOOKUP）会被拒绝。
 // 3) --guard <replay|external> 做动作边界守卫：重放/写请求类联网入口只能在 REAL_VERIFY / DIAGNOSE 执行；
 //    外部题解检索只能在 CASE_LOOKUP/EXTERNAL_LOOKUP/DIAGNOSE 执行（取证前外查会被过期情报误导）。
-// 4) TODO 清单落盘在 state.json.todo，--init/--set/--get 每次输出都渲染带勾选框的 11 项清单，
+// 4) TODO 清单落盘在 state.json.todo，--init/--set/--get 每次输出都渲染单行 11 项勾选清单，
 //    让"清单与进度"成为脚本产出的客观事实，而不是可被静默忽略的文字提示（match14 实测教训）。
 // 违反时退出码非 0，并写入 state.json 的 blocks 审计记录；--force 可显式放行（仍留审计痕迹）。
 
@@ -157,14 +157,16 @@ function computeTodo(state) {
 
 function renderTodo(todo) {
   const mark = { completed: '[x]', in_progress: '[~]', pending: '[ ]' };
-  const lines = ['### 执行 TODO 清单（11 项，脚本产出即事实）', ''];
-  for (const t of todo) {
-    const tail = t.status === 'in_progress' ? ' ← 进行中' : '';
-    lines.push(`- ${mark[t.status]} ${t.no}. ${t.label}${tail}`);
-  }
-  lines.push('');
-  lines.push('> 权威清单 = 本渲染文本 + state.json.todo；宿主有 TODO 工具时尽力同步（逐项同名同序，不新建子任务），宿主呈现/折叠差异不作为违规判据。');
-  return lines;
+  // 单行形态（2.3.117 瘦身）：每次 --init/--set/--guard 都渲染 + 模型在回复中贴回，
+  // 多行清单是双倍消耗；勾选符号、11 项序号与名称、权威声明不变，仅压成单行。
+  const line = todo.map((t) => `${mark[t.status]}${t.no}.${t.label}`).join(' ');
+  return [
+    '### 执行 TODO 清单（单行，脚本产出即事实）',
+    '',
+    line,
+    '',
+    '> 权威清单 = 本渲染文本 + state.json.todo；宿主有 TODO 工具时尽力同步（逐项同名同序，不新建子任务），宿主呈现/折叠差异不作为违规判据。',
+  ];
 }
 
 function syncTodo(state) {

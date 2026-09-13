@@ -3,6 +3,17 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.117 - 2026-09-13
+
+### 状态机 TODO 清单单行化：脚本输出与贴回双程瘦身（上下文经济学 P1）
+
+每次 `--init/--set/--guard` 输出渲染 11 项多行清单，且 SKILL.md §0.0 要求模型在回复中原样贴回——双倍消耗，单 case 实测 20-40 次状态命令。本次把渲染压成单行：
+
+- **state_machine.js `renderTodo`**：11 项压成一行（`[~]1.INTENT_CONFIRM [ ]2.ENV_READY…`），勾选符号、序号、条目名与「权威清单」声明全部保留，仅去掉多行列表的每行前缀与箭头；`state.json.todo` 数据层与 self-test 断言不变（`--self-test` PASS）。
+- **SKILL.md §0.0**：勾选表描述同步标注「单行形态」，判定标准语义不变（清单必须在回复中出现，脚本输出原样贴上即可）。
+
+效果：每次状态命令输出 + 贴回双程省 ~140B（信息量不变），清单在长输出中更易扫读。校验：check_routing_benchmarks 31/31（RB-027/028 状态机输出断言不受影响）、check_skill_consistency 0 问题、check_vendor_leakage 0 命中。
+
 ## 2.3.116 - 2026-09-13
 
 ### 新增 search_references.js：「反模式/规则」指针按号提取，补齐 references 检索闭环
