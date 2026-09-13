@@ -88,6 +88,14 @@ python scripts/forensic_ruyipage.py --url <目标页> --case-dir <project-root> 
 - 用户完成操作后直接关闭 ruyiPage 浏览器窗口，视为明确的手动结束抓包信号：脚本检测到浏览器断连后应立即收尾、分类并落盘已捕获数据，报告 `endReason=browser-closed`，不能把 WebSocket 断连本身判为取证失败，也不要强杀仍在收尾的脚本进程；等待 `FORENSIC DONE` 或最终 JSON / Markdown 输出。浏览器关闭只决定采集生命周期，不放宽上述接口验收：指定终态仍未捕获到非 `OPTIONS` 2xx 时，结果仍为 `NO_TARGET` / `PARTIAL`，Step 1 仍缺失。若进程被不可捕获的硬杀且只残留 `case/forensic/partial-steps.jsonl`，该文件仅是已抓包元数据兜底，说明正常收尾未完成，不能替代 `capture.json` 与完整 body 证据。
 - 等待期间会增量预取 JS、目标和动态 API body，并在收尾阶段复用缓存；报告 `liveBodyPrefetch` 可审计断连前已保住的正文范围。Cookie 报告只保留名称、域、属性和长度摘要，禁止把完整会话值写入 JSON/Markdown。
 
+### 取证操作细则（match 实证）
+
+- **收尾耗时预期**：≈ `--target-settle` 秒数 + 落盘时间（通常 1 分钟内）。等待远超预期（如超 5 分钟）时先核对时间参数是否把毫秒当秒传入，不要无限轮询干等。
+- **翻页点击两个静默失败坑（match19 实测，各空耗一轮 120s）**：① 首屏 AJAX 飞行中按钮常处 `disabled` 态，click 被静默吞掉（无报错、无请求）→ `--click-delay 5~30` 等 loading 结束；② `page.ele()` 对部分属性选择器（`[data-page=5]`）查不到且不报错、盲点照打"已拟人点击" → 优先 id/结构选择器（等价替代见 match19 案例）。每轮取证覆盖 `case/forensic/capture.json` 同名产物（自动轮转 `.prev-1~3` 备份），跨轮关键样本及时转录。
+- **NO_TARGET 不是死路（match18）**：脚本输出末尾的「重采候选」动态 2xx 接口列表就是校准 `--targets` 的第一手材料，按候选锁定真实接口重采即 PASS，不要凭记忆猜下一个路径。
+- **命中但全 403（match26）**：target-hits.json 的 URL/Query 参数结构仍是接口路径与参数名的有效证据，不要无限重采；签名正确性由「trace 定位 builder/writer + 沙箱对齐环境分支 + REAL_VERIFY 闭环」验证，取证侧 403 可能是环境分派诱饵分支所致（match21/26 同族）。
+- **重试型场景**：登录可能因验证码/校验失败重试时调大 `--target-settle`（单位秒，默认 3；建议 10~30，上限 120），保证重试仍在同一会话内。关联材料以最后一次有效终态向前回溯，验证码中间接口不是额外终态门禁（load → verify 由分析阶段从同一会话回溯）。
+
 ## RuyiTrace 日志采集流程
 
 取证来源需要 RuyiTrace 时，默认自动 trace（脚本自动启动 trace Firefox 捕获，不询问用户选择采集方式）；用户已提供 NDJSON 时直接导入，不重复采集。自动 trace 失败、需要登录/验证/权限交互时转手动 trace。
@@ -186,7 +194,7 @@ node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --
 
 - RuyiTrace 把 XHR/fetch 等对象调用记录为**分存字段** `{"type":"call","interface":"XMLHttpRequest","member":"open",...}`——不存在 `XMLHttpRequest.open` 连续子串。门禁与摘要脚本（check_evidence / check_trace_gate / import_ruyitrace_log / capture_ruyitrace_log）已支持 `Interface.member` 形态的结构化匹配，信号直接写 `XMLHttpRequest.open`、`Headers.set` 即可命中分存字段记录；旧 case 中"退化为只写 `XMLHttpRequest`"的做法不再必要（宽信号仍可用，但优先带 member 的精确形态）。
 - **xhrNative 记录含完整请求 URL**（`{"type":"xhrNative","method":"GET","url":"https://...完整 query...","headers":[...]}`）：定位参数写入链后，用 `search_trace --keyword xhrNative` 或按 URL 关键词过滤可直接核对请求侧参数（含编码形态，如 `m=eXVhbnJlbnh1ZTE%3D`），是"签名生成值 ↔ 实际请求值"逐字符比对的第一手证据。
-- 信号仍不得传目标接口 URL 字面量（网络 URL 由 Step 1 的 `--require-network-signal` 承担）、密钥/常量名；泛化 API（createElement 等）会被 `lib/trace-signal-policy.js` 拒绝。
+- 信号仍不得传目标接口 URL 字面量（网络 URL 由 Step 1 的 `--require-network-signal` 承担）、密钥/常量名；泛化 API（createElement 等）会被 `lib/trace-signal-policy.js` 拒绝。应选**参数写入点/参数名**（`noncestr`、`x-zse-96`、`Headers.set("x-zse-96", ...)`）。
 
 #### TRACE_RETRY 处理顺序（按序降级，不回退）
 

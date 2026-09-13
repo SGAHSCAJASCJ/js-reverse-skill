@@ -357,6 +357,8 @@ match27 算法本身没变（同一 RSA），错的是**喂给算法的数值常
 
 **采样纪律（match22 实证）**：此类代码第 2 次计算在调试器挂接时反调试死循环（渲染进程卡死）——MCP 调试采样**一次/会话**，采样前规划全部 dump 项；卡死先查进程 CommandLine 确认该实例 profile 来源（独立 profile / 附加用户浏览器）再处置；MCP 断点跨 reload 易丢；evaluateOnCallFrame 的 objectId 在 resume 后失效（单次 pause 内完成全部取值）；文本锚点断点用函数**尾部唯一长片段**反向定位（通用序言 find() 会命中别的函数）。
 
+**交付形态**：可桥式——Python `curl_cffi`（过 TLS 白名单）+ Node 子进程桥（沙箱算 token），两进程各司其职。
+
 ## 反模式 31：toString 自引用解码器被 AST 重写破坏——产物能跑但解出的全是垃圾，或轮转死循环（match23 实证）
 
 **形态一（重写破坏自引用）**：obfuscator.io 家族的 base64 解码器内含 `q = o + g`（q 为解码函数**自身 toString 源码**），解码条件形如 `q['charCodeAt'](u+0xa)-0xa!==0x0 ? String.fromCharCode(...) : r`——解码结果逐字节依赖函数源码原文。AST 反混淆流水线重排/重写该函数体后，字符串表解出垃圾 → `parseInt` 得 NaN → 字符串表轮转 IIFE（`while(!![]){...push(shift())...}`）**永不收敛死循环**。**症状**：流水线 status=ok，产物在沙箱一加载就超时；或"能跑但所有解码串都是乱码"。**识别信号**：RuyiTrace 中 Function.toString 对同一解码函数高频调用（match23 对 g/MKZrLm 调用 3121 次）；源码含 `['charCodeAt'](变量+十六进制常量)` 求和偏移（detect-patterns 已内置该形态告警）。
