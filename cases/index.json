@@ -1058,6 +1058,27 @@
       "strategy": "B 最小 JS 沙箱（黑盒执行 RuyiTrace eval 落盘源码）：token=魔改MD5(/api/question/29+now+(counter+_)+\"()\"+page)，counter 初值 28 随翻页递增、_=pgxDebug 检测恒 0；标准 MD5 K 表缺失 + 46 项环境探测分派不可纯算；RuyiTrace eval 分类日志落盘 VM 反序列化业务源码（eval_<pid>_<seq>_eval-direct.js，29.js 对应 60KB），绕开 LZ 压缩/字节码/VM 指令三层直读逻辑；页面自驱动翻页（触发 #pgxNext click + 每次翻页前注入新 getTime now）；jQuery 桩 .add() 必须有；m=undefined 诱饵；末页 UA=yuanrenxue；数据绑定 sessionid；提交 POST /a/29 表单编码 code=2 通关（答案 27105688）",
       "file": "yuanrenxue-match29-vmpzl-eval-log-source.md",
       "verifiedAt": "2026-09-01"
+    },
+    {
+      "title": "设备指纹 black_box 自同构校验（wasm 自哈希绑定）——透明边界捕获 + 直接 wasm harness",
+      "domains": [
+        "9air.com",
+        "trustdecision.com",
+        "apitd.net"
+      ],
+      "signals": [
+        "black_box",
+        "tddf",
+        "fm.js",
+        "_fmOpt",
+        "wfb",
+        "WebAssembly 自哈希",
+        "currentScriptSrc",
+        "设备指纹"
+      ],
+      "strategy": "C WASM 加载：透明边界捕获官方包真实页全量导入值固化为成对设备画像（fp数组+fm.js源+wasm自身，各sha256），Node fresh 实例化 wasm 按契约装配后调导出 E 纯协议生成；无浏览器无 jsdom 无凭据注入",
+      "file": "wasm-harness-selfhash-fp-blackbox.md",
+      "verifiedAt": "2026-09-13"
     }
   ]
 }

@@ -541,6 +541,57 @@ async function loadWasmCached(wasmPath, importObject) {
 
 > 完整 harness 模板见 `templates/wasm-loader/emscripten-bundle-blackbox.js`。
 
+## wasm 边界透明捕获 → 直接 harness（黑盒签名 wasm 的低成本通 路，2026-09 实证）
+
+适用场景：**带导入的签名型 wasm**（导入由 JS 模块态提供、无隐式外部 I/O），且「官方包可通过、
+沙箱/重建包恒被拒」——即 wasm 的输入里混入了脚本自身/环境完整性类数据，逐槽对齐环境取值无效。
+此时不必逆向 62K 行 WAT，用「透明边界捕获 + 直接 harness」把黑盒变成可复现函数：
+
+```text
+① 透明捕获 hook（prepend 进 SDK JS 响应体主 world；add_preload_script 独立 world 拿不到 window）
+   - 包裹 WebAssembly.Instance / instantiate / instantiateStreaming（见下方两个重载坑）
+   - 导入包裹：记录调用序 + 返回值全量——标量直录；指针返回按类型读内存（NUL 串 /
+     [u32 头][bytes] 结构体 verbatim / f64 数组）并记录返回 ptr；含指针参数的导入（wasm→JS 回调）记参数内存
+   - 导出包裹：记录调用序 + ptr 参数解码（导出 F(str,str) 类）+ 输出结构（[u32 status][u32 len][bytes]）
+   - 关键导出调用前抓全内存快照（选配，供诊断；跨实例恢复不可行，见反模式 40）
+② 透明性验证：官方包 + hook 走完整链路到业务接口 200，证明 hook 未改语义（观测无副作用才可用）
+③ 捕获产物 = 「真机当次导出调用的完整输入」→ 固化为设备画像：
+   指纹数组 / 脚本源全文 / wasm 自身字节 / 常量串 / 异或对——**全部取自同一次会话**，各自 sha256
+④ 交付 harness：fresh 实例 + 画像 + 运行时真实时间/随机 → 调签名导出 → 拼 信封 → 业务实测
+⑤ fresh 200 = 纯协议达成；500 → 按 ⑥ 排查
+⑥ 排查序：资产配对（wasm 构建与画像是否同会话）→ 来源类指纹槽是否被取证页污染
+   （file:// 路径 / 探针全局名进入 Object.keys(window) 槽）→ 导入语义与调用序是否按捕获校准
+```
+
+### 捕获 hook 的四个必踩坑（实测）
+
+| 坑 | 现象 | 解法 |
+|---|---|---|
+| `instantiate(module, imports)` 重载 | 该重载解析结果是 **Instance 本体**，不是 `{module, instance}` 记录——只处理后者时导出包裹从未生效（日志 exp=0 但无报错） | 两种都处理：`r.instance` 存在则替换之，否则 `r instanceof WebAssembly.Instance` 直接包裹返回 |
+| 内存导出名假设 | `exports.memory` 不存在（可能叫 `v` 等任意名），指针捕获全部变 `nomem` | 遍历导出对象用 `instanceof WebAssembly.Memory` 探测，不按名取 |
+| 导入调用序漂移 | 序列每次运行不同（分支性导入出现/消失、时钟读取次数抖动） | 回放按捕获序**逐条弹出**；交付侧导入实现为幂等动态函数（每次调用现算），不按静态表硬编码 |
+| u32 头字段读到乱值 | 同一 ptr 两次读数不一致（写入方延迟/重排） | 结构体字段不要依赖读出的标量头，**以捕获的字节 buffer 内重新解析为准**；回放 verbatim 写回整段字节 |
+
+### fresh 生成 vs 字节级回放（接受模型）
+
+- **字节级回放历史会话是死路**：输出 = f(线性内存, wasm 全局, 导入值)，全局（堆指针/状态机）
+  从 JS 不可恢复——快照写回新实例后 OOB 或错乱（反模式 40）。
+- **fresh 生成不受限**：fresh 实例自带一致的 (初始内存, 初始全局)，只要导入值是真实设备画像，
+  产出的载荷自洽、服务端可验证；时间/随机用运行时真实值（真机自身也漂移）。
+- 时间/随机类导入可先双变体实测（原样回放 vs 运行时重建），确定服务端校验严格度后再定实现；
+  已知「签名内时间戳先做 T 偏移矩阵」（规则 34）同源。
+
+### 何时选这条路（成本对比）
+
+| 信号 | 首选 |
+|---|---|
+| 官方包 200 / 重建包必 500（同机同页同 cadence） | 自同构校验（反模式 39）→ 本节路线 |
+| wasm 带导入且导入由 JS 闭包提供、无外部 I/O | 本节路线（捕获 1 次会话即可固化输入） |
+| 无外部导入的确定性 wasm | 直接 `instantiate(bytes)` 调导出（match15 形态，无需捕获） |
+| 导入含强会话绑定（服务端逐次下发密钥且不可重放） | 才考虑 wasm 全量逆向 / 浏览器辅助生成兜底 |
+
+实证案例：`cases/wasm-harness-selfhash-fp-blackbox.md`（设备指纹 black_box，捕获 1 次 → 纯协议 14/14 通过）。
+
 ## 相关参考
 
 | 参考文档 | 关联点 |
@@ -551,3 +602,4 @@ async function loadWasmCached(wasmPath, importObject) {
 | `references/workflow/worker-signing.md` | Worker / Service Worker 中加载 WASM 生成签名的分析路径 |
 | `templates/wasm-loader/loader.js` | WASM 加载器交付模板（干净 `.wasm` + 导出函数） |
 | `templates/wasm-loader/emscripten-bundle-blackbox.js` | 整包 Emscripten bundle 黑盒执行 harness（webpack 内嵌 wasm base64 + glue） |
+| `cases/wasm-harness-selfhash-fp-blackbox.md` | 本节方法论实证：自同构校验 wasm 的透明捕获 + 直接 harness 全流程 |

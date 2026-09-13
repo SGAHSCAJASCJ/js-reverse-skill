@@ -313,6 +313,20 @@ vmpzl 系 VM 执行到业务层时通过 **eval 执行"反序列化生成的 JS 
 
 反例：面对几万行指令轨迹直接问 AI"这个算法是什么"并采信回答——没有证据坐标的答案无法验收（规则 30 对拍、规则 23 大样本统计均无法执行）；或让 AI 生成一遍"看起来对"的签名实现，跳过 `verify_signer_offline` 直接发真实请求（违反 IMPLEMENT 准入三件套与 REAL_VERIFY 前置）。**AI 参与不改变门禁权威**：`state_machine.js --guard` 与 `check_*.js` 校验序列仍是唯一放行依据。
 
+## 十九、自同构校验与 wasm 边界捕获（设备指纹 SDK 实证，详见案例库）
+
+### 41. 「官方包 200 / 重建包必 500」= 自同构校验信号，先查自喂输入再谈环境对齐
+
+当签名型 SDK 在真实页用官方包请求通过，而沙箱/反混淆重打包/插桩版本**同机同页同输入**恒被拒，且唯一变量是 JS 包本身时，优先怀疑 **SDK 把自身构件喂进了指纹计算**：捕获 wasm 导入返回值即可确认——出现「返回脚本源码全文」「返回 wasm 自身字节（`0061736d` 魔数头）」即为实锤。此时逐槽对齐环境取值、全量回灌真机值、TLS 替换、内存快照全部无效（三个输入是：脚本源字节、wasm 字节、来源类复合槽如 `currentScriptSrc`），正确动作是**停止环境层修补**，转「透明边界捕获 + 直接 wasm harness」（`env-wasm-advanced.md` 专节）。配套纪律：画像、脚本源、wasm 二进制按同一次会话**成对固化**并各自 sha256（存在两个长度相同字节不同的 wasm 构建时，混用即静默被拒）；指纹 ground truth 不得采自 file:// 探针页（来源类槽携带本地路径污染而不自知）。
+
+### 42. 透明边界全量捕获优先于 wasm 全量逆向——成本差两个数量级，一次会话捕获即固化全部输入
+
+签名型 wasm（导入由 JS 闭包提供、无隐式外部 I/O）不必逆向 WAT：用透明 hook 包裹 `WebAssembly` 构造器（prepend 进 SDK JS 响应体主 world，**不是** `add_preload_script` 独立 world），记录导入调用序 + 全部返回值（结构体 verbatim 字节 + 返回 ptr + f64 数组 + NUL 串）+ 导出调用序 + 输出字节，即得「真机当次调用的完整输入」。hook 必过两个坑：`instantiate(module, imports)` 的 module 重载解析结果是 **Instance 本体**（非 `{module, instance}`），只处理后者会让导出包裹静默失效（exp=0 无报错）；内存导出名不一定是 `memory`（用 `instanceof WebAssembly.Memory` 探测）。捕获前先做**透明性验证**（官方包+hook 走完整链路业务 200），观测无副作用才可用。
+
+### 43. fresh 生成优于字节级回放；载荷自包含性用实验测定，不默认注册
+
+wasm 输出 = f(线性内存, wasm 全局, 导入值)，全局变量（堆指针/状态机）从 JS 不可恢复——**跨实例内存快照恢复是结构性死路**（恢复 7MB 后 pre-hash 一致仍 OOB，反模式 40），不要试图字节级复现历史会话。正确目标是用捕获的真实设备输入 + 运行时时间/随机做 **fresh 生成**：fresh 实例自带一致的 (初始内存, 初始全局)，产出载荷自洽即可被服务端接受（真机自身的时间/随机也每次漂移）。配套两个减负实验：①`导入调用序`每次运行漂移（24~27 条、分支性导入出现/消失），交付侧导入实现为幂等动态函数，不按静态表硬编码；②**载荷自包含性实测**——跳过注册上报直发业务接口，若 200 则注册非必需，交付流程少一次请求足迹。不确定的输入语义（如异或对的位宽语义）用双变体实测定夺，不靠猜。
+
 ## 相关案例
 
 | 案例文件 | 关联点 |
@@ -338,3 +352,4 @@ vmpzl 系 VM 执行到业务层时通过 **eval 执行"反序列化生成的 JS 
 | `cases/yuanrenxue-match28-jsvmp-rsa-purecompute.md` | 规则 35 实战验证（JSVMP 字节码 limbs 字面量直读 → 确定性 RSA-1024 纯算，无需跑 VM；固定 0x01 padding 对拍；limbs 出现序≠数组序）+ 规则 36 实证（数据绑定 sessionid：换会话数据完全不同必须重算，答案 25808383→27673886）+ 规则 37 实证（限流 403 token failed 单请求诊断法：第 3 页起 403 但单请求 200 = 频率墙；页间 3s+冷却+提交 --answer 解耦）+ 反模式 35/36 实证 + JSBN hex2b64 非标准编码 |
 | `cases/yuanrenxue-match27-jsencrypt-random-rsa-purecompute.md` | 规则 38 实战验证（X.509 SPKI hex 公钥 + getRandomValues = JSEncrypt 随机 RSA → publicEncrypt 纯算；候选 X×公钥扫描实证明文常量：pubkey1+X=27 → 200、pubkey2 全 403；**沙箱跑通+结构像 ≠ 服务端接受**——_$v 依赖 document.all 分支致运行时常量算错，可纯算时转纯算不死磕沙箱）+ 反模式 27 五次实证（m=window["matchnumber"]=undefined 诱饵）+ 反模式 36 同族实证（429 限流）+ jq 桩 Proxy 缓存坑（缓存裸 obj 致二次访问缺失方法报错） |
 | `cases/yuanrenxue-match29-vmpzl-eval-log-source.md` | 规则 39 实战验证（JSVMP 业务逻辑经 eval 反序列化执行 → RuyiTrace eval 分类日志落盘业务源码，绕开 LZ 压缩/字节码/VM 指令三层直读；eval 源码变量名 `_$`+随机但结构稳定，grep `token`/`case 64` 定位请求构造）+ 反模式 37 实证（手写 `LZ.` 前缀解压器是死路，先查 eval 日志）+ 反模式 27 再实证（m=window.matchnumber 诱饵）+ match26 同款实证（页面自驱动翻页注入新 now、jQuery 桩 `.add()` 必须有）+ 46 项环境探测桩全 true（Symbol.toStringTag 补 HTMLDocument/Navigator）+ Session 门禁字面识别再实证（`client.getPage(` 不算复用，须 `client.get/post(`） |
+| `cases/wasm-harness-selfhash-fp-blackbox.md` | 规则 41~43 实战验证（自同构校验：wasm 导入自喂脚本源全文与 wasm 自身字节 → 官方包 200/重建包必 500 的真因；透明边界全量捕获 hook 两个重载/内存导出名坑；跨实例内存快照恢复 OOB 死路 → fresh 生成 + 成对设备画像；载荷自包含实测 no-register 也 200）+ 反模式 39/40 实证 + 7 轮环境层修补（逐槽对齐/全量回灌/凭据注入/TLS 替换）全部无效的教训：对照实验未锁"脚本源与 wasm 字节逐字节相同"这一前置 |

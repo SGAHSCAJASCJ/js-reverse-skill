@@ -92,6 +92,7 @@
 - **特征**：加密逻辑在 WebAssembly 中，JS 调用 WASM 导出函数；或 webpack 大 bundle 内嵌 wasm base64 + Emscripten glue（异步 glue + 内部 fetch，如 handshake 类风控 SDK）
 - **路径**：路径 C WASM 加载（不需补完整浏览器）
 - **强规则（先黑盒后静态）**：确认加密落在 WASM 后，先整包黑盒——Node vm 加载原版 glue，mock `window/document/第三方 SDK/fetch`，hook fetch 抓 body；禁止先手撕字节码。整包方案跑通再按需静态提取。
+- **改包即拒（自同构校验分支）**：官方包 200 / 沙箱或重建包必 500（同机同页同输入）时，捕获 wasm 导入返回值查「自喂脚本源 / 自喂 wasm 自身字节」信号；命中则停止环境层修补，转「透明边界捕获 + 直接 wasm harness」（规则 41~43、反模式 39/40、env-wasm-advanced.md 专节、案例 wasm-harness-selfhash-fp-blackbox.md）。
 
 ### 识别标准动作
 ```

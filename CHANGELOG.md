@@ -3,6 +3,22 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.114 - 2026-09-13
+
+### 吸纳 9air black_box 纯逆向案例：自同构校验 + wasm 边界透明捕获 + 直接 harness（7 轮环境层死局 → 纯协议 14/14 通过的完整方法论）
+
+某航空站点设备指纹 black_box（tddf 信封）历经 7+ 轮环境层实验（逐槽对齐/全量回灌真机值/注册凭据注入/TLS 替换/内存快照）全部 500 后，定位到「官方包 200 / 重建包必 500」的唯一变量是 JS 包本身——**SDK 把自身脚本源码全文与 wasm 自身字节经 wasm 导入喂进指纹计算（自同构校验/自哈希绑定）**。改用「透明边界捕获 + 直接 wasm harness」后纯协议达成：Node fresh 实例化 wasm + 成对设备画像 + 运行时时间/随机 → 真实业务接口连续 14 次全 200。零浏览器、零 jsdom、零凭据注入，替代原「一次性真机注册 + 凭据复用」中间方案。
+
+- **新案例**（`cases/wasm-harness-selfhash-fp-blackbox.md`）：完整导入契约实测值（`m` 导入恒返回 wasm 自身 138510B、`o` 导入喂 fm.js 源全文 577583B、`s` 为动态 nonce 型 version、导入调用序 24~27 条漂移）、10 条踩坑记录、12 条可验证事实、成对资产固化清单（fp 数组 + 脚本源 + wasm 二进制同会话提取，各 sha256）；index.json 同步新增（domains: 9air.com/trustdecision.com/apitd.net）。
+- **env-wasm-advanced.md 新增「wasm 边界透明捕获 → 直接 harness」专节**：适用场景（带导入的签名型 wasm + 官方包可通过/重建包恒拒）、五步流程（透明 hook → 200 透明性验证 → 画像固化 → fresh 生成 → 500 排查序）、四个实测坑（`instantiate(module,imports)` 的 module 重载解析结果是 **Instance 本体**而非记录、内存导出名须 `instanceof WebAssembly.Memory` 探测、导入调用序漂移须按捕获序弹出、结构体标量头不可信以字节 buffer 重解析为准）、fresh 生成 vs 字节级回放接受模型、成本对比表（何时选捕获/纯算/全量逆向）。
+- **反模式 39**（common-pitfalls.md）：官方包 200/重建包必 500 归因"环境没对齐"——7 轮单变量实验全无效的教训；判定测试：对照两侧喂给 wasm 的脚本源与 wasm 字节是否逐字节相同。
+- **反模式 40**（common-pitfalls.md）：wasm 内存快照跨实例恢复死路——`输出 = f(线性内存, wasm 全局, 导入值)`，全局（堆指针）从 JS 不可恢复，恢复 7MB 后 pre-hash 一致仍 OOB；快照仅留诊断/对拍用途，复现改走 fresh 生成。
+- **经验规则 41~43 + 新章「十九」**（experience-rules.md）：41 自同构校验识别与成对资产纪律；42 透明全量捕获优先于 wasm 全量逆向（成本差两个数量级）+ hook 两大坑；43 fresh 生成优于字节级回放 + 载荷自包含性实测（no-register 直发业务也 200，注册非必需）+ 双变体实测不确定输入语义。
+- **SKILL.md**：第 7 节信号表新增「官方包 200/重建包必 500 → 自同构校验」路由行；第 9 节路径 C 追加「透明边界捕获 + 直接 wasm harness」完整指针。
+- **decision-tree.md**：WASM 加密题型新增「改包即拒（自同构校验分支）」。
+
+校验：`check_vendor_leakage` 0 命中、`check_routing_benchmarks`、`check_skill_consistency`、`search_cases` 按域名/信号均命中新案例。
+
 ## 2.3.113 - 2026-09-12
 
 ### 吸纳外部经验库（ima《学习逆向的公众号文章》调研落地）
