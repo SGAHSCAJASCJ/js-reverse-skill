@@ -1,6 +1,6 @@
 # 脚本索引
 
-本目录包含 65 个可执行脚本（56 个 JavaScript、9 个 Python），按功能分为 11 类。以下索引以 `scripts/` 当前实际文件为准，不包含 `README.md` 与 `lib/` 共享模块。
+本目录包含 66 个可执行脚本（57 个 JavaScript、9 个 Python），按功能分为 12 类。以下索引以 `scripts/` 当前实际文件为准，不包含 `README.md` 与 `lib/` 共享模块。
 
 本文中的 `<project-root>` 指项目根目录，其下包含平级的 `case/` 与 `result/` 目录。需要 case 目录的脚本使用 `<project-root>/case`，需要项目根目录的脚本直接使用 `<project-root>`。`forensic_ruyipage.py` 与 `capture_ruyitrace_log.js` 会在 `--case-dir` 下创建 `case/`，因此必须传入 `<project-root>`。`check_session_resume`/`check_fingerprint_fixture`/`check_trace_api_coverage` 已归一化，传 `<project-root>` 或 `<project-root>/case` 均可。
 
@@ -27,6 +27,12 @@
 | `write_markdown_utf8.js` | 以 UTF-8 写入 Markdown，避免 Windows 编码问题 | `node scripts/write_markdown_utf8.js --input 草稿.md --out 最终项目总结.md --markdown` |
 | `write_stage_report.js` | 以 UTF-8 写入中文命名阶段报告 | `node scripts/write_stage_report.js --case-dir <project-root> --stage 需求信息确认 --markdown` |
 | `check_stage_reports.js` | 检查阶段报告中文文件名、UTF-8、必要阶段及动态字段 | `node scripts/check_stage_reports.js --case-dir <project-root> --require-stage 需求信息确认 --markdown` |
+
+## references 知识检索（1 个）
+
+| 脚本 | 功能 | 典型用法 |
+|------|------|---------|
+| `search_references.js` | 把「见反模式 N / 规则 N」类指针变成按号提取：`--id` 从小节标题提取到下一个同级标题，`--keyword` 跨 references/**/*.md 与本 README 关键词兜底；同号多文件按权威归属取正文；提供 `--case-dir` 时记入 query-log 打转检测。避免为单个编号整读 `common-pitfalls.md` / `experience-rules.md` 全文 | `node scripts/search_references.js --id "反模式 28" --markdown`；`node scripts/search_references.js --keyword 对齐探针 --dir references/env` |
 
 ## 状态机与聚合门禁（2 个）
 
@@ -142,6 +148,7 @@
 |------|-----------:|
 | 环境与会话检测 | 7 |
 | 案例与项目管理 | 7 |
+| references 知识检索 | 1 |
 | 网络取证与日志采集 | 5 |
 | 识别与归因辅助 | 2 |
 | Trace 分析与运行时闭环 | 9 |
@@ -150,6 +157,6 @@
 | 安装与下载 | 4 |
 | 验证码识别与求解辅助 | 8 |
 | 验证码验证门禁 | 3 |
-| **合计** | **63** |
+| **合计** | **64** |
 
 > 滑块缺口坐标来源判定（A 接口参数 / B 图片像素 / C 纯图像三路线）见 `references/captcha/gap-coordinate-source.md`。本目录中的验证码辅助脚本负责 C 类坐标换算、轨迹生成、答案校验与打码模板，A / B 类走封装层逆向。

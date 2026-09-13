@@ -3,6 +3,34 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.116 - 2026-09-13
+
+### 新增 search_references.js：「反模式/规则」指针按号提取，补齐 references 检索闭环
+
+量化分析：references 层 75 个文件 ≈ 27.4 万 tokens，`common-pitfalls.md` 单文件 ~40KB（约 2.2 万 tokens），而 SKILL.md 有 23 处「反模式 N」+ 23 处「规则 N」引用——跟进一个指针的代价是整读全文件。仓库已有 search_cases / search_trace / search_js 三个检索工具，唯独缺 references 检索，本次补齐：
+
+- **新脚本**（`scripts/search_references.js`）：`--id "反模式 28" / "规则 34"` 按号提取小节（小节标题到下一个同级标题，上限 140 行）；同号标题命中多文件时按权威归属取正文（反模式 → common-pitfalls，规则 → experience-rules），其余列一行指针；`--keyword` 跨 `references/**/*.md` + `scripts/README.md` + ast-patterns README 关键词兜底（按命中数排序、样例行定位）；`--dir` 限定路径子串；编号未命中列出现有编号清单并退出码 1；`--case-dir` 提供时复用 `lib/query_log` 记入打转检测（第 2 次 WARN、第 3 次打转实证）。
+- **SKILL.md §12**：新增规则「编号用 `--id` 按号提取小节后再读，禁止为单个编号整读 common-pitfalls / experience-rules 全文」+ 路由表一行。
+- **scripts/README.md**：新增「references 知识检索」分类；头部计数 65→66（57 JS）。
+- **RB-030/031**：提取命中与编号未命中两条基准（锚点 `search_references.js` / 「禁止为单个编号整读」）。
+
+效果：单次指针跟进成本 ~22K tokens → ~0.5K tokens。校验：check_routing_benchmarks 31/31、check_skill_consistency 0 问题（143 引用）、check_vendor_leakage 0 命中、check_tool_pins 通过。
+
+## 2.3.115 - 2026-09-13
+
+### SKILL.md 上下文瘦身第四步：经验证外迁收尾 + 绝对规则 8 拆行
+
+复盘 2.3.110~112 三轮瘦身的遗留重复，本轮只执行「外迁前提逐一验证命中」的收敛与排版改进（正文压缩、无语义变化），90,411B → 90,206B：
+
+- **§10 1a 算法中间值断点采样**：四条约束压缩为短句；卡死处置（CommandLine 核对 profile 来源）、锚点定位与工具名适配细则指向 `common-pitfalls.md` 反模式 30「采样纪律」（该节已完整承载全部约束，先验证后压缩）；「不支持帧内求值时逐帧 `step` 读作用域」为 SKILL.md 独有操作项，保留。
+- **§4.2 TRACE_CAPTURE 质量判定**：五个重度不足判据的括号解释删除——`trace-flow.md`「重度不足」表已逐条承载（未发现 stack.file / 成功解析 <10 / topApis 无 writer / 未覆盖页面 JS / 有效 API 占比过低）；判据名保留作路由；「必须先重采一次才允许降级静态分析」硬规则与 RB-019 锚「合并所有 tab/content 进程文件」原样保留。
+- **§9 路径 C wasm-bindgen 桩语义**：`instanceof_Window`/document 括号细节删除（`env-debug-loop.md`「WASM trap：unreachable」专节已完整承载触发链与修复清单）。
+- **绝对规则 8 拆行**（纯排版，按 2.3.110 分析方案 C 收尾）：789 字符单行拆为「四个来源 + 四源之外一律封死 + DOM 模拟库禁令」子弹列表；jsdom 同条禁令的双重陈述合并为一条（全文件唯一减少的 1 处「不得」来源于此），合规形态四要点（HTML 本地字符串/脚本取自落盘产物/不开 `resources: 'usable'`/不传目标站 `url`）原样保留。
+
+不动的部分：RB 锚点 38/38 逐字保留（含 1a、质量判定段内锚文本）；frontmatter description 未触碰；状态机节点/转移/门禁/守卫规则零改动；带「返工点/实证」标记的行为规则全部保留原位。
+
+校验：check_routing_benchmarks 29/29、check_skill_consistency 0 问题、check_vendor_leakage 0 命中、check_tool_pins 通过。
+
 ## 2.3.114 - 2026-09-13
 
 ### 吸纳 9air black_box 纯逆向案例：自同构校验 + wasm 边界透明捕获 + 直接 harness（7 轮环境层死局 → 纯协议 14/14 通过的完整方法论）

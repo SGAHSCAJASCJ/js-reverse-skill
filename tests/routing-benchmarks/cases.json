@@ -612,6 +612,43 @@
       "stdoutIncludes": [
         "可开始补环境"
       ]
+    },
+    {
+      "id": "RB-030",
+      "title": "search_references：--id 反模式 28 按号提取小节（跟进指针不整读巨头文件）",
+      "skillAnchors": [
+        "search_references.js"
+      ],
+      "script": "search_references.js",
+      "args": [
+        "--id",
+        "反模式 28",
+        "--markdown"
+      ],
+      "files": {},
+      "expectExit": 0,
+      "stdoutIncludes": [
+        "反模式 28：环境语义级偏差",
+        "references/workflow/common-pitfalls.md"
+      ]
+    },
+    {
+      "id": "RB-031",
+      "title": "search_references：编号未命中返回现有编号清单并退出码 1",
+      "script": "search_references.js",
+      "args": [
+        "--id",
+        "反模式 999"
+      ],
+      "files": {},
+      "expectExit": 1,
+      "stdoutIncludes": [
+        "未找到 反模式 999",
+        "现有编号"
+      ],
+      "skillAnchors": [
+        "禁止为单个编号整读"
+      ]
     }
   ]
 }
