@@ -127,6 +127,31 @@ const NODE_TO_TODO = {
   DONE: 11,
 };
 
+// 节点 → 该节点操作细则的权威指针（--init / --set 换节点时输出一行 [GUIDE]）。
+// 细则权威在 references，SKILL.md 只保留硬规则与路由（2.3.118）；编号类知识用 search_references.js --id 按号提取。
+const NODE_GUIDES = {
+  ENV_READY: 'scripts/README.md（环境检测 / install_all 参数）',
+  EVIDENCE_GATE: 'references/workflow/trace-flow.md（取证与 trace 细则）',
+  FORENSIC_CAPTURE: 'references/workflow/trace-flow.md（取证与重试）+ scripts/README.md（forensic_ruyipage 参数）',
+  TRACE_CAPTURE: 'references/workflow/trace-flow.md（trace 采集 / 质量判定）+ scripts/README.md（capture 参数）',
+  TRACE_RETRY: 'references/workflow/trace-flow.md（质量判定 / 降级顺序）',
+  MATERIALS_FALLBACK: 'references/workflow/decision-tree.md（阻塞点 #5）',
+  STEP2_ONLY: 'references/workflow/trace-flow.md（导入与摘要）',
+  BLOCKED_FORENSIC: 'references/env/env-detect-bypass.md（引擎级检测）+ references/workflow/decision-tree.md',
+  IDENTIFY: 'references/workflow/reference-map.md（按题型选最小集合）',
+  TRACE_ANALYZE: 'references/workflow/trace-flow.md（分析顺序）+ references/tooling/ruyitrace-cheatsheet.md（记录语义）',
+  IMPLEMENT: 'references/env/env-debug-loop.md（补环境诊断循环）；反模式/规则用 search_references.js --id 提取',
+  REAL_VERIFY: 'references/quality/validation.md（验证与门禁）+ references/network/ip-risk-control.md（403 分层定位）',
+  DIAGNOSE: 'references/network/ip-risk-control.md（双对照矩阵 / 会话状态类风控）',
+  DELIVER: 'references/quality/final-summary.md（总结模板 / 机器标记）',
+  SIGN_ONLY_DELIVER: 'references/quality/final-summary.md（总结模板 / 机器标记）',
+};
+
+function nodeGuide(node) {
+  const guide = NODE_GUIDES[node];
+  return guide ? `[GUIDE] ${node} 节点细则：${guide}` : '';
+}
+
 function todoHint(node, mode) {
   const idx = NODE_TO_TODO[node];
   if (!idx) return '';
@@ -460,6 +485,7 @@ function main() {
       if (!(node in EDGES)) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error(`self-test: TODO 映射含未知节点 ${node}`); }
     }
     if (!todoHint('FORENSIC_CAPTURE', 'enter').includes('第 4 项')) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error('self-test: todoHint 输出异常'); }
+    if (!nodeGuide('DIAGNOSE') || nodeGuide('CLEANUP')) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error('self-test: nodeGuide 映射异常'); }
     // TODO 清单必须落盘并可渲染：init 后 state.json 带 todo 字段，且 markdown 输出含勾选框
     const inited = readState(tmp);
     if (!inited.todo || inited.todo.length !== 11) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error('self-test: state.json 未落盘 11 项 todo'); }
@@ -563,6 +589,8 @@ function main() {
       extra.push('', `> **警告：检测到另一份状态文件**：${split.join(' / ')}。本次读写的是 ${statePath(caseDir)}，两份进度互不可见（--case-dir 传项目根还是 case 目录会解析到不同位置）。请只保留一份，后续所有命令固定用同一个 --case-dir。`);
     }
     if (hint) extra.push('', hint);
+    const initGuide = nodeGuide(state.node);
+    if (initGuide) extra.push('', initGuide);
     console.log(renderMarkdown(state, extra, caseDir));
     return 0;
   }
@@ -660,15 +688,18 @@ function main() {
     syncTodo(state);
     writeState(caseDir, state);
     const hint = todoHint(to, to === from ? 'same' : wasVisited ? 'back' : 'enter');
+    const guide = to !== from ? nodeGuide(to) : '';
     if (args.markdown) {
       const extra = [`> 状态转换：${from} → **${to}**${args.note ? '（' + args.note + '）' : ''}`];
       if (stepNote) extra.push('', `> ${stepNote}`);
       if (hint) extra.push('', hint);
+      if (guide) extra.push('', guide);
       console.log(renderMarkdown(state, ['', ...extra], caseDir));
     } else {
       console.log(`STATE_TRANSITION: ${from} → ${to}${args.note ? ' | ' + args.note : ''}`);
       if (stepNote) console.log(stepNote);
       if (hint) console.log(hint);
+      if (guide) console.log(guide);
       console.log(renderTodo(state.todo).join('\n'));
     }
     return 0;

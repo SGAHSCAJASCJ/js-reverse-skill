@@ -53,6 +53,8 @@ node scripts/state_machine.js --case-dir <project-root> --guard mcp
 node scripts/gate.js --case-dir <project-root> --at <NODE> --url <目标URL> --inputs <材料路径> --markdown
 ```
 
+**节点细则指针（[GUIDE]）**：`--init` 与 `--set` 换节点时，脚本输出一行 `[GUIDE]` 指向该节点操作细则的权威 references，操作细则按 GUIDE 指针读取（正文只保留硬规则与路由；规则冲突时仍以本文件为准）；编号类知识（反模式/规则）用 `node scripts/search_references.js --id` 按号提取（见第 12 节）。
+
 **TODO 硬门禁（不可跳过）**：`--init` / `--set` / `--guard` 的输出都会渲染「执行 TODO 清单」勾选表（单行形态：`[x]` 已完成 / `[~]` 进行中 / `[ ]` 待办，序号 + 名称 + 勾选符号一行承载），同时落盘到 `state.json.todo`。**权威清单 = 脚本渲染文本 + `state.json.todo`**；宿主有 TODO 工具时尽力同步（逐项同名同序，不新建子任务、不改写条目名），宿主 TODO 的呈现/折叠差异不作为违规判据。判定标准：任何一次状态推进后的回复里必须出现 11 项清单及其勾选状态文本（单行清单，脚本输出原样贴上即可），看不到即视为流程违规，须立即补跑 `--set`（同节点重复设置合法）并输出清单。
 
 清单 11 项（随状态推进勾选；每进入一个状态立即勾选对应项，回退时把对应项重新置为进行中，不新建子任务）：

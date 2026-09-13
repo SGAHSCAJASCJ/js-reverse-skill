@@ -3,6 +3,18 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.118 - 2026-09-13
+
+### 状态机节点细则指针（[GUIDE] 行）：按节点发射权威 references 路由
+
+SKILL.md 的节点操作细则此前只能靠模型自觉跟进指针；本次把「节点 → 细则权威」路由固化进 state_machine.js 输出——指针由脚本在动作时刻喂进上下文，不再依赖模型记忆：
+
+- **state_machine.js**：新增 NODE_GUIDES 映射（ENV_READY / 取证 / trace / IMPLEMENT / REAL_VERIFY / DIAGNOSE / DELIVER 等 15 个节点），`--init` 与 `--set` 换节点时输出一行 `[GUIDE] <节点> 节点细则：<references 指针>`；同节点重复 `--set` 不重复发射（防输出膨胀）；`--self-test` 新增映射断言（PASS）。
+- **SKILL.md §0.0**：新增「节点细则指针」段——操作细则按 GUIDE 指针读取，正文只保留硬规则与路由，规则冲突仍以本文件为准。
+- **scripts/README.md**：state_machine.js 行同步 GUIDE 行为说明。
+
+这是结构性外迁（SKILL.md 90KB → 60-70KB）的前置基础设施：细则外迁后「找不到细则」的风险由 GUIDE 行 + search_references.js（2.3.116）双保险兜住；外迁本体需逐节验证后单独执行。校验：check_routing_benchmarks 31/31、check_skill_consistency 0 问题、check_vendor_leakage 0 命中、check_tool_pins 通过。
+
 ## 2.3.117 - 2026-09-13
 
 ### 状态机 TODO 清单单行化：脚本输出与贴回双程瘦身（上下文经济学 P1）
