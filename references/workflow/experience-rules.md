@@ -4,8 +4,8 @@
 
 ## 一、Hook 安装与入口确认
 
-### 1. Hook 必须在 SDK 加载前安装
-签名型反爬的签名函数在 SDK 加载时即注册到拦截器，Hook 装晚了就截不到调用栈。正确做法是用 `instrumentation(action='reload')`：装完 Hook 后一步重载，默认 `clear_log=True` 拿到干净快照，保证 Hook 先于页面 JS 生效。**反例**：裸 `reload()` 不能保证顺序，常丢前几条调用。注意：`pre_inject_hooks` 仅适用于行为型反爬（首屏挑战页 navigate 时装 Hook），对签名型反爬**永远不要用**，签名型需要源码级插桩控制。常用 Hook 不要手写，`inject_hook_preset` 一键覆盖 xhr/fetch/crypto/websocket/debugger_bypass/cookie/runtime_probe。
+### 1. Hook 与环境补丁必须在目标 SDK/JSVMP 加载前就位（原 18 已并入）
+签名型反爬的签名函数在 SDK 加载时即注册到拦截器，Hook 装晚了就截不到调用栈；环境补丁同理——JSVMP 先加载并缓存了 `XMLHttpRequest.prototype.open` 的原始引用或 `window.chrome` 的取值，后装的 Hook/补丁拦截不到、改不动。正确做法：用 `instrumentation(action='reload')` 装完 Hook 后一步重载（默认 `clear_log=True` 拿到干净快照，保证 Hook 先于页面 JS 生效），环境补丁放在 `instrumentation` 的 `pre_eval` 回调中执行，整体顺序固定为「装 Hook → 补环境 → 加载 JSVMP → 触发签名」。**反例**：裸 `reload()` 不能保证顺序，常丢前几条调用；先加载 JSVMP 再补 `window.chrome`，JSVMP 启动时读到 undefined 已写入内部缓存，后续补丁无效。注意：`pre_inject_hooks` 仅适用于行为型反爬（首屏挑战页 navigate 时装 Hook），对签名型反爬**永远不要用**，签名型需要源码级插桩控制。常用 Hook 不要手写，`inject_hook_preset` 一键覆盖 xhr/fetch/crypto/websocket/debugger_bypass/cookie/runtime_probe。
 
 ### 2. JSVMP 寄存器数是分叉判断依据
 JSVMP 字节码 dispatch 形如 `u[xxx]: x(offset, t, this, arguments, 0, N)`，尾部 `N`（寄存器数）是区分不同函数的分叉依据。同一 opcode 在不同函数中 `N` 不同、行为也不同。识别 JSVMP 后先用 `hook_jsvmp_interpreter` 观察 dispatch 表，按 `N` 值聚类，能快速锁定目标函数所在分支，避免在全部 case 中盲目 trace。**反例**：只看 opcode 不看 `N`，多个函数混在一起，trace 日志爆炸且无法定位签名函数。这是 JSVMP 双路径决策（路径 A 算法追踪 / 路径 D 环境伪装补环境）的前提判断。
@@ -15,8 +15,9 @@ JSVMP 字节码 dispatch 形如 `u[xxx]: x(offset, t, this, arguments, 0, N)`，
 
 ## 二、经验资产与离线验证
 
-### 4. case 中的"可验证事实清单"是经验资产
+### 4. case 是经验资产：升级时核对"可验证事实清单"，命中后精读踩坑记录转检查项（原 7 已并入）
 case 文件的价值随实战次数指数级增长：第一次分析某站点写的 case 可能粗糙；第二次分析（升级或变体）时用 case 发现 80% 还成立、20% 变了，就把变化追加到"变体章节"。"可验证事实清单"是核心资产，同站升级时逐条核对找出"哪些变了"。**示例**：case 记录"签名函数位于 acw_sc.2.js 第 12 万行附近的 dispatch"，升级后核对发现位移到第 15 万行但函数特征不变。EVIDENCE_GATE 指纹匹配时优先检测 `cacheOpts` 和 `X-Gnarly` 区分 SDK 变体（单签名 vs 双签名、bdms.paths vs cacheOpts）。
+命中经验库后不能直接套用，必须按 SKILL.md 状态机正常走完整流程：IMPLEMENT 编码前逐条回查踩坑记录，将每条记录写成可核对的实现约束和验证项（case 记录"该站点 cacheOpts 是新版 SDK 必传项，缺少会导致业务路径未注册、拦截器不触发"，则初始化代码必须传入 cacheOpts，并在验证清单中检查业务路径已注册——旧版只需 `bdms.paths`）。**反例**：只看 case 的算法部分就动手，漏了踩坑记录里的"预热请求注入动态密钥"，跳过 `/api2` 预热导致签名缺密钥。
 
 ### 5. `verify_signer_offline` 是协议代码的 unit test
 把签名算法移植成 Python/Node 协议代码后，用 N 个真实样本（含原始输入 + 浏览器产出的签名）离线验证，字符级定位首个偏差点。这是协议代码的 unit test——只要有一个样本不过，就说明算法有 bug。**反例**：只拿一个样本跑通就交付，结果线上偶发失败（时间戳精度、随机串字符集差异）。注意事项：样本要覆盖不同时间窗、不同参数长度、不同用户态，才能逼出边界 bug。把它当作 CI 门禁，协议代码每次改动都跑全量样本。
@@ -24,16 +25,10 @@ case 文件的价值随实战次数指数级增长：第一次分析某站点写
 ### 6. 想放弃时先回查 cases/ 和 common-pitfalls.md
 绝大多数"想放弃"是踩了已知反模式。降级梯度必须逐级走：`instrumentation(mode="ast")` → 失败 → `mode="regex"` 覆盖率不足 → `hook_jsvmp_interpreter(mode="transparent")` 日志太少 → `mode="proxy"` 破坏签名 → 路径 D（jsdom 环境伪装）→ 也失败 → 向用户说明。每级至少尝试一次并记录失败原因。**示例**：AST 插桩失败常因严格 CSP，v0.6.0 的 `csp_bypass=True` 可自动绕过。回查 common-pitfalls.md 往往 10 分钟解决卡了 2 小时的问题，不要跳过这一步。
 
-### 7. 命中案例后必须精读踩坑记录并转成检查项
-命中经验库后不能直接套用，必须按 SKILL.md 状态机正常走完整流程。IMPLEMENT 编码前逐条回查踩坑记录，将每条记录写成可核对的实现约束和验证项。**示例**：case 记录"该站点 cacheOpts 是新版 SDK 必传项，缺少会导致业务路径未注册、拦截器不触发"，则初始化代码必须传入 cacheOpts，并在验证清单中检查业务路径已注册（旧版只需 `bdms.paths`）。**反例**：只看 case 的算法部分就动手，漏了踩坑记录里的"预热请求注入动态密钥"，跳过 `/api2` 预热导致签名缺密钥。命中后第一步是通读 case 全文，把每条 pitfall 转成 checklist。
-
 ## 三、JSVMP 路径选择
 
-### 8. JSVMP 先选路径再动手
-识别到 JSVMP 后立即在路径 A（算法追踪）和路径 D（环境伪装/补环境）间决策，不要边做边换。签名型反爬只能走源码级插桩（`instrumentation mode="ast"`）；可在 Node 中加载执行的 JSVMP 优先走路径 D。RS 5/6、某 CDN 风控 sensor_data、webmssdk 这类"算法全在 opcode dispatch 循环内"的 VMP，`hook_jsvmp_interpreter` 也看不到 switch/case 内部，AST 插桩是唯一能打开黑箱的工具。**反例**：先试路径 D 跑半天发现 JSVMP 有反 jsdom 检测，再换路径 A，前功尽弃。决策依据见规则 2 的寄存器数分析。
-
-### 9. `String.fromCharCode` 是高频信号
-VM 解释器大量使用 `String.fromCharCode` 构造字符串（绕开字面量静态扫描），该调用的高密度区往往是字符串构造区，紧邻签名算法。`search_code(keyword="String.fromCharCode", script_url=url)` 能快速定位 dispatch 表附近的代码。**示例**：在某 acw_sc VMP 中，`fromCharCode` 调用密集区往后 200 行就是签名入口。注意事项：单纯 hook `fromCharCode` 会触发太多次，应结合寄存器数（见规则 2）过滤到目标函数后再 hook。其它高频信号词：`prototype.open`、`Object.defineProperty`、`toString`、签名函数名（`X-Bogus`、`_signature`）。
+### 8. JSVMP 先选路径再动手（原 15 已并入）
+识别到 JSVMP 后立即在路径 A（算法追踪）和路径 D（环境伪装/补环境）间决策，不要边做边换。签名型反爬只能走源码级插桩（`instrumentation mode="ast"`）；可在 Node 中加载执行、无反 jsdom/vm 检测的"签名黑箱"优先走路径 D（采集→对比→补丁），比追踪字节码执行快 10 倍。运行成本梯度：能 Node `crypto` 解决的不用 `vm`；能 `vm` 的不用 jsdom；能 jsdom 的不开浏览器。RS 5/6、某 CDN 风控 sensor_data、webmssdk 这类"算法全在 opcode dispatch 循环内"的 VMP，`hook_jsvmp_interpreter` 也看不到 switch/case 内部，AST 插桩是唯一能打开黑箱的工具。**反例**：先试路径 D 跑半天发现 JSVMP 有反 jsdom 检测，再换路径 A，前功尽弃；或明明无 vm 检测却硬啃 20 万行字节码 trace，3 天没出结果。决策依据见规则 2 的寄存器数分析；路径 D 前先确认无 vm 检测——Node vm 沙箱 ≠ 浏览器，部分调试干扰机制只在非浏览器环境触发（`window`/`document`/`navigator` 未定义、定时器行为不同），有检测时补的环境会被识破。
 
 ## 四、签名不一致排查
 
@@ -42,33 +37,21 @@ VM 解释器大量使用 `String.fromCharCode` 构造字符串（绕开字面量
 
 ## 五、运行时复用与 Hook 持久化
 
-### 11. Python `execjs` 复用 context
-Python 调 JS 签名时，`execjs` 编译一次 context 多次调用，避免每次请求重新创建运行时。**示例**：`ctx = execjs.compile(js_code)` 后多次 `ctx.call("sign", params)`，比每次 `execjs.eval` 快 10 倍以上。**反例**：在请求循环里每次 `execjs.compile`，单次耗时 200ms 起步，QPS 上不去。注意事项：context 内若维护了状态（如计数器、时间窗），跨请求复用要确认状态污染；多线程场景每个线程独立 context，避免共享运行时崩溃。
-
-### 12. Hook 必须持久化 + 防覆盖
-JSVMP 常在运行时重新赋值 `XMLHttpRequest.prototype.open` 等原型方法，覆盖掉你装的 Hook。必须用 `persistent=True`（页面导航/重载后自动重装）+ `non_overridable=True`（阻止后续覆写）。**示例**：某平台 SDK 加载后立即 `XMLHttpRequest.prototype.open = nativeOpen`，未加 `non_overridable` 的 Hook 被静默还原，截不到任何调用。注意事项：`non_overridable` 对部分严格检测环境的站点可能被探测到（属性描述符不可写），权衡使用；若站点主动检测描述符，改用实例级覆写。
+### 12. 运行时与 Hook 必须持久化：context 复用、防覆盖（原 11 已并入）
+JSVMP 常在运行时重新赋值 `XMLHttpRequest.prototype.open` 等原型方法，覆盖掉你装的 Hook。必须用 `persistent=True`（页面导航/重载后自动重装）+ `non_overridable=True`（阻止后续覆写）。**示例**：某平台 SDK 加载后立即 `XMLHttpRequest.prototype.open = nativeOpen`，未加 `non_overridable` 的 Hook 被静默还原，截不到任何调用。注意事项：`non_overridable` 对部分严格检测环境的站点可能被探测到（属性描述符不可写），权衡使用；若站点主动检测描述符，改用实例级覆写。交付侧同理——Python `execjs` 编译一次 context 多次调用（`ctx = execjs.compile(js_code)` 后多次 `ctx.call("sign", params)`，比每次 `execjs.eval` 快 10 倍以上）；**反例**：在请求循环里每次 `execjs.compile`，单次耗时 200ms 起步 QPS 上不去，且计数器/时间窗等状态随重建重置（见反模式 7）。context 内若维护了状态（计数器、时间窗），跨请求复用要确认状态污染；多线程场景每个线程独立 context，避免共享运行时崩溃。
 
 ## 六、工具技巧
 
-### 13. `search_code(keyword, script_url=url)` 定位大文件
-JSVMP 文件通常 200KB+，直接读全文件 token 爆炸。用 `search_code(keyword, script_url=url)` 在指定脚本中搜索关键词，返回匹配行 + 前后上下文，精准定位。**示例**：搜 `fromCharCode` 找到 30 处命中，每处给 5 行上下文，比读 20 万行文件高效。常见关键词：`fromCharCode`、`prototype.open`、`Object.defineProperty`、`toString`、签名函数名。注意事项：关键词太泛（如 `function`）命中太多，太窄可能漏，先用 `analyze_cookie_sources(name_filter="目标cookie名")` 缩小范围再搜。
+### 13. 大文件定位：`search_code` + 高频信号词（原 9 已并入）
+JSVMP 文件通常 200KB+，直接读全文件 token 爆炸。用 `search_code(keyword, script_url=url)` 在指定脚本中搜索关键词，返回匹配行 + 前后上下文，精准定位。高频信号词：`String.fromCharCode`（VM 解释器大量用它构造字符串绕开字面量静态扫描，高密度区是字符串构造区、紧邻签名算法——某 acw_sc VMP 中 `fromCharCode` 调用密集区往后 200 行就是签名入口）、`prototype.open`、`Object.defineProperty`、`toString`、签名函数名（`X-Bogus`、`_signature`）。**示例**：搜 `fromCharCode` 找到 30 处命中，每处给 5 行上下文，比读 20 万行文件高效。**反例**：关键词太泛（如 `function`）命中太多，太窄可能漏，先用 `analyze_cookie_sources(name_filter="目标cookie名")` 缩小范围再搜。注意事项：单纯 hook `fromCharCode` 会触发太多次，应结合寄存器数（见规则 2）过滤到目标函数后再 hook。
 
-### 14. `compare_env` 是补环境起点
-先在 ruyiPage（真实 Firefox 内核）中采集环境基准数据，再用 `evaluate_js` 在 jsdom 中分批采集细粒度值，与基准逐项 diff，差什么补什么。**反例**：凭经验猜缺 `navigator.webdriver`，补了仍报错，实际缺的是 `window.chrome.runtime`。`compare_env` 自动输出 diff 报告，避免盲补。注意事项：ruyiPage 基于 Firefox，原生函数 toString 返回含换行缩进格式（`function name() {\n    [native code]\n}`），与 Chrome（`function name() { [native code] }`）不同，补丁格式必须匹配采集基准浏览器，否则被指纹库识别。
+### 14. `compare_env` + 分批采集是补环境起点（原 17 已并入）
+先在 ruyiPage（真实 Firefox 内核）中采集环境基准数据，再用 `evaluate_js` 在 jsdom 中分批采集细粒度值，与基准逐项 diff，差什么补什么。**反例**：凭经验猜缺 `navigator.webdriver`，补了仍报错，实际缺的是 `window.chrome.runtime`。`compare_env` 自动输出 diff 报告，避免盲补。采集必须分批：单次 `evaluate_js` 代码太长会报错（jsdom 执行超时或内存溢出），分 4-5 批（① navigator → ② screen + window → ③ document + performance + toString → ④ DOM + Canvas + WebGL + Audio → ⑤ 其它），每批 30-50 项，每批结果与基准 diff 后立即补、再采下一批——单批失败也能快速定位（**反例**：一次采 200 项属性，jsdom 卡死，无法定位是哪项触发检测）；toString 单独成批，它需要遍历所有原型方法，单独处理便于排查。注意事项：ruyiPage 基于 Firefox，原生函数 toString 返回含换行缩进格式（`function name() {\n    [native code]\n}`），与 Chrome（`function name() { [native code] }`）不同，补丁格式必须匹配采集基准浏览器，否则被指纹库识别。
 
 ## 七、环境伪装踩坑
 
-### 15. JSVMP 环境伪装优先于算法追踪
-如果 JSVMP 只是"签名黑箱"且可在 jsdom 中加载执行，优先走路径 D（采集→对比→补丁），比追踪字节码执行快 10 倍。降级梯度：能 Node `crypto` 解决的不用 `vm`；能 `vm` 的不用 jsdom；能 jsdom 的不开浏览器。**反例**：明明 JSVMP 无反 jsdom 检测，却硬啃 20 万行字节码 trace，3 天没出结果。注意事项：Node vm 沙箱 ≠ 浏览器，部分调试干扰机制只在非浏览器环境触发（`window`/`document`/`navigator` 未定义、定时器行为不同），路径 D 前先确认无 vm 检测，否则补的环境会被识破。
-
 ### 16. `Function.prototype.toString` 是第一杀手
 jsdom 所有 DOM 方法的 `toString()` 会暴露实际 JS 代码（如 `function() { return this._domImpl.foo(); }`），JSVMP 一调用就识破。必须三层防御：① WeakSet 记录已伪装函数 → ② 实例级覆写（`Object.defineProperty` 单个方法）→ ③ 源码模式正则（批量替换 toString 返回值）。**示例**：补 `document.createElement.toString()` 必须返回 `function createElement() { [native code] }`。注意 Firefox 格式与 Chrome 不同（见规则 14），`markNative` 必须匹配基准浏览器格式，否则被指纹库识别。这是 jsdom 环境伪装失败的最高频原因。
-
-### 17. 环境对比要分批采集
-单次 `evaluate_js` 代码太长会报错（jsdom 执行超时或内存溢出），分 4-5 批采集：① navigator → ② screen + window → ③ document + performance + toString → ④ DOM + Canvas + WebGL + Audio → ⑤ 其它。每批结果与基准 diff 后立即补，再采下一批。**反例**：一次采 200 项属性，jsdom 卡死，无法定位是哪项触发检测。分批后每批 30-50 项，单批失败也能快速定位。注意事项：toString 单独成批，因为它需要遍历所有原型方法，单独处理便于排查。
-
-### 18. 环境补丁必须在 JSVMP 脚本加载前完成
-XHR Hook 的安装顺序决定能否截获最终 URL——若 JSVMP 先加载并缓存了 `XMLHttpRequest.prototype.open` 的原始引用，后装的 Hook 拦截不到。**反例**：先加载 JSVMP 再补 `window.chrome`，JSVMP 启动时读到的是 undefined，已写入内部缓存，后续补丁无效。正确顺序：装 Hook → 补环境 → 加载 JSVMP → 触发签名。用 `instrumentation(action='reload')` 保证 Hook 在最早期注入，环境补丁放在 `instrumentation` 的 `pre_eval` 回调中执行。
 
 ## 八、evaluate_js 写法
 
@@ -298,7 +281,7 @@ vmpzl 系 VM 执行到业务层时通过 **eval 执行"反序列化生成的 JS 
    `#pgxNext` click——页面自身走"getTime → 算 token → ajax"链路，天然复用会话内递增计数器；
    沙箱必须跨页复用（token 材料含 counter，重建沙箱会让 counter 回初值）。
 
-## 十八、AI 协作：大体积材料的处理纪律
+## 十九、AI 协作：大体积材料的处理纪律
 
 ### 40. AI 负责组织证据与缩小范围，不负责猜答案——大体积材料先脚本聚合再分段阅读
 
@@ -313,7 +296,7 @@ vmpzl 系 VM 执行到业务层时通过 **eval 执行"反序列化生成的 JS 
 
 反例：面对几万行指令轨迹直接问 AI"这个算法是什么"并采信回答——没有证据坐标的答案无法验收（规则 30 对拍、规则 23 大样本统计均无法执行）；或让 AI 生成一遍"看起来对"的签名实现，跳过 `verify_signer_offline` 直接发真实请求（违反 IMPLEMENT 准入三件套与 REAL_VERIFY 前置）。**AI 参与不改变门禁权威**：`state_machine.js --guard` 与 `check_*.js` 校验序列仍是唯一放行依据。
 
-## 十九、自同构校验与 wasm 边界捕获（设备指纹 SDK 实证，详见案例库）
+## 二十、自同构校验与 wasm 边界捕获（设备指纹 SDK 实证，详见案例库）
 
 ### 41. 「官方包 200 / 重建包必 500」= 自同构校验信号，先查自喂输入再谈环境对齐
 
@@ -327,29 +310,47 @@ vmpzl 系 VM 执行到业务层时通过 **eval 执行"反序列化生成的 JS 
 
 wasm 输出 = f(线性内存, wasm 全局, 导入值)，全局变量（堆指针/状态机）从 JS 不可恢复——**跨实例内存快照恢复是结构性死路**（恢复 7MB 后 pre-hash 一致仍 OOB，反模式 40），不要试图字节级复现历史会话。正确目标是用捕获的真实设备输入 + 运行时时间/随机做 **fresh 生成**：fresh 实例自带一致的 (初始内存, 初始全局)，产出载荷自洽即可被服务端接受（真机自身的时间/随机也每次漂移）。配套两个减负实验：①`导入调用序`每次运行漂移（24~27 条、分支性导入出现/消失），交付侧导入实现为幂等动态函数，不按静态表硬编码；②**载荷自包含性实测**——跳过注册上报直发业务接口，若 200 则注册非必需，交付流程少一次请求足迹。不确定的输入语义（如异或对的位宽语义）用双变体实测定夺，不靠猜。
 
+## 已合并条目指针（旧编号 → 主条目）
+
+| 旧编号 | 并入 | 原主题 |
+|-------|------|--------|
+| 7 | 规则 4 | 命中案例后必须精读踩坑记录并转成检查项 |
+| 9 | 规则 13 | `String.fromCharCode` 是高频信号 |
+| 11 | 规则 12 | Python `execjs` 复用 context |
+| 15 | 规则 8 | JSVMP 环境伪装优先于算法追踪 |
+| 17 | 规则 14 | 环境对比要分批采集 |
+| 18 | 规则 1 | 环境补丁必须在 JSVMP 脚本加载前完成 |
+
+## 贡献新规则
+
+不是每个案例都产生新规则：多数案例的经验已被现有条目覆盖，案例细节写进 `result/经验沉淀-<站点>.md` 交付物即可，引用现有编号（含上方指针表旧编号）优于新增。确需新增时：
+1. 先检索确认未覆盖：速查 `search_references.js --keyword <关键词>` + 通读本文件同章节条目，确认根因确实未被覆盖且可跨站点泛化。
+2. 按"### N. XXX"格式追加一条（编号顺延，不重排既有编号），必须有**实证来源**（案例/站点）、**具体操作**、**反例**、**正确做法**。
+3. **同根因合并优先**：新经验与既有条目同根因时并入既有条目（原编号保留在上方指针表），不新增编号；并入前同时检查主条目与指针条目两处。当前规模：**37 条实条 + 6 条指针**（7/9/11/15/17/18）。
+
 ## 相关案例
 
 | 案例文件 | 关联点 |
 |---------|--------|
-| `cases/jsvmp-xhr-interceptor-env-emulation.md` | 规则 1/3/5/12/16/18 实战验证 |
+| `cases/jsvmp-xhr-interceptor-env-emulation.md` | 规则 1/3/5/12/16 实战验证（原 18 已并入 1） |
 | `cases/jsvmp-dual-sign-xhr-intercept-cacheOpts-jsdom-firefox.md` | 规则 1/3/12/14/16 实战验证 |
 | `cases/jsvmp-ruishu6-cookie-412-sdenv.md` | 规则 2/6/8 实战验证 |
-| `cases/universal-vmp-source-instrumentation.md` | 规则 1/2/8/9 实战验证 |
+| `cases/universal-vmp-source-instrumentation.md` | 规则 1/2/8/13 实战验证（原 9 已并入 13） |
 | `cases/modified-md5-xhr-done-yuanrenxue.md` | 规则 10 实战验证（T常量篡改 + XHR.DONE 步长退化根因；降级前先做时间冻结对照法） |
 | `cases/yidun-jigsaw.md` | 规则 20 实战验证（m 空串陷阱 + 全字段解密 + 逐点统计） |
 | `cases/yidun-intellisense-vm-env.md` | 规则 20 实战验证（成功样本链路字段核对） |
 | `cases/yuanrenxue-match4-sprite-pixelsort.md` | 规则 21 + 图片像素判定（base64 唯一 ≠ 像素唯一）实战验证 |
 | `cases/yuanrenxue-match6-aarcsa-honeymoon-risk.md` | 会话状态类风控（蜜月期/频率/惩罚层）+ 反模式 13/14 实战验证 |
-| `cases/yuanrenxue-match9-dynamic-cookie2.md` | 规则 22 实战验证（RSA 循环加密禁缓存）+ 规则 23 实战验证（随机边缘拒绝需大样本判别）+ 数据绑定会话（反模式 19）+ 黑盒 SDK 定期更新（dynamic-resource.md 专节） |
-| `cases/yuanrenxue-match10-ruishu3-replay-defense.md` | 规则 24 实战验证（预填状态快照致引导脚本走旁路）+ 反模式 16/20/11 实战验证（插桩 while(1) 禁令 / VM 卡死转投浏览器 / 外部失败误归因通道层）+ 会话配套资源（dynamic-resource.md 专节）+ 元素语义真实化（env-object-model.md） |
+| `cases/yuanrenxue-match9-dynamic-cookie2.md` | 规则 22 实战验证（RSA 循环加密禁缓存）+ 规则 23 实战验证（随机边缘拒绝需大样本判别）+ 数据绑定会话（反模式 18）+ 黑盒 SDK 定期更新（dynamic-resource.md 专节） |
+| `cases/yuanrenxue-match10-ruishu3-replay-defense.md` | 规则 24 实战验证（预填状态快照致引导脚本走旁路）+ 反模式 16/11 实战验证（插桩 while(1) 禁令 / VM 卡死转投浏览器（已并 16）/ 外部失败误归因通道层）+ 会话配套资源（dynamic-resource.md 专节）+ 元素语义真实化（env-object-model.md） |
 | `cases/yuanrenxue-match16-webpack-blackbox-branch.md` | 规则 26 实战验证（webpack 模块切片定界 + 隔离作用域 + require 桩 + 反调试处理）+ 反模式 26 实战验证（抠代码后分支漂移：格式全对却被拒） |
 | `cases/yuanrenxue-match17-http2-transport-plaintext.md` | 规则 27 实战验证（请求侧无签名三条判据 + 传输层 HTTP/2/UA/Cookie 对齐）+ 反模式 27 实战验证（诱饵参数 `m` 恒 undefined 被序列化层丢弃）+ 反模式 22 二次实证（`--targets "question/17"` 误命中静态资源） |
 | `cases/yuanrenxue-match18-jsvmp-mouse-gated-signature.md` | 规则 28 实战验证（JSVMP 静默退出双层插桩定位 + 语义级环境对齐：内建自有属性 / webdriver 挂原型 / 鼠标事件门控）+ 反模式 28 实证 + 反模式 27 四次实证（`window.match18` 连环诱饵）+ 末页 page=05 双重校验 |
 | `cases/yuanrenxue-match19-tls-fingerprint-blocklist.md` | 规则 27 扩充实证（跨客户端栈对照法定位 TLS ClientHello 黑名单 + 交付语言切换依据；末页 UA 提示数组按元素类型判别）+ 反模式 27 五次实证并修正机理（丢弃在 `k.extend` 深拷贝 `copy!==undefined` 守卫，非 `$.param`——debug 文本含参数 ≠ wire URL 含参数） |
-| `cases/yuanrenxue-match24-jsvmp-blackbox-tl-xor30.md` | 规则 30 实战验证（逐位 diff 判分布→常量偏移 XOR 30 就地修正；VM 探针直达路径/沙箱 realm 钩子/按页构建时效窗口）+ 规则 31 实证（LEAD_MS 补偿伪需求：先测 age 窗口 2~4s，慢的根源是逐页点击派发非时间补偿）+ 规则 32 实证（jQuery expando 随机值：格式正确+运行时随机，服务端只验结构自洽）+ 反模式 32/33 实证 |
+| `cases/yuanrenxue-match24-jsvmp-blackbox-tl-xor30.md` | 规则 30 实战验证（逐位 diff 判分布→常量偏移 XOR 30 就地修正；VM 探针直达路径/沙箱 realm 钩子/按页构建时效窗口）+ 规则 31 实证（LEAD_MS 补偿伪需求：先测 age 窗口 2~4s，慢的根源是逐页点击派发非时间补偿）+ 规则 32 实证（jQuery expando 随机值：格式正确+运行时随机，服务端只验结构自洽）+ 反模式 23/18 实证（常量偏移 XOR 30 就地修正 / 对拍锁同源） |
 | `cases/yuanrenxue-match26-sm3-blackbox-page-drive.md` | 反模式 29/31 同族实证（SM3 魔改 8 组环境分派 IV，Firefox 取证内核 403 诱饵分支）+ 页面自驱动翻页（jq 桩 on() 记录 handler + 手动触发 click）+ 成对相同 token 的字节级折叠诊断（strToBytes `k & 0xfe` 偶数化）+ 会话验活（数据接口 200 ≠ 登录态存活）+ detect-patterns 自引用检测补强（拼接结果被 charCodeAt 形态漏报） |
 | `cases/yuanrenxue-match25-cfa-vm-blackbox-env-realm.md` | 规则 33 实战验证（环境桩必须在沙箱内执行：主 realm 定义 `win.window=globalThis` → self-reference 自检失败 → `_$VM=111` 分支 → 403 token failed；同输入双环境对比定位）+ 规则 34 实证（T 偏移矩阵 now±100s 全过 = 服务端不校验时间窗口，冻结 Date=now 即可，无需补偿）+ 反模式 34 实证 + IIFE 门禁坑（环境桩拆 browser-objects 顶层代码，check_code_quality 单函数上限） |
-| `cases/yuanrenxue-match28-jsvmp-rsa-purecompute.md` | 规则 35 实战验证（JSVMP 字节码 limbs 字面量直读 → 确定性 RSA-1024 纯算，无需跑 VM；固定 0x01 padding 对拍；limbs 出现序≠数组序）+ 规则 36 实证（数据绑定 sessionid：换会话数据完全不同必须重算，答案 25808383→27673886）+ 规则 37 实证（限流 403 token failed 单请求诊断法：第 3 页起 403 但单请求 200 = 频率墙；页间 3s+冷却+提交 --answer 解耦）+ 反模式 35/36 实证 + JSBN hex2b64 非标准编码 |
+| `cases/yuanrenxue-match28-jsvmp-rsa-purecompute.md` | 规则 35 实战验证（JSVMP 字节码 limbs 字面量直读 → 确定性 RSA-1024 纯算，无需跑 VM；固定 0x01 padding 对拍；limbs 出现序≠数组序）+ 规则 36 实证（数据绑定 sessionid：换会话数据完全不同必须重算，答案 25808383→27673886）+ 规则 37 实证（限流 403 token failed 单请求诊断法：第 3 页起 403 但单请求 200 = 频率墙；页间 3s+冷却+提交 --answer 解耦）+ 反模式 18/36 实证（换会话数据绑定重算 / 限流单请求诊断）+ JSBN hex2b64 非标准编码 |
 | `cases/yuanrenxue-match27-jsencrypt-random-rsa-purecompute.md` | 规则 38 实战验证（X.509 SPKI hex 公钥 + getRandomValues = JSEncrypt 随机 RSA → publicEncrypt 纯算；候选 X×公钥扫描实证明文常量：pubkey1+X=27 → 200、pubkey2 全 403；**沙箱跑通+结构像 ≠ 服务端接受**——_$v 依赖 document.all 分支致运行时常量算错，可纯算时转纯算不死磕沙箱）+ 反模式 27 五次实证（m=window["matchnumber"]=undefined 诱饵）+ 反模式 36 同族实证（429 限流）+ jq 桩 Proxy 缓存坑（缓存裸 obj 致二次访问缺失方法报错） |
 | `cases/yuanrenxue-match29-vmpzl-eval-log-source.md` | 规则 39 实战验证（JSVMP 业务逻辑经 eval 反序列化执行 → RuyiTrace eval 分类日志落盘业务源码，绕开 LZ 压缩/字节码/VM 指令三层直读；eval 源码变量名 `_$`+随机但结构稳定，grep `token`/`case 64` 定位请求构造）+ 反模式 37 实证（手写 `LZ.` 前缀解压器是死路，先查 eval 日志）+ 反模式 27 再实证（m=window.matchnumber 诱饵）+ match26 同款实证（页面自驱动翻页注入新 now、jQuery 桩 `.add()` 必须有）+ 46 项环境探测桩全 true（Symbol.toStringTag 补 HTMLDocument/Navigator）+ Session 门禁字面识别再实证（`client.getPage(` 不算复用，须 `client.get/post(`） |
 | `cases/wasm-harness-selfhash-fp-blackbox.md` | 规则 41~43 实战验证（自同构校验：wasm 导入自喂脚本源全文与 wasm 自身字节 → 官方包 200/重建包必 500 的真因；透明边界全量捕获 hook 两个重载/内存导出名坑；跨实例内存快照恢复 OOB 死路 → fresh 生成 + 成对设备画像；载荷自包含实测 no-register 也 200）+ 反模式 39/40 实证 + 7 轮环境层修补（逐槽对齐/全量回灌/凭据注入/TLS 替换）全部无效的教训：对照实验未锁"脚本源与 wasm 字节逐字节相同"这一前置 |

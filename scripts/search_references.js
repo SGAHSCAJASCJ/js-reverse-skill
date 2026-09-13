@@ -3,7 +3,7 @@
 
 // references 知识点检索（SKILL.md §12 路由配套，2.3.116）。
 // 动机：SKILL.md / references 中大量「见反模式 N / 规则 N」指针，跟进一次的代价是整读
-// common-pitfalls.md（~40KB）/ experience-rules.md（~30KB）全文件——为单个编号读 2 万+
+// common-pitfalls.md（~75KB）/ experience-rules.md（~50KB）全文件——为单个编号读 2 万+
 // tokens 与 SKILL.md §12「按需最小集合」相悖。本工具把指针变成按号提取：
 // --id 从小节标题定位（标题行到下一个同级标题），--keyword 跨文件关键词兜底。
 // 检索范围：references/**/*.md + scripts/README.md + assets/ast-patterns/README.md。
@@ -166,10 +166,43 @@ function availableNumbers(scope, kind) {
   return byNumber;
 }
 
-function lookupId(scope, rawId) {
+// 解析「已合并条目指针」表 → { 反模式: Map<旧,主>, 规则: Map<旧,主> }
+// 反模式指针在 common-pitfalls.md，规则指针在 experience-rules.md
+function parseMergedPointers(scope) {
+  const pointers = { 反模式: new Map(), 规则: new Map() };
+  for (const item of scope) {
+    const rel = toPosix(item.rel);
+    const kind = rel.endsWith('common-pitfalls.md') ? '反模式' : rel.endsWith('experience-rules.md') ? '规则' : null;
+    if (!kind) continue;
+    let inTable = false;
+    for (const line of item.text.split(/\r?\n/)) {
+      if (/^##\s*已合并条目指针/.test(line)) { inTable = true; continue; }
+      if (inTable && /^##\s/.test(line)) break;
+      if (!inTable) continue;
+      const m = line.match(new RegExp(`^\\|\\s*0*(\\d+)\\s*\\|\\s*${kind}\\s*0*(\\d+)(?!\\d)`));
+      if (m) pointers[kind].set(Number(m[1]), Number(m[2]));
+    }
+  }
+  return pointers;
+}
+
+function lookupId(scope, rawId, mergedPointers) {
   const { kind, number } = parseId(rawId);
   const label = `${kind} ${number}`;
   const hits = findIdHeadings(scope, kind, number);
+  if (!hits.length && mergedPointers && mergedPointers[kind] && mergedPointers[kind].has(number)) {
+    // 指针跳转：旧编号已并入主条目，直接提取主条目正文
+    const mainNumber = mergedPointers[kind].get(number);
+    const mainHits = findIdHeadings(scope, kind, mainNumber);
+    if (mainHits.length) {
+      const hint = CANONICAL_HINTS.find((c) => c.kind === kind);
+      const canonical = hint ? mainHits.find((h) => hint.pattern.test(h.file)) : null;
+      const primary = canonical || mainHits[0];
+      const section = extractSection(primary.lines, primary.line - 1, primary.level);
+      const note = `[已合并] ${kind} ${number} 已并入${kind} ${mainNumber}，以下为主条目内容：`;
+      return { label, found: true, file: primary.file, line: primary.line, text: `${note}\n\n${section.text}`, truncated: section.truncated, others: [] };
+    }
+  }
   if (!hits.length) {
     const available = [...availableNumbers(scope, kind).keys()].sort((a, b) => a - b);
     return { label, found: false, message: `未找到 ${label}（现有编号：${available.join(', ')}）。编号可能已被合并或删除，用 --keyword <关键词> 兜底检索。` };
@@ -261,7 +294,7 @@ function main() {
     : [];
   for (const warning of warnings) process.stdout.write(`${warning}\n`);
 
-  const idResults = args.ids.map((id) => lookupId(scope, id));
+  const idResults = args.ids.map((id) => lookupId(scope, id, parseMergedPointers(scope)));
   const keywordResults = args.keywords.map((kw) => ({ keyword: kw, hits: searchKeywords(scope, [kw]) }));
   const anyMiss = idResults.some((r) => !r.found) || keywordResults.some((r) => !r.hits.length);
   if (!anyMiss) process.exitCode = 0; else process.exitCode = 1;

@@ -32,7 +32,7 @@
 
 | 脚本 | 功能 | 典型用法 |
 |------|------|---------|
-| `search_references.js` | 把「见反模式 N / 规则 N」类指针变成按号提取：`--id` 从小节标题提取到下一个同级标题，`--keyword` 跨 references/**/*.md 与本 README 关键词兜底；同号多文件按权威归属取正文；提供 `--case-dir` 时记入 query-log 打转检测。避免为单个编号整读 `common-pitfalls.md` / `experience-rules.md` 全文 | `node scripts/search_references.js --id "反模式 28" --markdown`；`node scripts/search_references.js --keyword 对齐探针 --dir references/env` |
+| `search_references.js` | 把「见反模式 N / 规则 N」类指针变成按号提取：`--id` 从小节标题提取到下一个同级标题，已合并旧编号自动跳转主条目；`--keyword` 跨 references/**/*.md 与本 README 关键词兜底；同号多文件按权威归属取正文；提供 `--case-dir` 时记入 query-log 打转检测。避免为单个编号整读 `common-pitfalls.md` / `experience-rules.md` 全文 | `node scripts/search_references.js --id "反模式 28" --markdown`；`node scripts/search_references.js --keyword 对齐探针 --dir references/env` |
 
 ## 状态机与聚合门禁（2 个）
 
@@ -99,7 +99,7 @@
 | `check_code_quality.js` | 检查代码简洁性、模块化、编码与交付代码规则 | `node scripts/check_code_quality.js --case-dir <project-root> --markdown` |
 | `check_final_artifact.js` | 检查交付目录、单一入口、禁用浏览器自动化、总结与经验沉淀等规则 | `node scripts/check_final_artifact.js --case-dir <project-root> --markdown` |
 | `check_risk_layer_diagnosis.js` | 403/风控码分层定位门禁：验证记录含 401/403/412/429 失败尝试时，校验 `riskLayerDiagnosis` 双对照（正向新鲜签名重放 + 反向 hook 注入）齐备、新鲜、与结论自洽，拦截「无对照/过期样本下连接层结论」 | `node scripts/check_risk_layer_diagnosis.js --case-dir <project-root> --markdown` |
-| `check_skill_consistency.js` | 检查 SKILL.md 关键门禁锚点、引用路径与 references 孤儿文件 | `node scripts/check_skill_consistency.js --project-dir <project-root> --markdown` |
+| `check_skill_consistency.js` | 检查 SKILL.md 关键门禁锚点、引用路径、references 孤儿文件、scripts 索引同步，以及「反模式 N / 规则 N」编号引用真实存在（实条或合并指针） | `node scripts/check_skill_consistency.js --project-dir <project-root> --markdown` |
 | `check_vendor_leakage.js` | 检查通用文档（除 `cases/`、`references/captcha/`、识别参考与自带「知识分级」声明的文档）是否出现具体厂商名/目标平台名，防 SKILL.md §3 T1/T2 越界漂移 | `node scripts/check_vendor_leakage.js --project-dir <project-root> --markdown` |
 | `check_fingerprint_fixture.js` | 检查指纹 fixture 对 Canvas、WebGL、Audio、DOM 几何等的覆盖 | `node scripts/check_fingerprint_fixture.js --case-dir <project-root> --markdown` |
 | `check_dynamic_resources.js` | 检查动态资源是否仅作快照，并具备运行时刷新设计 | `node scripts/check_dynamic_resources.js --case-dir <project-root> --markdown` |

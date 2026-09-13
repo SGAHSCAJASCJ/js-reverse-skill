@@ -145,6 +145,52 @@ function checkScriptsIndex(root) {
   return problems;
 }
 
+// SKILL.md 引用的「反模式 N / 规则 N」编号必须真实存在（实条或指针），
+// 防止 references 层合并/删除条目后 SKILL.md 留下死编号。
+function checkNumberedRefs(root, skillText) {
+  const problems = [];
+  const pitfallPath = path.join(root, 'references', 'workflow', 'common-pitfalls.md');
+  const rulesPath = path.join(root, 'references', 'workflow', 'experience-rules.md');
+  if (!exists(pitfallPath) || !exists(rulesPath)) return problems;
+
+  const pitfall = readText(pitfallPath);
+  const rules = readText(rulesPath);
+
+  // 反模式实条编号（## 反模式 N：）+ 指针表旧编号（| N | 反模式 M |）
+  const validAntis = new Set();
+  for (const m of pitfall.matchAll(/^#{2,6}\s+反模式\s*0*(\d+)(?!\d)/gm)) validAntis.add(Number(m[1]));
+  let inPointerTable = false;
+  for (const line of pitfall.split(/\r?\n/)) {
+    if (/^##\s*已合并条目指针/.test(line)) { inPointerTable = true; continue; }
+    if (inPointerTable && /^##\s/.test(line)) break;
+    const m = inPointerTable ? line.match(/^\|\s*0*(\d+)\s*\|\s*反模式\s*0*(\d+)(?!\d)/) : null;
+    if (m) validAntis.add(Number(m[1]));
+  }
+  // 规则实条编号（### N. 全局编号 + 显式「规则 N」标题）+ 指针表旧编号（| N | 规则 M |）
+  const validRules = new Set();
+  for (const m of rules.matchAll(/^#{2,6}\s+0*(\d+)[．.、]\s/gm)) validRules.add(Number(m[1]));
+  for (const m of rules.matchAll(/^#{2,6}\s+(?:经验)?规则\s*0*(\d+)(?!\d)/gm)) validRules.add(Number(m[1]));
+  let inRulePointerTable = false;
+  for (const line of rules.split(/\r?\n/)) {
+    if (/^##\s*已合并条目指针/.test(line)) { inRulePointerTable = true; continue; }
+    if (inRulePointerTable && /^##\s/.test(line)) break;
+    const m = inRulePointerTable ? line.match(/^\|\s*0*(\d+)\s*\|\s*规则\s*0*(\d+)(?!\d)/) : null;
+    if (m) validRules.add(Number(m[1]));
+  }
+
+  for (const m of skillText.matchAll(/反模式\s*0*(\d+)(?!\d)/g)) {
+    if (!validAntis.has(Number(m[1]))) {
+      problems.push({ type: 'dead-anti-pattern-ref', message: `SKILL.md 引用的 反模式 ${m[1]} 不存在（common-pitfalls.md 无实条也无指针）` });
+    }
+  }
+  for (const m of skillText.matchAll(/(?<!反模式)规则\s*0*(\d+)(?!\d)/g)) {
+    if (!validRules.has(Number(m[1]))) {
+      problems.push({ type: 'dead-rule-ref', message: `SKILL.md 引用的 规则 ${m[1]} 不存在（experience-rules.md 无该编号）` });
+    }
+  }
+  return problems;
+}
+
 const REQUIRED_ANCHORS = [
   'GATE-0',
   'GATE-1',
@@ -212,6 +258,7 @@ function checkSkill(skillPath, root) {
   }
 
   problems.push(...checkScriptsIndex(root));
+  problems.push(...checkNumberedRefs(root, text));
 
   return { skillPath, references, problems };
 }

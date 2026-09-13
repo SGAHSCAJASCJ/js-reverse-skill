@@ -321,8 +321,7 @@ python scripts/forensic_ruyipage.py --url <target-url> --case-dir <project-root>
 - **翻页点击两个静默失败坑（match19 实测，各空耗一轮 120s）**：① 首屏 AJAX 飞行中按钮常处 `disabled` 态，click 被静默吞掉（无报错、无请求）→ `--click-delay 5~30` 等 loading 结束；② `page.ele()` 对部分属性选择器（`[data-page=5]`）查不到且不报错、盲点照打"已拟人点击" → 优先 id/结构选择器（细节与等价替代见 match19 案例）。每轮取证覆盖 `case/forensic/capture.json` 同名产物（自动轮转 `.prev-1~3` 备份），跨轮关键样本及时转录。
 - **收尾耗时预期**：≈ `--target-settle` 秒数 + 落盘时间（通常 1 分钟内）。等待远超预期（如超 5 分钟）时先核对时间参数是否把毫秒当秒传入，不要无限轮询干等。
 - **证据完整性**：body 超过 JSON 内联预览阈值时必须读取对应 `saved_to` 完整文件，`*_complete=false` 不能拿预览替代原始证据。
-- **手动结束**：需要用户交互时提示其在窗口完成操作——**操作完成后用户直接关闭浏览器窗口即视为手动结束抓包，脚本会立即收尾落盘（报告 endReason=browser-closed），不是失败**。
-- **禁止 kill 进程**：浏览器已关/日志出现 WebSocket 断连时脚本仍在收尾分类，等 `FORENSIC DONE` 或 JSON 输出。万一进程被强杀，`case/forensic/partial-steps.jsonl` 保留全部包元数据兜底（该文件残留即说明未正常收尾）。
+- **手动结束与收尾纪律**：用户操作完成后直接关闭浏览器窗口即视为手动结束（endReason=browser-closed，非失败）；浏览器已关/日志 WebSocket 断连时脚本仍在收尾分类，等 `FORENSIC DONE` 或 JSON 输出、禁止 kill 进程（强杀残留 `partial-steps.jsonl` 仅元数据兜底）。语义细则见 `scripts/README.md` 与 `references/workflow/trace-flow.md`。
 
 Windows 下若 Python 脚本输出仍现编码异常，用 `PYTHONUTF8=1` 前缀兜底（PowerShell：`$env:PYTHONUTF8="1"`）；仓库脚本已内置 UTF-8 强制与 emoji 安全化，正常无需手动加。
 
