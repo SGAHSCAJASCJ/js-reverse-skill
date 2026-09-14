@@ -124,7 +124,7 @@
 | `classify_verify.py` | 离线识别验证码题型与厂商，内置冒烟自检 | `python scripts/classify_verify.py --html page.html --url "https://example.test" --text "拖动滑块" --pretty` |
 | `analyze_tile_restore.py` | 离线分析切片乱序图片并辅助恢复原图 | `python scripts/analyze_tile_restore.py --image scrambled.png --rows 3 --cols 3 --pretty` |
 | `map_coordinates.py` | 将图片像素坐标换算为 CSS / 页面坐标，处理 DPR、偏移与滚动 | `python scripts/map_coordinates.py --image-size 300x150 --display-size 300x150 --point 120,75 --pretty` |
-| `detect_gap.py` | 滑块缺口自动识别一条龙（ddddocr slide_match/slide_comparison + OpenCV absdiff/模板，逐方法标注锚点与可用性，输出方法间一致性）；仅 C 路线使用 | `python scripts/detect_gap.py --bg bg.jpg --target front.png --full fullbg.jpg --pretty` |
+| `detect_gap.py` | 滑块缺口自动识别一条龙（ddddocr slide_match/slide_comparison + OpenCV absdiff/模板，逐方法标注锚点与可用性，输出方法间一致性及几何 rect/point）；仅 C 路线使用，`--annotate <out.png>` 渲染标注对比图供人工目视确认 | `python scripts/detect_gap.py --bg bg.jpg --target front.png --full fullbg.jpg --annotate annotated.png --pretty` |
 | `generate_motion_track.py` | 生成滑块（eased/staircase 双模型）、点选点击时序（click）、拖放、刮刮卡或连线轨迹 JSON；`--profile` 加载 case adapter 提供的 T2 实测参数包；seed 缺省随机并回显 | `python scripts/generate_motion_track.py --mode slider --model staircase --distance 128 --profile result/src/track-profile.json --pretty` |
 | `analyze_track.py` | 成功样本明文轨迹逐点统计（点数/间隔分布/步长序列/单调性/形态判定 staircase·eased·unknown），并可对比生成轨迹输出偏差 verdict | `python scripts/analyze_track.py --input sample-track.json --compare generated.json --pretty` |
 | `click_gap.py` | OpenCV 人工点击缺口工具，输出缺口左边缘 CSS x 坐标 | `python scripts/click_gap.py bg.jpg front.png --scale 2` |

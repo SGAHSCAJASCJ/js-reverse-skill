@@ -63,6 +63,7 @@
 ## 路线 C：图像识别（本地优先，打码兜底）
 
 - 本地一条龙：`scripts/detect_gap.py`——自动运行 ddddocr `slide_match`/`slide_comparison` 与 OpenCV absdiff/模板匹配（有 `--full` 时差分精度最高），逐方法标注锚点（左边缘/中心）与可用性（依赖缺失自动 skip），输出方法间一致性；分歧 >8px 时先复核 A/B 判定。坐标换算用 `scripts/map_coordinates.py`。
+- 目视确认：`--annotate <out.png>` 把 best 候选（红框 + 红色竖线）、其它候选（橙框）与中心锚点（品红点）、一致性摘要渲染到背景图上（默认放大 2 倍，`--annotate-scale` 可调），一眼确认坐标是否落在缺口上——比对着原始素材图空想可靠。标注文字为 ASCII（OpenCV 不支持中文渲染），不改变 JSON 取值与判定。
 - 局限性：现代高混淆滑块（网易易盾/腾讯防水墙/阿里 2.x 等）背景图常做像素扰动、色彩偏移、噪点、边缘抹平/反转，Canny/Sobel/模板匹配普遍失效——这正是"纯算不可行"说法的来源。本地识别不稳时，**优先回头复核 A/B 判定信号**（是否漏了参数字段或像素隐写线索），不要反复换识别算法。
 - 精度：识别出的像素坐标需经 `scripts/map_coordinates.py` 换算为显示坐标，再喂轨迹脚本。
 - 兜底：确认是纯 C 类且本地识别不稳时，切打码平台（`scripts/solver_request_template.py` + `solver-platform-recipes.md`），平台返回坐标同样要换算。
@@ -152,7 +153,7 @@ ddddocr 不准 → **不要先换识别算法，先回头判 A/B/C**。复核：
 
 ### C 路线升级（确认是纯图像题但 ddddocr 不准）
 
-1. 先跑 `scripts/detect_gap.py --bg bg.jpg --target front.png [--full fullbg.jpg]`：一次拿到全部可行方法候选、锚点与一致性；有 `--full` 时 absdiff 差分精度最高，`slide_comparison` 返回**中心点**（注意锚点，脚本已标注）
+1. 先跑 `scripts/detect_gap.py --bg bg.jpg --target front.png [--full fullbg.jpg]`：一次拿到全部可行方法候选、锚点与一致性；有 `--full` 时 absdiff 差分精度最高，`slide_comparison` 返回**中心点**（注意锚点，脚本已标注）。加 `--annotate annotated.png` 输出标注对比图，人工确认坐标确实落在缺口上再往下走
 2. 汇总结果不稳（方法分歧大/无候选）时再单方法手调：`cv2.matchTemplate`（`TM_CCOEFF_NORMED`）/ Canny 边缘匹配 / `cv2.absdiff(bg, fullbg)` 差分
 3. 以上都不稳 → **人工点击**（`scripts/click_gap.py`）：显示背景图放大 2 倍 + 拼图块参考叠加，用户点击缺口左边缘，输出 CSS x 坐标。适用于易盾等拼图块重着色导致自动识别失效的场景
 4. 人工点击也不适用（需自动化/规模化）→ 打码平台（`solver_request_template.py` + `solver-platform-recipes.md`）

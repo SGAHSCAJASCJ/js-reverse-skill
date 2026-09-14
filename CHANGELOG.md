@@ -3,6 +3,19 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.122 - 2026-09-14
+
+### 缺口识别可目视确认：detect_gap.py 新增 --annotate 标注对比图
+
+用户提问点出的一处真实空白：`detect_gap.py` 只输出 JSON，文档里写的「素材图目测交叉验证」全靠人自己开图比对，脚本不给任何可视化。补一条渲染通路，人工（或 AI 自动定位后交用户）能一眼确认识别坐标是否落在缺口上：
+
+- **`detect_gap.py --annotate <out.png> [--annotate-scale N]`**：把 best 候选画红框 + 红色竖线，其它左边缘候选择橙框，中心锚点候选（`slide_comparison`）画品红圆点，左上角写一致性摘要（best 方法/x/方法覆盖数/最大分歧），分歧超阈值时追加 WARNING 行。默认放大 2 倍便于看清，`--annotate-scale` 可调。
+- **每个方法补几何字段**：`rect`（absdiff / slide_match / template 的矩形）与 `point`（slide_comparison 的中心点），图片像素坐标系——标注渲染与人工核对共用，JSON 取值与判定逻辑不变。
+- **标注文字仅 ASCII**：OpenCV 无法渲染中文，图内标签全英文（`<method> x=<n>`），不影响 JSON 中的中文说明。
+- **无候选/背景图不可读**也照常写图或降级为 `annotation.status=failed`，不抛异常、不改变退出码。
+- 自测补标注图断言（写出成功、尺寸 = 背景 × scale、缺图降级 failed）；同步 `scripts/README.md`、`gap-coordinate-source.md`（C 路线新增「目视确认」条目 + C 路线升级第 1 步）、`verification-workflow.md` 第 5 步。
+- 校验：`detect_gap.py --self-test` PASS（含标注断言）、CLI 端到端 `--annotate` 实测输出 640×240（320×120 × 2）、`check_skill_consistency.js` 0 问题、`check_vendor_leakage.js` 0 命中。
+
 ## 2.3.121 - 2026-09-14
 
 ### SKILL.md 进一步瘦身 + 锚点/门禁去冗余（81.4→77.9KB；RB 31→25 条）

@@ -9,9 +9,13 @@ C（纯图像识别）。A（参数解密）/ B（像素隐写）路线不走本
 - ddddocr slide_comparison（缺口图 + 完整背景图差分）
 - OpenCV absdiff（有 --full 时差分定位，精度最高）
 - OpenCV 模板匹配（原图 + Canny 边缘两版）
-输出图片像素坐标系下的缺口 x（左边缘）、各方法明细与方法间一致性；
-CSS 换算交给 scripts/map_coordinates.py。依赖缺失不报错，逐方法标注
-skipped 与原因；无任何候选输出 NO_CANDIDATE 并退出非 0。
+输出图片像素坐标系下的缺口 x（左边缘）、几何信息（rect 矩形 / point 中心点）、
+各方法明细与方法间一致性；CSS 换算交给 scripts/map_coordinates.py。依赖缺失不
+报错，逐方法标注 skipped 与原因；无任何候选输出 NO_CANDIDATE 并退出非 0。
+
+--annotate <out.png> 额外渲染标注对比图供人工目视确认：best 候选画红框 + 红色
+竖线，其它候选画橙框，中心锚点候选画品红圆点，一致性摘要写在图左上角。标注
+文字为 ASCII（OpenCV 不支持中文渲染），不改变 JSON 中的取值与判定。
 """
 
 from __future__ import annotations
@@ -35,6 +39,13 @@ except ImportError:
 METHOD_PRIORITY = ["absdiff", "slide_match", "template_edge", "template"]
 AGREEMENT_PX = 5.0
 DISAGREEMENT_PX = 8.0
+
+# 标注图配色（BGR）：best 红 / 其它候选橙 / 中心锚点品红 / 文字白底黑衬
+ANNOT_BEST = (0, 0, 255)
+ANNOT_OTHER = (0, 165, 255)
+ANNOT_CENTER = (255, 0, 255)
+ANNOT_TEXT = (255, 255, 255)
+ANNOT_MASK = (0, 0, 0)
 
 
 def configure_utf8_stdio() -> None:
@@ -63,12 +74,14 @@ def method_slide_match(bg_path: str, target_path: str, simple_target: bool) -> d
         return {"method": "slide_match", "status": "skipped", "reason": "bg/target 文件不可读"}
     det = ddddocr.DdddOcr(det=False, ocr=False, show_ad=False)
     res = det.slide_match(target_bytes, bg_bytes, simple_target=simple_target)
-    x = float(res["target"][0])
+    x1, y1, x2, y2 = res["target"]
+    x = float(x1)
     return {
         "method": "slide_match",
         "status": "ok",
         "x": x,
         "anchor": "left-edge",
+        "rect": [float(x1), float(y1), float(x2 - x1), float(y2 - y1)],
         "detail": {"bbox": res["target"], "simple_target": simple_target},
     }
 
@@ -82,12 +95,14 @@ def method_slide_comparison(bg_path: str, full_path: str) -> dict[str, Any]:
         return {"method": "slide_comparison", "status": "skipped", "reason": "bg/full 文件不可读"}
     det = ddddocr.DdddOcr(det=False, ocr=False, show_ad=False)
     res = det.slide_comparison(full_bytes, bg_bytes)
-    x = float(res["target"][0])
+    px, py = res["target"]
+    x = float(px)
     return {
         "method": "slide_comparison",
         "status": "ok",
         "x": x,
         "anchor": "center",
+        "point": [float(px), float(py)],
         "detail": {
             "point": res["target"],
             "note": "ddddocr slide_comparison 返回缺口中心点；换算左边缘需减去缺口半宽（可从 absdiff bbox 或拼图块宽度获取）",
@@ -111,12 +126,13 @@ def method_absdiff(bg_path: str, full_path: str) -> dict[str, Any]:
     if not contours:
         return {"method": "absdiff", "status": "failed", "reason": "差分未找到差异区域（阈值 25）"}
     largest = max(contours, key=cv2.contourArea)
-    x, _, w, _ = cv2.boundingRect(largest)
+    x, y, w, h = cv2.boundingRect(largest)
     return {
         "method": "absdiff",
         "status": "ok",
         "x": float(x),
         "anchor": "left-edge",
+        "rect": [float(x), float(y), float(w), float(h)],
         "detail": {"bbox_w": w, "area": float(cv2.contourArea(largest))},
     }
 
@@ -151,11 +167,19 @@ def method_template(bg_path: str, target_path: str, edge_mode: bool) -> dict[str
         "status": "ok",
         "x": float(max_loc[0]),
         "anchor": "left-edge",
+        "rect": [float(max_loc[0]), float(max_loc[1]), float(tw), float(th)],
         "detail": {"score": round(float(score), 4)},
     }
 
 
-def detect(bg_path: str, target_path: str | None, full_path: str | None, simple_target: bool) -> dict[str, Any]:
+def detect(
+    bg_path: str,
+    target_path: str | None = None,
+    full_path: str | None = None,
+    simple_target: bool = False,
+    annotate_path: str | None = None,
+    annotate_scale: int = 2,
+) -> dict[str, Any]:
     methods: list[dict[str, Any]] = []
     if full_path:
         methods.append(method_absdiff(bg_path, full_path))
@@ -216,10 +240,77 @@ def detect(bg_path: str, target_path: str | None, full_path: str | None, simple_
     else:
         result["hint"] = "无可行方法：安装 ddddocr/opencv-python，或提供 --target/--full；仍失败按 gap-coordinate-source.md C 路线降级（人工 click_gap.py → 打码平台）"
     result["notes"] = [
-        "仅用于授权验证分析；识别结果需与素材图目测交叉验证后再使用。",
+        "仅用于授权验证分析；识别结果需与素材图目测交叉验证后再使用（加 --annotate 可渲染标注对比图）。",
         "高混淆滑块（像素扰动/重着色）自动识别普遍不稳，失败时优先复核坐标来源 A/B 判定。",
     ]
+    if annotate_path:
+        result["annotation"] = annotate(bg_path, result, annotate_path, annotate_scale)
     return result
+
+
+def _put_label(canvas: Any, text: str, x: float, y: float, color: tuple[int, int, int], fs: float, thick: int) -> int:
+    """画一行带底衬的标注文字，返回下一行可用基线 y。"""
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    (tw, tht), base = cv2.getTextSize(text, font, fs, thick)
+    x = max(0, min(int(x), max(0, canvas.shape[1] - tw - 6)))
+    y = max(tht + 6, min(int(y), canvas.shape[0] - 4))
+    cv2.rectangle(canvas, (x - 3, y - tht - 3), (x + tw + 3, y + base), ANNOT_MASK, -1)
+    cv2.putText(canvas, text, (x, y), font, fs, color, thick, cv2.LINE_AA)
+    return y + base + 10
+
+
+def annotate(bg_path: str, result: dict[str, Any], out_path: str, scale: int) -> dict[str, Any]:
+    """把识别候选渲染到背景图上，输出人工确认用对比图（不改变 JSON 判定）。"""
+    if cv2 is None:
+        return {"status": "skipped", "reason": "opencv 未安装（pip install opencv-python）"}
+    bg = cv2.imread(bg_path)
+    if bg is None:
+        return {"status": "failed", "reason": "背景图解码失败"}
+    scale = max(1, int(scale))
+    h, w = bg.shape[:2]
+    canvas = cv2.resize(bg, (w * scale, h * scale), interpolation=cv2.INTER_CUBIC)
+    fs = 0.55 * scale
+    thick = max(1, int(round(0.9 * scale)))
+
+    best = result.get("best")
+    for cand in result.get("candidates", []):
+        if cand.get("status") != "ok":
+            continue
+        is_best = bool(best) and cand["method"] == best["method"]
+        color = ANNOT_BEST if is_best else ANNOT_OTHER
+        rect = cand.get("rect")
+        point = cand.get("point")
+        label = f"{cand['method']} x={cand['x']:.0f}"
+        if rect:
+            x, y, rw, rh = [int(v) * scale for v in rect]
+            cv2.rectangle(canvas, (x, y), (x + rw, y + rh), color, max(2, scale) if is_best else max(1, scale))
+            _put_label(canvas, label, x, y - 6, color, fs, thick)
+        elif point:
+            px, py = int(point[0]) * scale, int(point[1]) * scale
+            cv2.circle(canvas, (px, py), max(3, 3 * scale), ANNOT_CENTER, -1)
+            _put_label(canvas, label + " center", px + 6, py - 6, ANNOT_CENTER, fs, thick)
+
+    if best:
+        bx = int(round(best["x"])) * scale
+        cv2.line(canvas, (bx, 0), (bx, canvas.shape[0] - 1), ANNOT_BEST, max(1, scale))
+
+    agreement = result.get("agreement")
+    legend = [f"best: {best['method']}  x={best['x']:.0f} (image px)" if best else "NO_CANDIDATE"]
+    if agreement:
+        legend.append(
+            f"left-edge {agreement['within_5px']}/{agreement['left_edge_methods']} within 5px, "
+            f"spread {agreement['max_spread_px']}px"
+        )
+    if result.get("warning"):
+        legend.append("WARNING: spread > 8px, re-check A/B source first")
+    y = 0
+    for i, line in enumerate(legend):
+        color = ANNOT_BEST if result.get("warning") and i == len(legend) - 1 else ANNOT_TEXT
+        y = _put_label(canvas, line, 6, y, color, fs, thick)
+
+    if not cv2.imwrite(out_path, canvas):
+        return {"status": "failed", "reason": f"写入失败: {out_path}"}
+    return {"status": "ok", "path": out_path, "size": [canvas.shape[1], canvas.shape[0]], "scale": scale}
 
 
 def run_self_test() -> int:
@@ -261,8 +352,20 @@ def run_self_test() -> int:
                     # slide_comparison 返回中心点：(180+220)/2 = 200
                     assert abs(m["x"] - 200) <= 6, f"{m['method']} 中心点定位偏差过大: {m['x']}"
             assert outcome["best"] is not None and abs(outcome["best"]["x"] - 180) <= 6, "best 必须取左边缘锚点"
+            for m in ok:
+                if m.get("anchor") == "left-edge":
+                    assert m.get("rect"), f"{m['method']} 左边缘方法应带 rect 几何"
+
+            # 标注图：写出成功、尺寸 = 背景 × scale；背景图缺失时降级为 failed 不抛异常
+            annot_path = os.path.join(tmp, "annotated.png")
+            outcome = detect(bg_path, None, full_path, False, annot_path, 2)
+            assert outcome["annotation"]["status"] == "ok", f"标注图应写出: {outcome['annotation']}"
+            ann = cv2.imread(annot_path)
+            assert ann is not None and ann.shape[1] == bg.shape[1] * 2, "标注图尺寸应为背景 × scale"
+            assert detect("nonexistent-bg.png", None, None, False, annot_path, 2)["annotation"]["status"] == "failed", \
+                "背景图不可读时标注应 failed 而非抛异常"
     else:
-        print("note: opencv 未安装，跳过合成图定位断言（CI 环境预期路径）")
+        print("note: opencv 未安装，跳过合成图定位与标注图断言（CI 环境预期路径）")
 
     print("SELF-TEST OK")
     return 0
@@ -277,11 +380,13 @@ def main() -> int:
     parser.add_argument("--target", default=None, help="滑块拼图块图路径（slide_match/模板匹配用）")
     parser.add_argument("--full", default=None, help="完整无缺口背景图路径（差分用，精度最高）")
     parser.add_argument("--simple-target", action="store_true", help="ddddocr slide_match simple_target 模式（滑块无透明背景时）")
+    parser.add_argument("--annotate", default=None, help="渲染标注对比图到指定 PNG 路径（人工目视确认识别是否落在缺口上）")
+    parser.add_argument("--annotate-scale", type=int, default=2, help="标注图放大倍数（默认 2）")
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args()
 
     try:
-        result = detect(args.bg, args.target, args.full, args.simple_target)
+        result = detect(args.bg, args.target, args.full, args.simple_target, args.annotate, args.annotate_scale)
     except Exception as exc:  # noqa: BLE001 - 顶层兜底，保证 JSON 形态输出
         print(json.dumps({"status": "ERROR", "error": str(exc)}, ensure_ascii=False))
         return 1
