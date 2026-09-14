@@ -59,7 +59,9 @@ def solve(image_bytes, captcha_type, options=None):
     slice_bytes = options.get("slice")
     if captcha_type == "slider" and slice_bytes:
         res = _det.slide_match(slice_bytes, image_bytes)
-        # res['target'] = [x1, y1, x2, y2]（bbox），x1 即缺口左边缘 x（官方 README 返回格式）
+        # 返回形态随 ddddocr 版本变化：旧版 [x1,y1,x2,y2]（bbox）／1.6.x [x,y] + target_x/target_y（点）。
+        # res['target'][0] 即缺口 x（图片像素坐标系）；锚点语义（左边缘/中心）用
+        # scripts/detect_gap.py --annotate 标注图实测确认后再固化，勿凭印象套用。
         x = res["target"][0]
         return {
             "captcha_type": "slider",

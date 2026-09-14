@@ -50,7 +50,9 @@ text = ocr.classification(img_bytes)
 
 # 滑块类算法1 边缘匹配（滑块图 target + 背景图 background）
 det = ddddocr.DdddOcr(det=False, ocr=False, show_ad=False)
-res = det.slide_match(target_bytes, background_bytes)   # {'target': [x1,y1,x2,y2]} bbox，取 res['target'][0] 为缺口左边缘 x
+# 返回形态随版本变化：旧版 [x1,y1,x2,y2]（bbox）／1.6.x [x,y] + target_x/target_y（点）
+res = det.slide_match(target_bytes, background_bytes)   # res['target'][0] 即缺口 x（图片像素坐标系）
+# 锚点语义（左边缘/中心）用 scripts/detect_gap.py --annotate 标注图实测确认，勿凭印象套用
 # 滑块无透明背景时加 simple_target=True：det.slide_match(target_bytes, background_bytes, simple_target=True)
 
 # 滑块类算法2 图像差异比较（带缺口阴影图 + 完整图，两图差分 → 点坐标）

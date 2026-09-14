@@ -13,8 +13,10 @@
 - **每个方法补几何字段**：`rect`（absdiff / slide_match / template 的矩形）与 `point`（slide_comparison 的中心点），图片像素坐标系——标注渲染与人工核对共用，JSON 取值与判定逻辑不变。
 - **标注文字仅 ASCII**：OpenCV 无法渲染中文，图内标签全英文（`<method> x=<n>`），不影响 JSON 中的中文说明。
 - **无候选/背景图不可读**也照常写图或降级为 `annotation.status=failed`，不抛异常、不改变退出码。
-- 自测补标注图断言（写出成功、尺寸 = 背景 × scale、缺图降级 failed）；同步 `scripts/README.md`、`gap-coordinate-source.md`（C 路线新增「目视确认」条目 + C 路线升级第 1 步）、`verification-workflow.md` 第 5 步。
-- 校验：`detect_gap.py --self-test` PASS（含标注断言）、CLI 端到端 `--annotate` 实测输出 640×240（320×120 × 2）、`check_skill_consistency.js` 0 问题、`check_vendor_leakage.js` 0 命中。
+- **修正 `slide_match` 返回形态假设**：实测 ddddocr 1.6.1 返回 `{'target': [x, y], 'target_x', 'target_y', 'confidence'}`（**点**），并非仓库文档沿用的 4 元 bbox；脚本改为按长度兼容两形态（≥4 → `rect`，≥2 → `point`），`x` 取值方式不变。同步修正 `captcha-solving-handoff.md`、`open-source-recipes.md`、`templates/captcha-verify-py/README.md` 三处「bbox」硬描述为「版本相关形态 + 锚点语义需实测确认」。
+- **诚实边界**：合成图无真实拼图轮廓（alpha 为整矩形），不足以断言 slide_match 的锚点语义（左边缘 vs 中心）——故自测只锁「两形态都能解析且不抛异常」，精度判定留给真实样本 + `--annotate` 目视确认。
+- 自测补标注图断言（写出成功、尺寸 = 背景 × scale、缺图降级 failed）并在 ddddocr 可用时实跑 slide_match 路径；同步 `scripts/README.md`、`gap-coordinate-source.md`（C 路线新增「目视确认」条目 + C 路线升级第 1 步）、`verification-workflow.md` 第 5 步。
+- 校验：`detect_gap.py --self-test` PASS（含标注与 slide_match 形态兼容断言，本机 ddddocr 1.6.1 + opencv 4.13.0.92）、CLI 端到端 `--annotate` 实测输出 640×240（320×120 × 2）、`check_skill_consistency.js` 0 问题、`check_vendor_leakage.js` 0 命中。
 
 ## 2.3.121 - 2026-09-14
 

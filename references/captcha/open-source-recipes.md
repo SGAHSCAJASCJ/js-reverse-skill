@@ -75,7 +75,10 @@ with open("target.png", "rb") as f:
 with open("background.png", "rb") as f:
     background = f.read()
 res = det.slide_match(target, background)
-# 返回 {'target': [x1, y1, x2, y2]}（bbox），缺口左边缘 x = res['target'][0]
+# 返回形态随 ddddocr 版本变化：旧版 {'target': [x1, y1, x2, y2]}（bbox）；
+# 1.6.x 为 {'target': [x, y], 'target_x': x, 'target_y': y, 'confidence': ...}（点）。
+# 两形态都以 res['target'][0] 取缺口 x（图片像素坐标系）；锚点语义（左边缘/中心）
+# 用 scripts/detect_gap.py --annotate 出标注图实测确认，勿凭印象套用。
 # 滑块无透明背景时加 simple_target=True；有 fullbg 时可用 slide_comparison(bg, fullbg) 双图差分
 print(res["target"][0])
 ```

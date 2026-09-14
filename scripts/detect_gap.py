@@ -74,16 +74,25 @@ def method_slide_match(bg_path: str, target_path: str, simple_target: bool) -> d
         return {"method": "slide_match", "status": "skipped", "reason": "bg/target 文件不可读"}
     det = ddddocr.DdddOcr(det=False, ocr=False, show_ad=False)
     res = det.slide_match(target_bytes, bg_bytes, simple_target=simple_target)
-    x1, y1, x2, y2 = res["target"]
-    x = float(x1)
-    return {
+    # ddddocr 返回形态随版本变化：新版 [x, y]（点，另带 target_x/target_y），旧版 [x1, y1, x2, y2]（bbox）
+    target = list(res["target"])
+    x = float(target[0])
+    result: dict[str, Any] = {
         "method": "slide_match",
         "status": "ok",
         "x": x,
         "anchor": "left-edge",
-        "rect": [float(x1), float(y1), float(x2 - x1), float(y2 - y1)],
-        "detail": {"bbox": res["target"], "simple_target": simple_target},
+        "detail": {
+            "target": target,
+            "confidence": res.get("confidence"),
+            "simple_target": simple_target,
+        },
     }
+    if len(target) >= 4:
+        result["rect"] = [float(target[0]), float(target[1]), float(target[2] - target[0]), float(target[3] - target[1])]
+    elif len(target) >= 2:
+        result["point"] = [float(target[0]), float(target[1])]
+    return result
 
 
 def method_slide_comparison(bg_path: str, full_path: str) -> dict[str, Any]:
@@ -277,18 +286,27 @@ def annotate(bg_path: str, result: dict[str, Any], out_path: str, scale: int) ->
         if cand.get("status") != "ok":
             continue
         is_best = bool(best) and cand["method"] == best["method"]
-        color = ANNOT_BEST if is_best else ANNOT_OTHER
+        is_center = cand.get("anchor") == "center"
         rect = cand.get("rect")
         point = cand.get("point")
-        label = f"{cand['method']} x={cand['x']:.0f}"
         if rect:
+            color = ANNOT_BEST if is_best else ANNOT_OTHER
             x, y, rw, rh = [int(v) * scale for v in rect]
             cv2.rectangle(canvas, (x, y), (x + rw, y + rh), color, max(2, scale) if is_best else max(1, scale))
-            _put_label(canvas, label, x, y - 6, color, fs, thick)
+            _put_label(canvas, f"{cand['method']} x={cand['x']:.0f}", x, y - 6, color, fs, thick)
         elif point:
+            color = ANNOT_CENTER if is_center else (ANNOT_BEST if is_best else ANNOT_OTHER)
             px, py = int(point[0]) * scale, int(point[1]) * scale
-            cv2.circle(canvas, (px, py), max(3, 3 * scale), ANNOT_CENTER, -1)
-            _put_label(canvas, label + " center", px + 6, py - 6, ANNOT_CENTER, fs, thick)
+            cv2.circle(canvas, (px, py), max(3, 3 * scale), color, -1)
+            _put_label(
+                canvas,
+                f"{cand['method']} x={cand['x']:.0f}" + (" center" if is_center else " left-edge"),
+                px + 6,
+                py - 8 * scale,  # 抬高到圆点上方，避免标签底衬盖住标记
+                color,
+                fs,
+                thick,
+            )
 
     if best:
         bx = int(round(best["x"])) * scale
@@ -354,7 +372,16 @@ def run_self_test() -> int:
             assert outcome["best"] is not None and abs(outcome["best"]["x"] - 180) <= 6, "best 必须取左边缘锚点"
             for m in ok:
                 if m.get("anchor") == "left-edge":
-                    assert m.get("rect"), f"{m['method']} 左边缘方法应带 rect 几何"
+                    assert m.get("rect") or m.get("point"), f"{m['method']} 应带 rect 或 point 几何"
+            if ddddocr is not None:
+                # slide_match 返回形态随 ddddocr 版本变化（旧版 bbox / 1.6.x 点），两种都必须能解析且不抛异常。
+                # 合成图无真实拼图轮廓（alpha 为整矩形），精度不可断言——此处只锁形态兼容。
+                piece_path = os.path.join(tmp, "piece.png")
+                cv2.imwrite(piece_path, np.dstack([full[:, 180:220], np.full((full.shape[0], 40, 1), 255, np.uint8)]))
+                sm = method_slide_match(bg_path, piece_path, False)
+                assert sm["status"] == "ok", f"slide_match 应命中: {sm}"
+                assert isinstance(sm["x"], float) and (sm.get("rect") or sm.get("point")), \
+                    f"slide_match 应给出 float x 与 rect/point 几何: {sm}"
 
             # 标注图：写出成功、尺寸 = 背景 × scale；背景图缺失时降级为 failed 不抛异常
             annot_path = os.path.join(tmp, "annotated.png")
