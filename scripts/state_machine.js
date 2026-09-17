@@ -192,6 +192,7 @@ const NODE_RULES = {
   REAL_VERIFY: [
     '先离线回归：fixture 逐字段比对通过（compare_fixture.js 退出码 0）才发真实请求，不得带着已知偏差发起。',
     '写请求格式（Content-Type / body 编码 / 字段名）必须从页面源码或 capture 成功样本取证，禁止猜测（R2 默认，偏离需说明理由）。',
+    'Session 门禁：联网入口写成可复用 Session 并显式关闭（Node https.Agent keepAlive + destroy / Python requests.Session + close），调用形态按字面识别，封装进辅助模块不计入。',
   ],
   DIAGNOSE: [
     '下「连接层拦截 / 纯协议不可绕过」结论前必须完成正向 + 反向双对照（新鲜样本、健康 session、单变量），结果过 check_risk_layer_diagnosis.js；未完成停在 DIAGNOSE，不得下结论、不得转投浏览器内核方案。',

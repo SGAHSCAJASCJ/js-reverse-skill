@@ -3,6 +3,19 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.124 - 2026-09-17
+
+### §4.2/§10 操作细则外迁：正文只留决策规则+指针（34.1K → 33.3K 字）
+
+第 4 轮瘦身的折中执行（用户确认）：不碰结构与红线，只把两大操作细则块外迁到权威 references，正文保留「一句话规则 + 锚点句 + 指针」。语义零丢失——所有外迁内容在目标文件有完整版，缺失部分先补齐再删正文。
+
+- **§4.2 取证与证据门禁**：退出码三态（PASS/PARTIAL/NO_TARGET）语义、PARTIAL 三步路由、翻页类 ≥2 请求序号三条此前 references 均无系统版，先补进 `trace-flow.md`「取证验收标准 / 取证操作细则」；正文四个参数细则 bullet（退出码/翻页/收尾/预算）压成一句指针。信号语义三 bullet（信号定义 + 定向收窄 + STACK_FULL 闸门参数）压成一条（保留 `--target-signal` 兼容提示锚点——consistency 校验实测拦截过一次误删），定向收窄组合表与闸门参数指向 trace-flow.md「定向 trace 策略」与 ruyi-tooling.md。质量判定「重度不足」五个判据枚举改为指针（trace-flow.md 已有完整表）。
+- **§10 REAL_VERIFY**：Session 门禁 Node/Python 形态枚举与「最稳妥写法」外迁 `ip-risk-control.md` 新增「写请求与 Session 形态门禁」小节（含写请求三陷阱：jQuery 默认表单编码/CSRF 字段位置/跨域提交），正文保留 R1 判定核心（按字面识别、封装不计入、裸 urllib 判不合格）+ 指针；`--guard mcp` 调试器工具枚举、引擎检测双对照段的重复新鲜度纪律压缩。
+- **NODE_RULES 补投递**：REAL_VERIFY 节点新增 Session 门禁规则（第 3 条），换节点时随 `[RULE]` 重新注入，弥补正文细则外迁后的常驻性。
+- **锚点安全**：外迁前逐条核对 34 个 RB 锚点在 SKILL.md / trace-flow.md / ip-risk-control.md 的命中分布，8 个 SM-only 锚点（RB-007/008/010/015/016/019/028/034）全部保留在正文原句中。
+
+**效果**：SKILL.md 34096 → 33324 字（-772），references 侧 +1.0K（trace-flow +530 / ip-risk-control +470，先补后删非平移）；RB 34/34、consistency 143 引用 0 问题、state_machine self-test PASS、vendor leakage 0 命中。
+
 ## 2.3.123 - 2026-09-16
 
 ### 规范对齐重构：SKILL.md 77.4KB → 60.7KB（达成 2.3.118 规划的 60-70KB 目标）

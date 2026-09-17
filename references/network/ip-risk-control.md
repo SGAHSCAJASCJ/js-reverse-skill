@@ -278,6 +278,19 @@ class CircuitBreaker {
 | 并发限制 | 同时最多 1-3 个请求 | 所有场景 |
 | 每日上限 | 单 IP 每日最多 N 次请求 | 严格风控 |
 
+## 写请求与 Session 形态门禁
+
+> **触发条件**：REAL_VERIFY 阶段发起写/提交请求、或写联网入口时读。
+
+**写请求格式取证**：提交/写入接口的请求格式（Content-Type、body 编码、字段名）必须从页面源码（`case/forensic/document.html` 的 form/submit 逻辑）或 capture.json 的真实成功样本取证，禁止猜测。常见陷阱：jQuery `$.ajax({data:{...}})` 默认表单编码（`application/x-www-form-urlencoded`）而非 JSON；CSRF 字段名/位置因站点而异（`csrf_token`/`_token`/header 形态都有）；提交接口可能不在同域（跨域提交时 Referer/Origin 也在校验范围）。
+
+**Session 形态门禁（match18 返工点）**：REAL_VERIFY 起联网入口即写成可复用 Session + 显式关闭，调用形态按字面识别——复用/清理须出现在 result 入口源码：
+
+- Node 对应：`https.Agent({ keepAlive: true })` + 请求统一走 client + 收尾 `agent.destroy()`（或 `client.close()`）
+- Python 对应：`requests.Session()` + 请求统一走 session + 收尾 `session.close()`
+
+封装进辅助模块或局部重命名不计入；裸 `urllib.request`、每次独立连接判不合格。最稳妥写法：入口直接创建、请求统一走 client、收尾 destroy。
+
 ## 相关参考
 
 | 参考文档 | 关联点 |

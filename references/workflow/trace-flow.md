@@ -83,6 +83,7 @@ python scripts/forensic_ruyipage.py --url <目标页> --case-dir <project-root> 
 
 ### 取证验收标准
 
+- **退出码三态**：任一非 OPTIONS 的 2xx 命中即 `PASS`（= 目标请求已取证，不表示业务成功）；`PARTIAL`（请求发出但仅 OPTIONS/非 2xx）与 `NO_TARGET`（终态未命中）均非 0。`NO_TARGET` 按输出末尾「重采候选」校准 `--targets` 重采，不凭记忆猜路径；`PARTIAL` 先核对拒绝原因（登录/风控/引擎检测），`--ua` 覆盖重采一次仍全 4xx 即进 BLOCKED_FORENSIC，禁止无限重采。
 - JD `pc_home_feed` 类接口：至少捕获到 URL 包含 `pc_home_feed` 的 2xx 响应，并能看到请求 URL 中的加密 / 风控参数，例如 `h5st`。
 - 某本地生活平台 `shopList` 类跨域接口：必须区分 `OPTIONS` preflight 与真实业务请求；只有捕获到非 `OPTIONS` 的 2xx `shopList` 响应，才算取证成功。若返回登录 / Yoda / 401 风控信息，应按"需要登录 / 风控验证"流程暂停，不要宣称已绕过。
 - 用户完成操作后直接关闭 ruyiPage 浏览器窗口，视为明确的手动结束抓包信号：脚本检测到浏览器断连后应立即收尾、分类并落盘已捕获数据，报告 `endReason=browser-closed`，不能把 WebSocket 断连本身判为取证失败，也不要强杀仍在收尾的脚本进程；等待 `FORENSIC DONE` 或最终 JSON / Markdown 输出。浏览器关闭只决定采集生命周期，不放宽上述接口验收：指定终态仍未捕获到非 `OPTIONS` 2xx 时，结果仍为 `NO_TARGET` / `PARTIAL`，Step 1 仍缺失。若进程被不可捕获的硬杀且只残留 `case/forensic/partial-steps.jsonl`，该文件仅是已抓包元数据兜底，说明正常收尾未完成，不能替代 `capture.json` 与完整 body 证据。
@@ -95,6 +96,7 @@ python scripts/forensic_ruyipage.py --url <目标页> --case-dir <project-root> 
 - **NO_TARGET 不是死路（match18）**：脚本输出末尾的「重采候选」动态 2xx 接口列表就是校准 `--targets` 的第一手材料，按候选锁定真实接口重采即 PASS，不要凭记忆猜下一个路径。
 - **命中但全 403（match26）**：target-hits.json 的 URL/Query 参数结构仍是接口路径与参数名的有效证据，不要无限重采；签名正确性由「trace 定位 builder/writer + 沙箱对齐环境分支 + REAL_VERIFY 闭环」验证，取证侧 403 可能是环境分派诱饵分支所致（match21/26 同族）。
 - **重试型场景**：登录可能因验证码/校验失败重试时调大 `--target-settle`（单位秒，默认 3；建议 10~30，上限 120），保证重试仍在同一会话内。关联材料以最后一次有效终态向前回溯，验证码中间接口不是额外终态门禁（load → verify 由分析阶段从同一会话回溯）。
+- **翻页/序列类目标**：取证交互覆盖 ≥2 个请求序号（如翻 2 页再收尾），单序号样本看不见计数器递增语义（反模式 24）。
 
 ## RuyiTrace 日志采集流程
 
