@@ -6,7 +6,7 @@
 // common-pitfalls.md（~75KB）/ experience-rules.md（~50KB）全文件——为单个编号读 2 万+
 // tokens 与 SKILL.md §12「按需最小集合」相悖。本工具把指针变成按号提取：
 // --id 从小节标题定位（标题行到下一个同级标题），--keyword 跨文件关键词兜底。
-// 检索范围：references/**/*.md + scripts/README.md + assets/ast-patterns/README.md。
+// 检索范围：references/**/*.md + scripts/README.md + scripts/ast-patterns/README.md。
 
 const fs = require('fs');
 const path = require('path');
@@ -14,7 +14,7 @@ const { recordQueries } = require('./lib/query_log');
 
 const SKILL_ROOT = path.resolve(__dirname, '..');
 const DIR_SCOPES = ['references'];
-const FILE_SCOPES = [path.join('scripts', 'README.md'), path.join('assets', 'ast-patterns', 'README.md')];
+const FILE_SCOPES = [path.join('scripts', 'README.md'), path.join('scripts', 'ast-patterns', 'README.md')];
 // 同号标题命中多个文件时的权威归属（反模式 → common-pitfalls，规则 → experience-rules）
 const CANONICAL_HINTS = [
   { kind: '反模式', pattern: /common-pitfalls\.md$/ },
@@ -66,7 +66,7 @@ function usage() {
       --markdown     Markdown 输出
   -h, --help         显示帮助
 
-说明：检索范围 references/**/*.md、scripts/README.md、assets/ast-patterns/README.md；
+说明：检索范围 references/**/*.md、scripts/README.md、scripts/ast-patterns/README.md；
 同号标题命中多个文件时按权威归属取正文（反模式 → common-pitfalls，规则 → experience-rules），其余列出一行指针。
 引用知识点时用本工具按号提取，不要为单个编号整读 common-pitfalls.md / experience-rules.md 全文。`;
 }

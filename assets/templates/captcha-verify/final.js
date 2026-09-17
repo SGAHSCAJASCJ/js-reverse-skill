@@ -28,7 +28,7 @@ const path = require('path');
 // ============================================================
 // 依赖（由用户从 templates 复制到 result/src/ 后填充）
 // ============================================================
-// 请求客户端：从 templates/node-request/client.js 复制到 result/src/request/client.js
+// 请求客户端：从 assets/templates/node-request/client.js 复制到 result/src/request/client.js
 const { createRequestSession, CookieJar } = require('./src/request/client');
 // 真实平台协议适配器：必须由本 case 根据 trace/抓包实现。
 let adapter = null;

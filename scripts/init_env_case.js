@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const paths = require('./lib/paths');
 
 function parseArgs(argv) {
   const args = { caseDir: '', target: '', entry: '', param: '', api: '', force: false, json: false, markdown: false };
@@ -59,10 +60,10 @@ function writeFileIfNeeded(p, content, force, actions) {
 
 function initCase(args) {
   if (!args.caseDir) throw new Error('必须提供 --case-dir');
-  const caseDir = path.resolve(args.caseDir);
+  const caseSubDir = paths.resolveCaseSubdir(args.caseDir);
+  const caseDir = path.dirname(caseSubDir);
   if (isDangerousDir(caseDir)) throw new Error(`拒绝在危险目录中初始化：${caseDir}`);
   const actions = [];
-  const caseSubDir = path.join(caseDir, 'case');
   const dirs = ['js/original', 'js/pretty', 'js/extracted', 'requests', 'fixtures', 'notes', 'hooks', 'env', 'ruyi-trace/logs', 'browser/ruyipage', 'tmp', '阶段报告', 'forensic'];
   ensureDir(caseDir, actions);
   ensureDir(path.join(caseDir, 'result'), actions);

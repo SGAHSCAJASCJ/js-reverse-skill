@@ -147,7 +147,7 @@ ddddocr 不准 → **不要先换识别算法，先回头判 A/B/C**。复核：
 - 验证：多个不同素材图复现，x 均与缺口吻合且数值稳定
 
 **B-3 vm 沙箱执行 SDK 加密段（兜底）**
-- B-2 提取不了（JSVMP/重度混淆）时，用 `templates/vm-sandbox/` 在 Node 侧执行 SDK 的坐标计算段
+- B-2 提取不了（JSVMP/重度混淆）时，用 `assets/templates/vm-sandbox/` 在 Node 侧执行 SDK 的坐标计算段
 - 喂入 bg 图字节，沙箱内 Hook 取 x
 - 优点：不需要理解解码逻辑，执行即可；缺点：交付物依赖 SDK JS 片段，SDK 更新需重新落盘
 

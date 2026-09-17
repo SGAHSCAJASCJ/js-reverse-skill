@@ -785,7 +785,7 @@ function inspectCaptchaAnswerLayer(resultDir, resultFiles) {
 
   const adapterPresent = ['src/adapter.js', 'src/adapter.py'].some((p) => exists(path.join(resultDir, p)));
   if (!adapterPresent) {
-    problems.push('检测到验证码交付（captcha 配置或 adapter 契约引用），但缺少 result/src/adapter.js 或 src/adapter.py：真实平台协议必须由本 case 的 adapter 实现（契约示例见 templates/captcha-verify*/adapter*）');
+    problems.push('检测到验证码交付（captcha 配置或 adapter 契约引用），但缺少 result/src/adapter.js 或 src/adapter.py：真实平台协议必须由本 case 的 adapter 实现（契约示例见 assets/templates/captcha-verify*/adapter*）');
   }
   const solverFilePresent = ['src/solver.js', 'src/solver.py'].some((p) => exists(path.join(resultDir, p)));
   const solverRefPresent = resultFiles

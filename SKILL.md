@@ -1,285 +1,210 @@
 ---
 name: js-reverse-skill
 description: >
-  网页端 JavaScript 加密参数逆向与纯协议还原。逆向还原浏览器请求中加密参数、签名、token、
-  cookie、设备指纹的生成逻辑；适用于各类动态参数的生成逻辑分析，覆盖标准算法、自定义混淆、
-  obfuscator.io、JSVMP 黑盒补环境、WASM 加密、TLS 指纹模拟、Session 请求链、验证码 verify、
-  反爬风控对抗等场景。覆盖桌面网页、移动 H5 与内置浏览器，交付 Node.js/Python 实现。
-  不用于 App、桌面程序及 Native 逆向；小程序限纯 JS 参数还原（Native/加壳部分除外）；JSVMP 默认黑盒执行或最小环境复现。
+  网页端 JavaScript 加密参数逆向与纯协议还原：还原浏览器请求中签名、token、cookie、设备指纹的生成逻辑，
+  覆盖标准算法、自定义混淆、JSVMP、WASM、TLS 指纹、Session 请求链与验证码 verify，交付 Node.js/Python 纯协议实现。
+  不用于 App、桌面程序及 Native 逆向；小程序仅限纯 JS 参数还原。
 ---
 
 # 通用网页端 JS 逆向技能
 
 ## 执行速查卡（上下文压缩/续接后先读这里重建主干）
 
-- **初始化/推进**：`node scripts/state_machine.js --case-dir <project-root> --init --markdown`（已有 state.json 直接读当前节点，勿重复 init）；`--set <NODE> --note "<结论>"` 推进，命令细则与 TODO 硬门禁见 0.0 节。
-- **续接判定**：`node scripts/check_session_resume.js --case-dir <project-root> --project-dir <project-root> --markdown` 判 resume/fresh（GATE-1，见 0.0 节）。
-- **主线**：INTENT_CONFIRM → ENV_READY → EVIDENCE_GATE →（FORENSIC_CAPTURE → TRACE_CAPTURE）→ CASE_LOOKUP → IDENTIFY → TRACE_ANALYZE → IMPLEMENT → REAL_VERIFY → DELIVER → CLEANUP → DONE。打转信号：检索输出 `[WARN] 重复检索` 或 `[STATE]` 提示即执行 §4.4 防耗尽检查点序列。
-- **命令索引**：全量脚本见 `scripts/README.md`；各节点命令在对应节（取证 4.2 / trace 4.2 / 检索与反混淆 7 / 分析 8 / 验证与交付 10）。
+- **初始化/推进**：`node scripts/state_machine.js --case-dir <project-root> --init --markdown`（已有 state.json 就直接读当前节点）；`--set <NODE> --note "<结论>"` 推进；细则见 0.0 节。
+- **续接判定**：`check_session_resume.js --case-dir <project-root> --project-dir <project-root> --markdown` 判 resume/fresh（GATE-1，见 0.0 节）。
+- **主线**：INTENT_CONFIRM → ENV_READY → EVIDENCE_GATE →（FORENSIC_CAPTURE → TRACE_CAPTURE）→ CASE_LOOKUP → IDENTIFY → TRACE_ANALYZE → IMPLEMENT → REAL_VERIFY → DELIVER → CLEANUP → DONE；打转信号：检索输出 `[WARN] 重复检索` 或 `[STATE]` 提示即执行 §4.4 防耗尽序列。
+- **约束分级（第 2 节）**：`R0` 红线（不可协商）/ `R1` 门禁（脚本裁定，未过=补齐后复检）/ `R2` 默认（可偏离，说明一句）。
+- **命令索引**：全量脚本见 `scripts/README.md`；各节点命令在对应节（取证/trace 4.2、检索与反混淆 7、分析 8、验证与交付 10）。
 
-## 0. 分析前硬门禁（不可跳过）
+## 0. 分析前硬门禁（GATE-0~GATE-2）
 
-### 0.0 状态机强制跟踪与动作守卫（不可跳过）
+### 0.0 状态机强制跟踪与动作守卫（R1）
 
-激活 skill 后立即初始化执行状态，之后全程用脚本跟踪"当前在哪个步骤"，让动作边界成为技术约束而非口头约定：
+全程用脚本跟踪“当前在哪个步骤”，让动作边界成为技术约束而非口头约定：
 
 ```powershell
-# 激活后立即初始化（写入 case/state.json，起点 INTENT_CONFIRM）
+# 初始化（写入 case/state.json，起点 INTENT_CONFIRM）
 node scripts/state_machine.js --case-dir <project-root> --init --markdown
-# 每次状态转换：--set 校验合法性，跳过必经节点（如直跳 IMPLEMENT）直接报错；--force 放行但留审计
+# 状态转换：--set 校验合法性（跳过必经节点直接报错，--force 放行但留审计）
 node scripts/state_machine.js --case-dir <project-root> --set <NODE> --note "<关键结论>" --markdown
-# 向目标接口发起重放/写请求前必过（细则见 4 节「阶段动作边界」）
-node scripts/state_machine.js --case-dir <project-root> --guard replay
-# 外部题解/文章检索前必过（细则见 4 节「外部检索时序」）
-node scripts/state_machine.js --case-dir <project-root> --guard external
-# 浏览器 MCP 兜底取证前必过（前置条件与放行范围以绝对规则 8 为准）
-node scripts/state_machine.js --case-dir <project-root> --guard mcp
-# 进入每个节点前聚合跑该节点必验门禁；输出含 FAIL 或需参数缺失时停在当前节点
+# 动作守卫：重放/写请求前 replay；外部检索前 external；MCP 兜底取证前 mcp（前置以绝对规则 8 为准）
+node scripts/state_machine.js --case-dir <project-root> --guard <replay|external|mcp>
+# 节点聚合门禁：进入每个节点前聚合跑该节点必验门禁；输出含 FAIL 或需参数缺失时停在当前节点
 node scripts/gate.js --case-dir <project-root> --at <NODE> --url <目标URL> --inputs <材料路径> --markdown
 ```
 
-**节点细则指针（[GUIDE]）**：`--init` 与 `--set` 换节点时，脚本输出一行 `[GUIDE]` 指向该节点操作细则的权威 references，操作细则按 GUIDE 指针读取（正文只保留硬规则与路由；规则冲突时仍以本文件为准）；编号类知识（反模式/规则）用 `node scripts/search_references.js --id` 按号提取（见第 12 节）。
+换节点时脚本随输出投递 `[GUIDE]`（该节点操作细则的权威 references）与 `[RULE]`（该节点规则，未标级别者按 R1，见第 2 节）；正文只保留跨题通用规则与路由，冲突时以本文件为准。编号知识（反模式/规则）用 `node scripts/search_references.js --id` 按号提取（见第 12 节）。
 
-**TODO 硬门禁（不可跳过）**：`--init` / `--set` / `--guard` 的输出都会渲染 11 项「执行 TODO 清单」勾选表（单行形态：`[x]`/`[~]`/`[ ]`），同时落盘到 `state.json.todo`。**权威清单 = 脚本渲染文本 + `state.json.todo`**；宿主有 TODO 工具时尽力同步（逐项同名同序，不新建子任务、不改写条目名），呈现/折叠差异不作违规判据。判定标准：任何一次状态推进后的回复里必须出现 11 项清单及勾选状态（脚本输出原样贴上即可），看不到即视为流程违规，须立即补跑 `--set`（同节点重复设置合法）并输出清单。11 项即状态机主链节点（INTENT_CONFIRM → ENV_READY → EVIDENCE_GATE → FORENSIC/TRACE_CAPTURE → CASE_LOOKUP → IDENTIFY → TRACE_ANALYZE → IMPLEMENT → REAL_VERIFY → DELIVER → CLEANUP，逐项同名），随状态推进勾选，回退置回进行中。
+**TODO 清单（R2 默认）**：上述命令每次输出都渲染 11 项单行勾选表（`[x]`/`[~]`/`[ ]`）并落盘 `state.json.todo`，**脚本输出即权威**。默认原样附在回复里，宿主有 TODO 工具时逐项同名同序同步；漏贴不判违规，不得手写清单代替脚本输出。
 
-违反规则：任何"当前执行与 state.json 不一致"（未 init、非法跳转、越权重放）都是任务失败信号；先回读 state.json 自修，禁止口头宣称"已进入某节点"代替 `--set` 与门禁实际输出。门禁/守卫拒绝即停，不得用 `--force` 常态绕过（`--force` 用于显式声明例外，仍须在阶段报告与最终总结写明）。
-
-> 本节是最高优先级。激活 skill 后、第一次调用任何取证/分析工具前，必须按序完成 GATE-0~GATE-2 并逐项输出结果。GATE 逐项输出是执行流内动作：输出结果后立即执行下一步，不等用户回应。脚本退出码非 0，或输出含「缺失证据」「不可跳过」「未通过」时，停在当前节点自修复（补采证据 / 安装组件 / 重采）后复检；门禁失败是待办任务，不是向用户汇报并等待指示的理由，未通过不得推进。
+执行与 state.json 不一致（未 init、非法跳转、越权重放）是任务失败信号：回读 state.json 自修，禁止口头宣称代替 `--set` 与门禁输出；门禁/守卫拒绝即停（R1），`--force` 只用于显式声明例外且须在总结写明。
 
 ```text
-GATE-0 INTENT（默认自动推进，不等待确认）
-  输出: 目标 URL、接口 URL、目标参数、请求范围、已提供材料、初步反爬类型（标为待验证假设）、
-        是否需登录/人工验证码、默认真实 API 验证或 sign-only 原因。
-  推进: 目标 URL + 目标参数可提取即进入 GATE-1，不询问补充材料、不确认范围。
-  唯一例外：目标 URL 或参数缺失且无法合理提取 → 问一次最小信息。用户中途可随时打断修正。
-
-GATE-1 ENV（resume 可跳过完整自检）
+GATE-0 INTENT（R2 自动推进）
+  输出：目标 URL、接口 URL、目标参数、请求范围、已提供材料、初步反爬类型（假设）、是否需登录/人工验证码、默认真实验证或 sign-only 原因。
+  推进：目标 URL + 目标参数可提取即进 GATE-1，不问补充材料、不确认范围；两者缺一且无法合理提取才问一次最小信息。用户随时可打断。
+GATE-1 ENV（resume 可跳过自检）
   node scripts/check_session_resume.js --case-dir <project-root> --project-dir <project-root> --markdown
-  mode = resume → 读最新阶段报告续接；GATE-0 与 GATE-2 仍必须完成。
-  mode = fresh  → node scripts/check_external_tools.js --markdown --project-dir <project-root> --offline
-                  node scripts/precheck_runtime.js
-  未通过 → 先宣布缺失组件、安装目标 <project-root>/tools/、预计下载规模与影响，再执行：
-           node scripts/install_all.js --project-dir <project-root> --yes --markdown
-  通过后写快照：
-           node scripts/check_session_resume.js --case-dir <project-root> --project-dir <project-root> --write-snapshot --markdown
-
-GATE-2 EVIDENCE（硬阻断）
+  resume → 读最新阶段报告续接（GATE-0/GATE-2 仍必须完成）；fresh → 依序跑：
+  node scripts/check_external_tools.js --markdown --project-dir <project-root> --offline
+  node scripts/precheck_runtime.js
+  未通过 → 先宣布缺失组件、安装到 <project-root>/tools/ 的规模与影响，再：
+  node scripts/install_all.js --project-dir <project-root> --yes --markdown
+  通过后写快照：node scripts/check_session_resume.js --case-dir <project-root> --project-dir <project-root> --write-snapshot --markdown
+GATE-2 EVIDENCE（R1 硬阻断）
   node scripts/check_evidence.js --case-dir <project-root> --url <target-url> --inputs <材料路径> --markdown
-  Step 1 接口已知时加: --require-network-signal <目标接口URL或关键词>
-  Step 2 writer/API 已知时加: --require-trace-signal <环境 API / writer / 参数写入点>
-  （两类信号分开约束；不要把 JSONP/script/导航 URL 作为 trace 信号）
-  退出码 0 且无「缺失证据」→ 进入状态机。
-  否则停在 EVIDENCE_GATE，按 4.2 补齐证据后回本节复检。
+  Step 1 接口已知加 --require-network-signal <目标接口URL或关键词>；Step 2 writer/API 已知加 --require-trace-signal <环境 API / writer / 参数写入点>
+  （两类信号分开约束；不要把 JSONP/script/导航 URL 当 trace 信号）
+  退出码 0 且无「缺失证据」→ 进入状态机；否则停在 EVIDENCE_GATE，按 4.2 补证后复检。
 ```
 
-续接模式只跳过 GATE-1 环境自检，**不跳过** GATE-0 意图声明和 GATE-2 证据门禁。
+续接模式只跳过 GATE-1 环境自检，**不跳过** GATE-0 意图声明与 GATE-2 证据门禁。
 
-Windows 下后续手动运行 Python 脚本一律用环境检查选定的解释器（通常是 `py -3`）；裸 `python` 可能命中 WindowsApps stub 并以 exit 9009 静默失败。
+Windows 下手动跑 Python 脚本用环境检查选定的解释器（通常 `py -3`）；裸 `python` 可能命中 WindowsApps stub 静默失败（exit 9009）。
 
 ## 1. 任务边界、授权与确认策略
 
-用户发起本技能请求即代表已在合法授权范围内操作，默认直接协助，不要求授权证明，不反复确认。
+用户发起本技能请求即代表已在合法授权范围内，默认直接协助：不要求授权证明，不反复确认。确认按「对外部世界的影响与可逆性」分三档：
 
-确认策略按“对外部世界的影响与可逆性”分三档：
+| 档位 | 判定 | 动作 | 典型场景 |
+|---|---|---|---|
+| A | 证据/选择可自动判定 | 自动推进，不停下 | 目标 URL/参数认定、证据门禁判定、TLS 客户端选择、fingerprint baseline 切换（重新采样统一后宣布继续）、原始日志与登录态 profile 处置（默认保留并说明，用户明确要求才删） |
+| B | 有外部副作用或不可逆 | 执行前宣布 + 继续 + 可打断 | 工具安装、真实写请求 |
+| C | AI 不可替代的物理交互 | 停下等用户，期间并行推进其他分析 | 登录、验证码、人工识别、手动 trace、付费打码平台 |
 
-| 档位 | 判定 | 动作 |
-|---|---|---|
-| A | 证据/选择可自动判定 | 自动推进，不停下 |
-| B | 有外部副作用或不可逆 | 执行前宣布 + 继续 + 可打断 |
-| C | AI 不可替代的物理交互 | 停下等用户，期间并行推进其他分析 |
-
-典型归属：目标 URL/参数认定、证据门禁判定、TLS 客户端选择、fingerprint baseline 切换（自动重新采样统一后宣布继续）、原始日志与登录态 profile 处置（默认保留并在总结说明，用户明确要求才删）属 A/B；工具安装与真实写请求属 B；登录、验证码、人工识别、手动 trace、付费打码平台属 C。
-
-**连续执行总则（横切全部阶段；先决条件仍以第 0 节硬门禁为准）**：本技能默认单会话连续执行到 DONE，唯一停点是 C 档物理交互。一切输出动作——GATE 逐项结果、状态行、B 档宣布、阶段报告/notes 落盘、卡点与方向说明——都是执行流内动作，输出后立即继续下一步，不等用户回应；落盘中间产物 ≠ 阶段终点。门禁/脚本失败时先自修复复检，连续 2 轮修复仍失败才把卡点连同默认方向（继续攻坚）一起输出并按默认方向继续，用户打断才改道。禁止把「已保留中间产物，请确认下一步」作为回合结束方式——那是未完成任务。
+**连续执行总则（横切全部阶段；先决条件以第 0 节门禁为准）**：默认单会话连续执行到 DONE，唯一停点是 C 档。GATE 结果、状态行、B 档宣布、报告落盘、卡点说明都是执行流内动作，输出后立即继续；落盘中间产物 ≠ 阶段终点。门禁失败先自修复复检，连续 2 轮仍失败才输出卡点与默认方向（继续攻坚）并继续——禁止以「已保留中间产物，请确认下一步」结束回合。
 
 任务边界：
 
-- 处理对象：网页端 JS 签名、Cookie/Token、设备指纹、混淆、WASM、JSVMP、验证码 verify、Session/TLS 请求链与浏览器隐蔽信道参数；覆盖桌面网页、移动 H5 与内置浏览器；不用于 App、桌面程序及 Native 逆向。小程序底层多为 JS 封装（wx 对象即 JS），其**纯 JS 参数还原**走本 skill Web 路径；涉及 Native .so、加壳或非 JS 层的部分仍超出范围。
-- 交付要求：最终交付是可审计、可复现、可维护的纯协议实现；浏览器仅用于取证与运行时观察，不作为交付物执行依赖。
-- 技术栈：支持 Node.js 与 Python；优先复用成熟实现；新增依赖写入依赖契约并确认来源和版本。
+- 处理对象：网页端 JS 签名、Cookie/Token、设备指纹、混淆、WASM、JSVMP、验证码 verify、Session/TLS 请求链与隐蔽信道参数；覆盖桌面网页、移动 H5 与内置浏览器；不用于 App、桌面程序、Native 逆向。小程序底层多为 JS 封装（wx 对象即 JS），其**纯 JS 参数还原**走本 skill Web 路径；涉及 Native .so、加壳或非 JS 层超出范围。
+- 交付要求：可审计、可复现、可维护的纯协议实现；浏览器只用于取证与运行时观察（红线见第 3 节）。
+- 技术栈：Node.js 与 Python；优先复用成熟实现；新增依赖写入依赖契约并确认来源与版本。
 
-## 2. 绝对规则
+## 2. 约束分级与绝对规则
 
-1. 所有关键结论必须有本次任务证据：RuyiTrace NDJSON、网络请求记录、落盘 JS、调用栈、运行时变量、中间值对比或用户提供的真实材料。
-2. 历史案例只能作为假设和路径提示，不能替代本次证据；与本次 trace 冲突时以本次 trace 为准。
-3. 默认先定位请求链，再确定还原方式。不得先凭参数名猜算法、补环境或写最终代码；未过 GATE-2 就分析参数或猜算法 = 违反本条，视为任务失败。
-4. JSVMP 默认黑盒执行或最小环境复现，不反编译字节码源码。
-5. 最终交付必须能在无浏览器、无显示器、无 X11 的环境中独立运行。
-6. 默认完成真实 API 验证；只有用户明确要求“只输出参数”“不发真实请求”时才允许 sign-only 模式。
-7. 不记录、提交或硬编码用户密钥、完整登录 Cookie、Authorization、验证码答案或其他秘密材料。
-8. 取证只允许四个来源：
-   - ① ruyipage 定制 Firefox（经 `scripts/forensic_ruyipage.py`）。
-   - ② RuyiTrace（经 `scripts/capture_ruyitrace_log.js`）。
-   - ③ 用户手动提供材料。
-   - ④ 浏览器 MCP 连接真实 Chrome 内核浏览器（**仅 BLOCKED_FORENSIC 降级兜底**：取证浏览器被引擎级检测拒绝且 `--ua` 覆盖无效时，经用户确认并过 `--guard mcp` 后放行；Chrome 等非 Firefox 内核与定制 Firefox 互补，match14 实证引擎检测不拦真实浏览器。产物必须落盘 `case/`——成功样本 Cookie/指纹/JS/网络记录，后续分析只认落盘产物；只取证不交付，纯协议红线不变）。
-   - 四源之外一律封死：常规取证不得手写 fetch/curl/requests 抓取目标页面或下载目标 JS，不得使用系统 Chrome/Edge/Firefox、Playwright/Puppeteer/Selenium 或浏览器 MCP 取证（④ 不满足前置条件时同样禁止）。
-   - DOM 模拟库（jsdom / happy-dom / domino）不得**联网加载目标页**取证（`JSDOM.fromURL()`、`new JSDOM(..., { url, resources: 'usable' })` 会真去拉取页面与子资源）：这是绕过本条的第五种取证通道，拿到的是"页面自己算出的值"而非可审计算法，且必然暴露 `jsdom/x.y.z` UA 与残缺 DOM 指纹被检测。合规形态：HTML 由本地字符串构造、脚本来自 ①②③④ 落盘产物、不开 `resources: 'usable'`、不传目标站 `url` 触发网络加载。
+所有约束分三级：级别决定能否偏离与谁有裁定权，同时属多级时按最高级执行。下文用 `R0`/`R1`/`R2` 标注，未标注者按语境判断、拿不准按更高级执行：
+
+| 级别 | 含义 | 偏离条件 | 裁定方 |
+|---|---|---|---|
+| **R0 红线** | 合规、安全、防伪证、交付边界 | 无例外条款；「用户没反对」「时间紧」不放宽 | 不可协商 |
+| **R1 门禁** | 证据与产物的准入条件 | 未过 = 停在当前节点补齐后复检，**不是违规** | 脚本退出码 / 落盘产物 |
+| **R2 默认** | 顺序、格式、话术等流程约定 | 有理由即可偏离，说明一句 | 本次证据 + 用户约束 |
+
+1. **（R0）本次证据**：关键结论必须有本次任务证据——RuyiTrace NDJSON、网络请求记录、落盘 JS、调用栈、运行时变量、中间值对比或用户提供的真实材料。
+2. **（R0）历史案例只是假设**：不作替代证据；与本次 trace 冲突时以 trace 为准。
+3. **（R1）先定位请求链，再定还原方式**：未过 GATE-2 就猜算法、补环境或写最终代码，即停在当前节点补齐。
+4. **（R0）JSVMP 边界**：默认黑盒执行或最小环境复现，不反编译字节码源码。
+5. **（R0）交付边界**：最终交付须能在无浏览器、无显示器、无 X11 环境独立运行。
+6. **（R1）默认真实验证**：仅用户明确要求「只输出参数」「不发真实请求」时走 sign-only。
+7. **（R0）秘密材料**：不记录、提交或硬编码密钥、完整登录 Cookie、Authorization、验证码答案等秘密材料。
+8. **（R0）取证只允许四源**：① ruyipage 定制 Firefox（`scripts/forensic_ruyipage.py`）② RuyiTrace（`scripts/capture_ruyitrace_log.js`）③ 用户手动提供材料 ④ 浏览器 MCP 连真实 Chrome 内核（**仅 BLOCKED_FORENSIC 降级兜底**：取证浏览器被引擎级检测拒绝且 `--ua` 覆盖无效时，经用户确认并过 `--guard mcp`；产物必须落盘 `case/`，后续分析只认落盘产物，只取证不交付）。四源之外一律封死：不得手写 fetch/curl/requests 抓目标页或下载目标 JS，不得用系统 Chrome/Edge/Firefox、Playwright/Puppeteer/Selenium 或浏览器 MCP 取证（④ 不满足前置时同样禁止）；DOM 模拟库（jsdom / happy-dom / domino）不得**联网加载目标页**取证（`JSDOM.fromURL()`、`resources: 'usable'`、传目标站 `url` 均属联网取证通道），合规形态见第 3 节。
 
 ## 3. 纯协议红线
 
-- 不交付 Playwright、Puppeteer、Selenium、浏览器扩展、浏览器 MCP 或 ruyipage/RuyiTrace 自动化代码。
-- 交付物不得使用浏览器、浏览器自动化或浏览器运行态生成参数（含打开网页、执行页面脚本、读取浏览器状态）。
-- 不以自动化浏览器完成反爬挑战；不把浏览器抓到的关键 Cookie 或动态秘密当作固定常量或签名来源。唯一例外：目标参数是**设备级凭据**且沙箱/纯协议无法自生成（迫不得已）时，须先向用户说明并经用户确认，凭据走配置注入并标注来源与有效期；未经确认使用即视为本红线违规。
-- 使用 jsdom / happy-dom / domino 等 DOM 模拟库时，不得联网加载目标页生成参数（HTML 用本地字符串、脚本取自本 case 落盘产物、不开 `resources: 'usable'`、不传目标站 `url`）；仅动态挑战类目标（如某签名型风控）确需在线执行官方 JS 时例外，走 `references/env/runtime-frameworks.md` 的 sdenv 路径并在最终总结标注联网依赖。
-- 交付入口必须是 Node.js `final.js` 或 Python `final.py`，运行时只使用 HTTP、TLS、密码学、序列化和必要的最小 JS 沙箱能力。
-- 通用模板不得在 `templates/` 中预填真实厂商的接口名、字段名、HTTP 方法、JSONP、加密结构、凭据字段或默认轨迹；平台细节必须由本 case 的抓包、RuyiTrace 与成功样本驱动，落在 case adapter/result 中。
-- 厂商知识分级（T1 识别指纹 / T2 协议语义）不得越界：识别信号（参数名↔算法族映射、厂商 Cookie/组件名、响应码特征）不得进入通用 workflow/质量文档，只留在标注过的识别参考（`references/crypto/algorithm-families.md`、`references/network/ip-risk-control.md`）与分类脚本（`scripts/classify_verify.py`）；协议知识（字段语义、加密结构、接口链、实测轨迹参数）不得离开 `references/captcha/` 验证码厂商知识库、`cases/*.md` 与 case adapter（带验证日期）；通用文档（含相关案例表）不得出现具体厂商名、目标平台名或协议参数，引用只写「见 <知识库/案例>」指针。
-- 交付物不得依赖 skill 仓库路径、临时脚本、系统浏览器 profile 或用户机器上的登录态。
-- 关键 Cookie / 凭据必须区分静态配置、运行时生成值、服务端下发值、会话绑定值和**设备级凭据**（设备级凭据只走上述迫不得已 + 用户确认的例外路径）；禁止把成功样本中的动态秘密直接复制进代码。
+- 不交付 Playwright、Puppeteer、Selenium、浏览器扩展、浏览器 MCP 或 ruyipage/RuyiTrace 自动化代码；交付物不得使用浏览器、浏览器自动化或浏览器运行态生成参数（含打开网页、执行页面脚本、读取浏览器状态）。
+- 不以自动化浏览器完成反爬挑战；不把浏览器抓到的关键 Cookie 或动态秘密当固定常量或签名来源。唯一例外：目标参数是**设备级凭据**且沙箱/纯协议无法自生成时，说明并经用户确认后走配置注入，标注来源与有效期；未经确认即违规。
+- 用 jsdom / happy-dom / domino 时不得联网加载目标页生成参数（HTML 用本地字符串、脚本取自本 case 落盘产物、不开 `resources: 'usable'`、不传目标站 `url`）；动态挑战类目标确需在线执行官方 JS 时例外，走 `references/env/runtime-frameworks.md` 的 sdenv 路径并在总结标注联网依赖。
+- 交付入口必须是 Node.js `final.js` 或 Python `final.py`，运行时只用 HTTP、TLS、密码学、序列化与必要的最小 JS 沙箱能力。
+- 通用模板不得在 `assets/templates/` 预填真实厂商的接口名、字段名、HTTP 方法、JSONP、加密结构、凭据字段或默认轨迹；平台细节由本 case 的抓包、RuyiTrace 与成功样本驱动，落在 case adapter/result 中。
+- 厂商知识分级（T1 识别指纹 / T2 协议语义）不得越界：识别信号（参数名↔算法族映射、厂商 Cookie/组件名、响应码特征）只留在标注过的识别参考（`references/crypto/algorithm-families.md`、`references/network/ip-risk-control.md`）与分类脚本（`scripts/classify_verify.py`），不进通用 workflow/质量文档；协议知识（字段语义、加密结构、接口链、实测轨迹参数）只留在 `references/captcha/`、`cases/*.md` 与 case adapter（带验证日期）；通用文档与案例表不得出现具体厂商名、平台名或协议参数，引用只写「见 <知识库/案例>」。
+- 交付物不得依赖 skill 仓库路径、临时脚本、系统浏览器 profile 或用户机器登录态。
+- 关键 Cookie / 凭据必须区分静态配置、运行时生成值、服务端下发值、会话绑定值与**设备级凭据**（后者只走上述例外路径）；禁止把成功样本中的动态秘密复制进代码。
 
 判定标准：删除浏览器和显示环境后，交付程序仍能独立生成请求并得到预期响应。
 
 ## 4. 唯一启动状态机与执行主线
 
-状态转换是唯一准入规则，旧版编号清单不得并行执行。
-
-（命令参数细则见 `scripts/README.md`，trace 策略见 `references/workflow/trace-flow.md`；本节聚焦状态流转与门禁规则，不重复承载细则。）
+状态转换是唯一准入规则，旧版编号清单不得并行执行。（命令参数细则见 `scripts/README.md`，trace 策略见 `references/workflow/trace-flow.md`；本节只讲状态流转与门禁。）
 
 ```text
-INTENT_CONFIRM
-  ├─ 范围明确 → ENV_READY
-  └─ 缺少信息 → WAIT_USER
-ENV_READY
-  ├─ 环境正常 → EVIDENCE_GATE
-  └─ 环境缺失 → ENV_READY
+INTENT_CONFIRM ─ 范围明确 → ENV_READY；缺信息 → WAIT_USER
+ENV_READY ─ 环境正常 → EVIDENCE_GATE；缺失 → 修复后重检
 EVIDENCE_GATE
-  ├─ Step 1 与 Step 2 均具备 → CASE_LOOKUP
-  ├─ 只有 Step 1 且 RuyiTrace 工具不可用（install_all.js 自动安装失败）→ MATERIALS_FALLBACK
-  ├─ 只有 Step 1 → TRACE_CAPTURE
+  ├─ Step 1 + Step 2 均具备 → CASE_LOOKUP
+  ├─ 只有 Step 1 → TRACE_CAPTURE（RuyiTrace 不可用且自动安装失败 → MATERIALS_FALLBACK）
   ├─ 只有 Step 2 → STEP2_ONLY
-  └─ 两步均缺失 → FORENSIC_CAPTURE
-MATERIALS_FALLBACK（工具不可用降级，细则见 decision-tree.md 阻塞点#5）
-  ├─ 用户材料（JS/cURL/HAR，含经用户确认的浏览器 MCP 代采落盘产物）经 check_evidence.js
-  │   内容校验通过 → CASE_LOOKUP
-  │   （强制声明：经验沉淀与最终总结写明未走 ruyipage/RuyiTrace、证据为手动材料 + 真实请求反证）
-  └─ 仅 URL 或材料校验不通过 → FORENSIC_CAPTURE（先修复工具）
+  └─ 两步均缺 → FORENSIC_CAPTURE
+MATERIALS_FALLBACK（工具不可用降级，见 decision-tree.md 阻塞点#5）
+  ├─ 用户材料（JS/cURL/HAR，含经确认的浏览器 MCP 代采落盘产物）过 check_evidence.js 内容校验 → CASE_LOOKUP
+  │  （必备声明：经验沉淀与最终总结写明未走 ruyipage/RuyiTrace、证据为手动材料 + 真实请求反证）
+  └─ 仅 URL 或校验不过 → FORENSIC_CAPTURE（先修工具）
 STEP2_ONLY → CASE_LOOKUP
-FORENSIC_CAPTURE
-  ├─ 终态目标取证达成（终态 2xx 命中）→ TRACE_CAPTURE
-  └─ 目标请求持续被拒且定位到内核级/环境检测阻断 → BLOCKED_FORENSIC
-BLOCKED_FORENSIC（取证被目标站检测阻断，与工具缺失不同）
+FORENSIC_CAPTURE ─ 终态 2xx 命中 → TRACE_CAPTURE；持续被拒且定位到内核级/环境检测阻断 → BLOCKED_FORENSIC
+BLOCKED_FORENSIC（被检测阻断，与工具缺失不同；未定位到检测证据不得进入）
   ├─ UA 类检测 → forensic_ruyipage.py --ua 覆盖后重采 → 达成则 TRACE_CAPTURE
-  ├─ UA 覆盖无效的引擎级检测（eval.toString/Error.stack/引擎特征等，取证细则与
-  │   match14 实证见 references/env/env-detect-bypass.md）→ 输出卡点对齐用户后三选一：
-  │   ① 浏览器 MCP 连真实 Chrome 内核取证（先过 --guard mcp；成功样本落盘 case/，
-  │      按用户材料归类走 MATERIALS_FALLBACK 校验）
-  │   ② 用户提供真实浏览器 cURL/HAR 走 MATERIALS_FALLBACK
-  │   ③ 用户确认降级（降级义务同 MATERIALS_FALLBACK：经验沉淀与最终总结写明 Step 2 缺失原因）
-  └─ 未定位到检测证据不得进入本节点（先按 4.2 重采 / DIAGNOSE 排查）
-TRACE_CAPTURE
-  ├─ 采集成功 + 质量达标 + 出口门禁复检通过 → CASE_LOOKUP
-  ├─ 质量不足 → TRACE_RETRY
-  └─ 采集失败 → 转手动 trace
-TRACE_RETRY
-  ├─ 重试达标 + 出口门禁复检通过 → CASE_LOOKUP
-  ├─ 仍不足 → 降级补充，标 trace 未覆盖
-  └─ 全部失败 → 用 FORENSIC_CAPTURE 证据继续 + 总结声明 trace 缺失
-CASE_LOOKUP
-  ├─ 本地命中且时效校验通过 → IDENTIFY
-  └─ 本地未命中 → EXTERNAL_LOOKUP
-EXTERNAL_LOOKUP（前置：必须已有本次取证产物；外查前过 `--guard external`）
-  ├─ 搜到方案且算法可读 → IMPLEMENT
-  └─ 搜不到或黑盒 → FORENSIC_CAPTURE
-IDENTIFY → TRACE_ANALYZE → IMPLEMENT
-IMPLEMENT → REAL_VERIFY
-REAL_VERIFY
-  ├─ 默认真实验证通过 → DELIVER
-  ├─ 失败 + 已有 trace → DIAGNOSE
-  ├─ 失败 + 无 trace → FORENSIC_CAPTURE
-  └─ sign-only → SIGN_ONLY_DELIVER
-DIAGNOSE（403/风控码失败的首选入口；双对照细则见第 10 节分层定位协议）
-  ├─ 200 + 业务层风控文案 → 会话状态类风控（蜜月期/惩罚计数；"放慢速度"
-  │  类文案在签名确认正确前不得按字面归因频率），
-  │  按 ip-risk-control.md 专节排查；惩罚期内基线失败 → 冷却，不做实验
-  ├─ 正向对照 200 + 反向对照 403 → 签名内容层 → 环境检测对齐（探针法）→ IMPLEMENT
-  ├─ 正向对照 403 → 连接层嫌疑成立 → IMPLEMENT 路径 E（TLS/Session 对齐）
+  └─ UA 覆盖无效的引擎级检测（eval.toString/Error.stack 等，见 references/env/env-detect-bypass.md）→ 对齐用户后三选一：
+     ① 浏览器 MCP 连真实 Chrome 内核取证（过 `--guard mcp`，样本落盘 case/，按用户材料归类过 MATERIALS_FALLBACK 校验）
+     ② 用户提供真实浏览器 cURL/HAR 走 MATERIALS_FALLBACK
+     ③ 用户确认降级（义务同 MATERIALS_FALLBACK：总结写明 Step 2 缺失原因）
+TRACE_CAPTURE ─ 采集成功+质量达标+出口门禁复检通过 → CASE_LOOKUP；质量不足 → TRACE_RETRY；采集失败 → 转手动 trace
+TRACE_RETRY ─ 重试达标+复检通过 → CASE_LOOKUP；仍不足 → 降级补充并标 trace 未覆盖；全失败 → 用 FORENSIC_CAPTURE 证据继续 + 总结声明 trace 缺失
+CASE_LOOKUP ─ 本地命中且时效校验通过 → IDENTIFY；未命中 → EXTERNAL_LOOKUP
+EXTERNAL_LOOKUP（前置：已有本次取证产物 + `--guard external`）─ 方案可读 → IMPLEMENT；搜不到或黑盒 → FORENSIC_CAPTURE
+IDENTIFY → TRACE_ANALYZE → IMPLEMENT → REAL_VERIFY
+REAL_VERIFY ─ 验证通过 → DELIVER；失败+有 trace → DIAGNOSE；失败+无 trace → FORENSIC_CAPTURE；sign-only → SIGN_ONLY_DELIVER
+DIAGNOSE（403/风控码失败首选入口；双对照协议见第 10 节）
+  ├─ 200 + 业务层风控文案 → 会话状态类风控（蜜月期/惩罚计数；"放慢速度"类文案在签名确认正确前不得按字面归因频率，按 ip-risk-control.md 专节排查；惩罚期内基线失败 → 冷却不做实验）
+  ├─ 正向 200 + 反向 403 → 签名内容层 → 环境检测对齐（探针法）→ IMPLEMENT
+  ├─ 正向 403 → 连接层嫌疑成立 → IMPLEMENT 路径 E（TLS/Session 对齐）
   ├─ 会话/资源/频率/业务参数错误 → 对应修复 → IMPLEMENT
-  ├─ 确认取证浏览器被引擎级毒化（浏览器自身 400 且 --ua 无效、或与真机同输入
-  │  对拍不一致）→ BLOCKED_FORENSIC 补登记（match21 实证：该证据常在分析阶段
-  │  才齐备，经用户确认后 --guard mcp 走 Chrome MCP 对照）
-  └─ 双对照未完成（含用过期样本、hook 未验证标记、惩罚期污染数据）→ 停在 DIAGNOSE，
-     不得下拦截层结论、不得转投浏览器内核方案；对照结果写入验证记录并过
-     check_risk_layer_diagnosis.js 后按结论路由
+  ├─ 确认取证浏览器被引擎级毒化（浏览器自身 400 且 --ua 无效，或与真机同输入对拍不一致）→ 补登记 BLOCKED_FORENSIC（match21：该证据常在分析阶段才齐备）
+  └─ 双对照未完成（过期样本/hook 未验证标记/惩罚期污染数据）→ 停在 DIAGNOSE，不下拦截层结论、不转浏览器内核方案；过 check_risk_layer_diagnosis.js 后按结论路由
 DELIVER / SIGN_ONLY_DELIVER → CLEANUP → DONE
 ```
 
-**TRACE_CAPTURE / TRACE_RETRY 出口门禁（不可跳过）**：进入 CASE_LOOKUP 前必须复跑 `check_trace_gate.js` 出口复检，退出码 0（Step 2 已具备且目标 writer 覆盖满足）才放行。完整命令、判定规则与信号语义见 4.2 节「TRACE_CAPTURE 出口门禁复检」。
+**TRACE_CAPTURE / TRACE_RETRY 出口门禁（R1）**：进 CASE_LOOKUP 前必须复跑 `check_trace_gate.js` 复检（退出码 0 放行），命令与信号语义见 4.2 节。
 
-**阶段动作边界（硬约束）**：状态机每个节点只允许该节点的取证/分析动作，**前置阶段不得发起外部重放/对照实验**。
+**阶段动作边界（R1，`--guard replay|external|mcp` 裁定）**：每个节点只做本节点允许的动作，**前置阶段不得发起外部重放/对照实验**。
 
-- 允许范围：TRACE_CAPTURE / CASE_LOOKUP / EXTERNAL_LOOKUP / IDENTIFY / TRACE_ANALYZE 只做取证（`forensic_ruyipage.py` / `capture_ruyitrace_log.js`）、本地证据分析（`import_ruyitrace_log.js` / `search_trace.js` / `search_js.js`）与案例/网络检索。
-- 重放归属：判断参数可重放性、绑定关系、UA/cookie/TLS 因素属 **DIAGNOSE**。需要这类判断时，先 TRACE_ANALYZE 定位 builder/writer，IMPLEMENT 写出实现，再到 REAL_VERIFY/DIAGNOSE 做对照实验。
-- 越权代价：①消耗会话状态、触发风控污染后续取证；②签名链未定位时缺乏对照基础，会把会话/cookie 层问题误判为签名或连接层问题。
-- 技术入口：任何向目标接口发真实请求（含"只发一次看看返回什么"的诊断性请求）前必须先过 `--guard replay`（命令见 0.0 节），退出码 0 才允许发。自我判断"我现在做的算 DIAGNOSE"不构成放行依据——守卫读的是 `state.json` 里的实际节点。
+- 允许范围：TRACE_CAPTURE / CASE_LOOKUP / EXTERNAL_LOOKUP / IDENTIFY / TRACE_ANALYZE 只做取证（`forensic_ruyipage.py`/`capture_ruyitrace_log.js`）、本地分析（`import_ruyitrace_log.js`/`search_trace.js`/`search_js.js`）与案例/网络检索；重放归 DIAGNOSE——先 TRACE_ANALYZE 定位 builder/writer，IMPLEMENT 写出实现，再对照实验。越权代价：签名链未定位时易误判问题层，并白耗会话状态、触发风控。
+- 技术入口：向目标接口发真实请求（含“只发一次看看返回什么”）前先过 `--guard replay`（见 0.0 节），退出码 0 才允许发；自我判断“这算 DIAGNOSE”不构成放行依据——守卫读 `state.json` 的实际节点。
 
-**外部检索时序（硬约束）**：外部题解/文章检索只允许在 CASE_LOOKUP / EXTERNAL_LOOKUP / DIAGNOSE 节点进行，执行前必须过 `--guard external`（命令见 0.0 节；退出码 0 放行，越权退出 2 并写 `blocks` 审计）。EVIDENCE_GATE 及更早阶段一律不得外查——取证前外查的期望收益远低于被过期情报带偏的成本。情报到手后：① 外部结论一律标记为**假设**，必须用本次 trace/capture 逐条验证后才能升级为结论；② 与本次证据冲突时无条件以本次证据为准（绝对规则 2）；③ 不得因外部方案更"完整"而修改本次证据解读或跳过取证；④ 优先查已按平台/题型归类的逆向文章索引库（如 GitHub `kanadeblisst00/high-quality-biz`），命中后仍按前三条处置。
-
-激活后立即运行 `node scripts/state_machine.js --case-dir <project-root> --init --markdown` 建立执行状态；随状态推进勾选的 11 项 TODO 清单、同步规则与判定标准见 0.0 节「TODO 硬门禁」。
+**外部检索时序（R1，`--guard external` 裁定）**：外查只允许在 CASE_LOOKUP / EXTERNAL_LOOKUP / DIAGNOSE 进行，执行前过 `--guard external`（退出码 0 放行，越权退出 2 并写 `blocks` 审计）。EVIDENCE_GATE 及更早阶段不得外查——取证前外查会被过期情报带偏。情报到手后：① 一律标为**假设**，用本次 trace/capture 逐条验证后才升级为结论；② 冲突时无条件以本次证据为准（绝对规则 2）；③ 不因外部方案更“完整”而改读证据或跳过取证；④ 优先查已按平台/题型归类的索引库（如 GitHub `kanadeblisst00/high-quality-biz`），命中后仍按前三条处置。
 
 ### 4.1 路径、意图与环境
 
-`<project-root>` 指项目根目录，其下**平级**包含 `case/`（取证与分析中间产物）与 `result/`（交付物）。`notes/` 是 `case/` 的子目录，**不与 `result/` 平级**：
+`<project-root>` 是项目根目录，其下**平级**为 `case/`（取证与分析中间产物）与 `result/`（交付物）；`notes/` 在 `case/` 内，**不与 `result/` 平级**：
 
 ```text
-<project-root>/                # 所有脚本的 --case-dir 传这一层
-├─ case/                       # 中间产物，可清理
-│  ├─ state.json               # 状态机（state_machine.js --init 写入）
-│  ├─ notes/                   # env-snapshot.json / entry-chain.md / missing-env-priority.md 等门禁依赖
-│  ├─ 阶段报告/  tmp/  fixtures/  requests/  hooks/  env/  forensic/
-│  ├─ js/{original,pretty,extracted}/   ruyi-trace/logs/   browser/ruyipage/
-└─ result/                     # 交付物：final.js|final.py、config.json、最终项目总结.md、经验沉淀-<站点>.md、验证记录.json、src/
+<project-root>/         # 所有脚本的 --case-dir 传这一层
+├─ case/                # 中间产物，可清理
+│  ├─ state.json        # 状态机（state_machine.js --init 写入）
+│  ├─ notes/            # env-snapshot.json / entry-chain.md / missing-env-priority.md 等门禁依赖
+│  ├─ 阶段报告/ tmp/ fixtures/ requests/ hooks/ env/ forensic/
+│  ├─ js/{original,pretty,extracted}/  ruyi-trace/logs/  browser/ruyipage/
+└─ result/              # 交付物：final.js|final.py、config.json、最终项目总结.md、经验沉淀-<站点>.md、验证记录.json、src/
 ```
 
-一个文件夹内放多个 case 时，**每个 `<case-name>/` 自身就是一个 `<project-root>`**（各自有 `case/` 与 `result/`），`tools/` 提到外层与各 case 平级共享：
+多 case 同目录时，**每个 `<case-name>/` 自身就是一个 `<project-root>`**，`tools/` 放外层共享：`<workspace>/{tools/, <case-a>/{case,result}, <case-b>/{case,result}}`。
 
-```text
-<workspace>/
-├─ tools/                      # RuyiTrace / ruyipage runtime，多 case 共享
-├─ <case-a>/{case/, result/}
-└─ <case-b>/{case/, result/}
-```
+`--case-dir` 统一传 `<project-root>`；`scripts/lib/paths.js` 的 `resolveCaseDir()`/`resolveResultDir()`/`resolveNotesDir()` 是唯一路径真源（兼容 `<project-root>` 与 `<project-root>/case`），脚本内不要自行拼 `caseDir/result`。环境检测用 `--project-dir` 指向 tools/ 所在工程根，多 case 共享时自动上溯含 `tools/` 的祖先目录。
 
-所有脚本的 `--case-dir` 统一传 `<project-root>`；`scripts/lib/paths.js` 的 `resolveCaseDir()` / `resolveResultDir()` / `resolveNotesDir()` 是唯一路径真源，已兼容传 `<project-root>` 或 `<project-root>/case`，不要在脚本里自行拼 `caseDir/result` 或 `caseDir/../result`。环境检测类脚本用 `--project-dir <project-root>` 指定 tools/ 所在工程根；多 case 共享 tools 时 `--project-dir`/`--case-dir` 传 case 目录或共享工程根均可，脚本会自动向上查找含 `tools/` 的祖先目录，避免把已装在共享工程根的 RuyiTrace/ruyipage runtime 误判缺失或重复下载。
+从请求中提取目标 URL、接口 URL、目标参数、方法、范围与项目根（推进规则见 GATE-0）；实现若需额外动态参数，列出参数名、位置、用途假设与证据后纳入请求链范围。
 
-从请求中提取目标 URL、接口 URL、目标参数、请求方法、范围和项目根目录。目标 URL + 目标参数可确定即直接推进；仅两者缺一且无法合理提取时才问一次最小信息。若实现需要额外动态参数，列出参数名、位置、用途假设和证据后纳入请求链范围。
+用户约束与 skill 规则的仲裁（启动阶段只裁定一次）：用户说「不接受浏览器自动化」「不用 Playwright」，默认约束**最终交付物**（第 3 节），不改取证阶段允许 ruyipage 定制 Firefox / RuyiTrace 的规则（绝对规则 8）；「忽略已有案例经验」指不直接套用历史结论（绝对规则 2 的 CASE_LOOKUP 时效校验仍在），不是跳过必经节点。仅当约束明确指向取证动作本身（如「不许打开浏览器」）时才问一次确认。
 
-用户约束与 skill 规则的仲裁（启动阶段只裁定一次，不得反复权衡）：用户说「不接受浏览器自动化」「不用 Playwright」等，默认约束**最终交付物**（第 3 节纯协议红线），不改变取证阶段允许 ruyipage 定制 Firefox / RuyiTrace 的规则（绝对规则 8），两者不冲突时无需多轮权衡；「忽略已有案例经验」指不直接套用历史结论（绝对规则 2 仍要求先走 CASE_LOOKUP 做时效校验），不是跳过必经节点。仅当用户约束明确指向取证动作本身（如「不许打开浏览器」）时才问一次确认取舍。
-
-用户说明重装 Node、替换 Firefox、迁移 tools 目录或升级 ruyipage/RuyiTrace 时，重新执行完整环境检查，不得沿用旧快照。
-
-环境检查与快照写入按第 0 节 GATE-1 执行。不得因已有阶段报告或 `result/` 跳过环境快照写入或证据核验。
+环境检查与快照写入按 GATE-1 执行，不因已有阶段报告或 `result/` 跳过；用户说明重装 Node、替换 Firefox、迁移 tools 或升级 ruyipage/RuyiTrace 时重跑完整环境检查，不沿用旧快照。
 
 ### 4.2 取证与证据门禁
 
-EVIDENCE_GATE 运行 GATE-2 的 `check_evidence.js`（命令与信号参数见 0 节 GATE-2）。
+URL 不是证据——脚本确认文件真实存在且可归类才允许跳过对应步骤；退出码非 0 或输出含「缺失证据」时停在 EVIDENCE_GATE 补证复检，禁止进入 IDENTIFY/TRACE_ANALYZE/IMPLEMENT。
 
-URL 不是证据。脚本确认文件真实存在并可归类，才允许跳过对应步骤。退出码非 0 或输出含「缺失证据」「不可跳过」时，停在 EVIDENCE_GATE 补证并复检，禁止进入 IDENTIFY/TRACE_ANALYZE/IMPLEMENT。
+- Step 1：有效 `capture.json` 网络记录，或过内容校验的 HAR、cURL、原始 HTTP 请求文本；目标接口已知时加 `--require-network-signal <目标接口URL或关键词>`。Step 2：可解析、非空且关联目标域的 RuyiTrace NDJSON/JSONL（`ruyitrace-summary.md` 不算）；Step2-only 时先导入生成摘要再定位，不重复采集。单独 JS、截图或指纹基线只作辅助材料，不计为 Step 1。
 
-- Step 1：有效 `capture.json` 网络记录，或通过内容校验的 HAR、cURL、原始 HTTP 请求文本；目标接口已知时用 `--require-network-signal <目标接口URL或关键词>` 约束 capture/用户材料。
-- Step 2：内容可解析、记录非空且关联目标域的 RuyiTrace NDJSON/JSONL；`ruyitrace-summary.md` 不能替代 NDJSON。Step2-only 时先导入并生成摘要，再结合日志定位，不重复采集 trace，也不因缺少 Step 1 强制网络取证。
-- 单独 JS、截图或指纹基线只作辅助材料，不计为 Step 1。
+**取证前速查（R2）**：路由到 FORENSIC_CAPTURE / TRACE_CAPTURE 后、发起采集前，先按第 5 节跑 `search_cases.js`；命中则提取三项情报（校准 `--targets`、坑点与采集参数建议、题型假设）写入状态行后再取证，未命中按全新 case 取证。速查只是假设与路径提示（绝对规则 2）。
 
-**取证前强制速查（不可跳过）**：EVIDENCE_GATE 路由到 FORENSIC_CAPTURE / TRACE_CAPTURE 后、发起任何取证采集命令前，先 `node scripts/search_cases.js --domain <目标域名> --signal <参数名或SDK特征>` 速查经验库。命中时提取三项情报（终态接口模式校准 `--targets`、已知坑点与采集参数建议、题型假设）写入状态行后再取证；未命中按全新 case 取证。速查结果只是假设与路径提示（绝对规则 2），不替代本次取证证据。
-
-网络取证（`--targets` 仅写唯一标识终态接口的完整路径子串，禁止用会误命中同号旁路接口的宽正则，见反模式 22；入口页 HTML 自动存 `case/forensic/document.html` 作为 challenge cookie 强制证据）：
+网络取证（`--targets` 只写唯一标识终态接口的完整路径子串，禁止用会误命中同号旁路接口的宽正则，见反模式 22；入口页 HTML 自动存 `case/forensic/document.html` 作为 challenge cookie 强制证据）：
 
 ```powershell
 python scripts/forensic_ruyipage.py --url <target-url> --case-dir <project-root> --targets <最终业务接口关键词> --markdown
 ```
 
-- 发起取证命令前先 `--set` 对应节点（FORENSIC_CAPTURE / TRACE_CAPTURE），取证完成再补设会被状态机拒绝；抓包从页面打开前覆盖到终态，不要求用户预先列全验证码 load/verify 等中间接口。
-- `--ua` 只覆盖 UA 字符串；`eval.toString()` 等内核级检测覆盖无效，命中按 `BLOCKED_FORENSIC` 处理（见 `references/env/env-detect-bypass.md`），禁止手写取证探针。
-- RED LINE：`--cookie` 仅注入取证浏览器还原真实会话，不替代最终交付的协议实现。
-- 完整参数细则（时间参数单位秒、`--wait/--target-settle` 上限、`--cookie/--cookie-domain`、`--ua`、60 包/100MB 预算、bodies/wasm 落盘、`saved_to/_complete` 语义）见 `scripts/README.md` 与 `references/workflow/trace-flow.md`。
+- 先 `--set` 对应节点再发起取证（取证完成再补设会被拒绝）；抓包从页面打开前覆盖到终态。`--ua` 只覆盖 UA 字符串，内核级检测无效（按 BLOCKED_FORENSIC 处理）；禁止手写取证探针。`--cookie/--cookie-domain` 仅注入取证浏览器还原真实会话，不替代交付实现。参数细则（秒级时间、`--wait/--target-settle` 上限、cookie 注入作用域、60 包/100MB 预算、`saved_to/_complete` 语义）见 `scripts/README.md`、`references/workflow/trace-flow.md`。
+- **退出码语义**：`PARTIAL`（仅 OPTIONS/非 2xx）与 `NO_TARGET` 均非 0，任一非 OPTIONS 2xx 即 `PASS`（= 目标请求已取证，不表示业务成功）；NO_TARGET 按输出末尾「重采候选」校准 `--targets` 重采，不凭记忆猜路径。
+- **翻页/序列类目标**：取证交互覆盖 ≥2 个请求序号（如翻 2 页再收尾），单序号样本看不见计数器递增语义（反模式 24）。
+- **证据完整性与收尾**：body 超 JSON 内联预览阈值时必须读 `saved_to` 完整文件（`*_complete=false` 不能拿预览当证据）；用户关浏览器即手动结束（endReason=browser-closed，非失败），脚本收尾分类期间禁止 kill 进程。
 
-终态目标请求未命中 = Step 1 缺失，禁止转源码搜索继续。JS 源码关键词定位只能作辅助假设；用户也可提供 cURL/HAR/原始请求文本；终态命中并落盘后再回 EVIDENCE_GATE。
-
-- **退出码语义**：`PARTIAL`（仅 OPTIONS/非 2xx）与 `NO_TARGET`（完全未命中）均非 0；任一非 OPTIONS 2xx 命中即 `PASS`、退出码 0。HTTP 2xx 只表示目标请求已取证，不表示业务成功（通用脚本不猜业务码）。NO_TARGET 的「重采候选」列表与全 403 的处理语义、重试型场景参数见 `references/workflow/trace-flow.md`「取证操作细则」。
-- **翻页/序列请求类目标**：取证交互覆盖 ≥2 个请求序号（如翻 2 页再收尾），为 fixture 多序号比对留成功样本——单序号样本看不见计数器递增语义（反模式 24，match14 教训）；翻页点击静默失败坑见 trace-flow.md「取证操作细则」。
-- **证据完整性**：body 超过 JSON 内联预览阈值时必须读取对应 `saved_to` 完整文件，`*_complete=false` 不能拿预览替代原始证据。
-- **手动结束与收尾纪律**：用户操作完成后直接关闭浏览器窗口即视为手动结束（endReason=browser-closed，非失败）；浏览器已关/日志 WebSocket 断连时脚本仍在收尾分类，等 `FORENSIC DONE` 或 JSON 输出、禁止 kill 进程（强杀残留 `partial-steps.jsonl` 仅元数据兜底）。语义细则见 `scripts/README.md` 与 `references/workflow/trace-flow.md`。
-
-Windows 下若 Python 脚本输出仍现编码异常，用 `PYTHONUTF8=1` 前缀兜底（PowerShell：`$env:PYTHONUTF8="1"`）；仓库脚本已内置 UTF-8 强制与 emoji 安全化，正常无需手动加。
+终态目标请求未命中 = Step 1 缺失，禁止转源码搜索继续；JS 关键词定位只作辅助假设（用户也可提供 cURL/HAR/原始请求文本），终态命中落盘后再回 EVIDENCE_GATE。
 
 日志采集：
 
@@ -287,47 +212,43 @@ Windows 下若 Python 脚本输出仍现编码异常，用 `PYTHONUTF8=1` 前缀
 node scripts/capture_ruyitrace_log.js --url <target-url> --case-dir <project-root> --evidence-signal <环境API或签名写入点关键词> --end-signal <明确完成事件> --import-after --markdown
 ```
 
-- 信号语义：`--evidence-signal` 只匹配 RuyiTrace 记录的 API/写入点（`Headers.set(<参数>)`、参数名、`XMLHttpRequest.open`），应选参数写入点/参数名（`noncestr`、`x-zse-96`）。三类必然不命中、一律不传：①目标接口 URL；②裸 `createElement`、`appendChild`、`JSON.stringify`、`Date.now` 等泛化 API（门禁会拒绝）；③密钥/常量名（会误触发硬阻断）。信号记录形态与匹配规则见 `references/workflow/trace-flow.md`。
-- `--end-signal` 只控制提前关闭，与 `--evidence-signal` 分离；`--target-signal` 仅兼容旧调用，新流程勿用。目标接口 URL 命中证据由 Step 1（`forensic_ruyipage.py --targets` + `check_evidence.js --require-network-signal`）承担。
-- 定向收窄：默认全量采集仍是首轮与出口门禁基准；已锁定目标脚本/函数、jsvmp 题型或首轮日志过大时，追加 `--trace-env KEY=VALUE` 透传 `MOZ_DOM_*` 开关（先判题型再选最小组合，见 `references/workflow/trace-flow.md`「定向 trace 策略」）。JSVMP 采后核 `case/ruyi-trace/logs/eval/eval_*_eval-direct.js` 是否落盘（落盘即业务逻辑）。
-- 带栈 opcode（`STACK_FULL`）必配 `--gate --gate-after <ms> --gate-duration <ms>` + `--max-log-bytes <n>` + `--pref javascript.options.blinterp=false`（配方见 `ruyi-tooling.md`「闸门窗口」）；其余参数细则见 `scripts/README.md` 与 `references/workflow/trace-flow.md`。
+- 信号语义：`--evidence-signal` 只匹配 RuyiTrace 记录的 API/写入点，应选参数写入点/参数名（`noncestr`、`x-zse-96`、`Headers.set(...)`）；三类必然不命中、一律不传——①目标接口 URL ②裸 `createElement` 等泛化 API（门禁会拒绝）③密钥/常量名。`--end-signal` 只控制提前关闭，与 evidence-signal 分离；`--target-signal` 仅兼容旧调用，新流程勿用。
+- 定向收窄：默认全量采集是首轮与出口门禁基准；已锁定目标脚本/函数、jsvmp 题型或首轮日志过大时追加 `--trace-env KEY=VALUE` 透传 `MOZ_DOM_*`（先判题型再选最小组合，见 trace-flow.md「定向 trace 策略」）。JSVMP 采后核 `case/ruyi-trace/logs/eval/eval_*_eval-direct.js` 是否落盘（落盘即业务逻辑）。
+- 带栈 opcode（`STACK_FULL`）必配 `--gate --gate-after <ms> --gate-duration <ms>` + `--max-log-bytes <n>` + `--pref javascript.options.blinterp=false`（见 `ruyi-tooling.md`「闸门窗口」）；其余参数见 `scripts/README.md` 与 `references/workflow/trace-flow.md`。
 
-用户已提供 NDJSON 时用 `--input <ndjson>` 导入并生成摘要，不重复采集；多个进程日志用 `import_ruyitrace_log.js --input a --input b`，复制到 case 时会按来源摘要命名，避免同名文件覆盖。取证结果只进入 `case/`，原始 JS 放入 `case/js/original/`，临时材料放入 `case/tmp/`。
+用户已提供 NDJSON 用 `--input <ndjson>` 导入生成摘要，不重复采集；多进程日志用 `import_ruyitrace_log.js --input a --input b`，复制到 case 时按来源摘要命名避免同名覆盖。取证结果只进 `case/`，原始 JS 放 `case/js/original/`，临时材料放 `case/tmp/`。
 
-目标请求需手动触发时，必须提示用户在 trace 浏览器中完成操作；用户确认“已触发”前不得结束采集。不得把“没触发目标路径”当成“采集完成”。
+目标请求需手动触发时，提示用户在 trace 浏览器中操作；用户确认“已触发”前不得结束采集，也不得把“没触发目标路径”当成“采集完成”。
 
-**TRACE_CAPTURE 质量判定与 TRACE_RETRY**：采集到 NDJSON 不等于达标。摘要出现 trace-flow.md「重度不足」表任一判据（「未发现 stack.file」、成功解析极低、topApis 找不到目标参数 writer、「未覆盖页面 JS」、「有效 API 调用占比过低」）均按重度不足处理并进入 TRACE_RETRY。**判定重度不足后必须先执行重采动作（TRACE_RETRY，可调整信号/duration/手动触发方式），重采一次仍不足才允许降级做落盘 JS 静态分析**；禁止跳过重采直接进入源码静态分析——缺 trace 时静态分析极易在「参数来源靠猜」上打转空耗。多进程 domtrace 主日志须合并所有 tab/content 进程文件（排除 parent 内核进程）——只取单个文件（尤其 mtime 最新的）会把有效 trace 误判为空（合并细则见 trace-flow.md）。完整降级顺序与验证码特化判定见 `references/workflow/trace-flow.md`。
+**质量判定与 TRACE_RETRY**：采集到 NDJSON ≠ 达标。摘要出现 trace-flow.md「重度不足」任一判据（未发现 stack.file、成功解析极低、找不到目标参数 writer、未覆盖页面 JS、有效 API 占比过低）即进 TRACE_RETRY；**禁止跳过重采直接转静态分析**——缺 trace 时静态分析极易在「参数来源靠猜」上打转。多进程 domtrace 主日志必须合并所有 tab/content 进程文件（只取单文件会把有效 trace 误判为空）。
 
-**TRACE_CAPTURE 出口门禁复检（不可跳过）**：采集声明完成、进入 CASE_LOOKUP 前必须复跑出口门禁脚本，确认 Step 2（RuyiTrace NDJSON）真实产出。这是状态机内复检（GATE-2 判定初始证据路由，本门禁确认 Step 2 真已补上）：
+**TRACE_CAPTURE 出口门禁复检（R1）**：采集声明完成、进 CASE_LOOKUP 前必须复跑出口门禁，确认 Step 2 真实产出（GATE-2 判定初始路由，本门禁确认 Step 2 真已补上）：
 
 ```powershell
 node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --require-trace-signal <环境API/写入点> --markdown
 ```
 
-退出码 0（Step 2 已具备且目标 writer 覆盖满足）才可进入 CASE_LOOKUP；NDJSON 已产出但 writer 信号未命中时，状态是“Step 2 已具备、目标链路覆盖不足”，进入 TRACE_RETRY，不得写成“没有 trace”。声明「已采集 trace」不等于 Step 2 已产出——出口门禁用脚本退出码硬卡「声明不执行」绕过 Step 2 直接拼凑交付。FORENSIC_CAPTURE 补采后同样必须通过本门禁才进 CASE_LOOKUP；STEP2_ONLY（用户已提供 NDJSON）Step 2 本就具备，直接通过。
+退出码 0（Step 2 已具备且目标 writer 覆盖满足）才可进入 CASE_LOOKUP；NDJSON 已产出但 writer 未命中时状态是“Step 2 已具备、目标链路覆盖不足”，进 TRACE_RETRY，不得写成“没有 trace”。FORENSIC_CAPTURE 补采后同样必须过本门禁；STEP2_ONLY（用户已提供 NDJSON）直接通过。
 
-`--trace-signal` 命中的是 trace 覆盖得到的「环境 API / 签名写入点」，不是网络请求 URL；网络 URL 使用 `--require-network-signal`，两者不可混用：
+`--trace-signal` 命中 trace 覆盖到的「环境 API / 签名写入点」而非网络 URL，两者不可混用：
 
-- 信号是环境 API（`fetch`、`XMLHttpRequest.send`、`handshake`、参数名等）未命中 → 目标路径未触发，是硬信号，进入 TRACE_RETRY，不得自行放宽。
-- 目标是纯网络接口、trace 未覆盖 URL 字面量 → 属预期，不算采集失败，不要反复重试 trace；改用参数写入点（如 `Headers.set("x-zse-96", ...)`）或参数名定位签名链，并显式声明「trace 未覆盖目标接口 URL 字面量；签名链定位依据为 <写入点/关键词>」，写入 `notes/ruyitrace-summary.md`、阶段报告（如已启用）与最终总结；未声明不得进入 IMPLEMENT。目标接口 URL 的命中证据由 Step 1 取证承担（`forensic_ruyipage.py --targets` + `check_evidence.js --require-network-signal`）。
+- 环境 API（`fetch`、`XMLHttpRequest.send`、`handshake`、参数名等）未命中 → 目标路径未触发，是硬信号，进 TRACE_RETRY，不自行放宽。
+- 纯网络接口、trace 未覆盖 URL 字面量 → 属预期，不算采集失败，不反复重试；改用参数写入点（如 `Headers.set("x-zse-96", ...)`）或参数名定位签名链，并把「trace 未覆盖目标接口 URL 字面量；签名链定位依据为 <写入点/关键词>」写入 `notes/ruyitrace-summary.md` 与最终总结；未声明不得进入 IMPLEMENT。
+
+Windows 下 Python 输出仍现编码异常时用 `PYTHONUTF8=1` 兜底（PowerShell：`$env:PYTHONUTF8="1"`）；仓库脚本已内置 UTF-8 强制，正常无需手动加。
 
 ### 4.3 EXTERNAL_LOOKUP
 
-本地 CASE_LOOKUP 未命中时，搜索网络已有方案作为假设来源，不替代本次证据。目标：目标域名 + 参数名 + “逆向/签名/加密”等关键词。
+本地 CASE_LOOKUP 未命中时，搜网络已有方案作假设来源（目标域名 + 参数名 + “逆向/签名/加密”），不替代本次证据。
 
-- 算法可读 → 方案作为假设进入 IMPLEMENT。
-- 算法黑盒、来源不可信或搜不到 → 进入 FORENSIC_CAPTURE。
+- 算法可读 → 方案作假设进 IMPLEMENT；黑盒、来源不可信或搜不到 → FORENSIC_CAPTURE。
+- 网络方案失败后不得反复试方案；验证失败且当前为轻量路径时，强制升级 FORENSIC_CAPTURE。
 
-网络方案失败后不得反复试方案；验证失败且当前为轻量路径时，强制升级到 FORENSIC_CAPTURE。
-
-**EXTERNAL_LOOKUP 豁免**：仅当本次取证已同时具备 Step 1 + Step 2，且 TRACE_ANALYZE 已定位 source/entry/builder/writer 时，可跳过 EXTERNAL_LOOKUP 直接 IMPLEMENT；需在状态行或阶段报告中显式声明「EXTERNAL_LOOKUP 豁免：Step1+Step2 齐备 + 链已定位」。仅凭「本地案例未命中」或「证据链看起来完整」不得跳过。CASE_LOOKUP 是必经节点：先 `search_cases` 查本地相似案例（同算法族/同参数名可复用方法论），未命中才考虑豁免；不得直接从 EVIDENCE_GATE 跨过 CASE_LOOKUP/EXTERNAL_LOOKUP 进 TRACE_ANALYZE。
+**EXTERNAL_LOOKUP 豁免**：仅当本次取证已具备 Step 1 + Step 2 且 TRACE_ANALYZE 已定位 source/entry/builder/writer 时，可跳过并直接 IMPLEMENT，需在状态行或阶段报告声明「EXTERNAL_LOOKUP 豁免：Step1+Step2 齐备 + 链已定位」；仅凭「本地案例未命中」或「证据链看起来完整」不得跳过。CASE_LOOKUP 是必经节点：先 `search_cases` 查本地相似案例（同算法族/同参数名可复用方法论），未命中才考虑豁免；不得从 EVIDENCE_GATE 跨过 CASE_LOOKUP/EXTERNAL_LOOKUP 进 TRACE_ANALYZE。
 
 ### 4.4 状态记录与 IMPLEMENT 前置条件
 
-每次状态转换必须输出一行状态行，格式固定为 `当前状态(证据状态) → 目标状态(关键结论)`，必须包含：
-- 当前状态名与证据状态（Step1/Step2 齐备情况、trace 质量）
-- 若跳过任何必经节点（CASE_LOOKUP / EXTERNAL_LOOKUP），必须显式写出豁免依据（如「EXTERNAL_LOOKUP 豁免：Step1+Step2 齐备 + TRACE_ANALYZE 已定位链」）
-- 若 trace 未覆盖目标接口 URL 字面量，状态行需带「trace 定位依据：<写入点/关键词>」
+每次状态转换默认输出一行状态行（R2 模板，缺项按语境补齐）：`当前状态(证据状态) → 目标状态(关键结论)`，含 ①当前状态与证据状态（Step1/Step2 齐备情况、trace 质量）②跳过必经节点（CASE_LOOKUP / EXTERNAL_LOOKUP）的豁免依据 ③trace 未覆盖目标接口 URL 字面量时带「trace 定位依据：<写入点/关键词>」。
 
 示例：`TRACE_ANALYZE(Step1+Step2 齐备，noncestr 写入点命中) → IMPLEMENT`；`DIAGNOSE(正向对照 200 + 反向对照 403 → 签名内容层，探针法 diff 出 4 差异位) → IMPLEMENT`。关键结论随节点落盘，供压缩/续接使用：
 
@@ -335,110 +256,83 @@ node scripts/check_trace_gate.js --case-dir <project-root> --url <target-url> --
 node scripts/write_stage_report.js --case-dir <project-root> --stage <阶段> --input <草稿.md> --markdown
 ```
 
-输出到 `case/阶段报告/`。状态失败时停留在当前节点，不得把失败标记为通过。
+输出到 `case/阶段报告/`；状态失败时停在当前节点，不把失败标记为通过。
 
-**阶段报告默认不生成，仅在以下场景按需落盘**：多轮复杂补环境 / 跨会话续接风险、上下文防耗尽检查点触发、或用户明确要求。关键结论随节点落盘（IDENTIFY 结论、WASM 黑盒跑通、body 结构确认、实现方案选定等）不受默认省略限制，必须写入 `case/阶段报告/`；最小报告至少含当前状态、已证实事实、缺失证据、下一步输入。阶段报告落盘是后台动作：落盘后立即按「下一步输入」继续推进下一状态，不等用户确认——「报告已写、下一步等指示」违反第 1 节连续执行总则。
+**阶段报告按需落盘（R2）**：多轮复杂补环境 / 跨会话续接风险 / 防耗尽触发 / 用户要求时生成。关键结论（IDENTIFY 结论、WASM 黑盒跑通、body 结构确认、实现方案选定等）必须写入 `case/阶段报告/`，最小报告含当前状态、已证实事实、缺失证据、下一步输入；落盘后立即按「下一步输入」继续（见第 1 节）。
 
-**IMPLEMENT 准入三件套（不可跳过）**：进入 IMPLEMENT 前必须按序完成，任一缺失停在 TRACE_ANALYZE。**禁止先根据 Node.js 报错盲补——盲补会导致十几轮「加载→崩→猜→再加载」的空转循环**：
-1. **证据前置**：走路径 B/C/D（最小 JS 沙箱、WASM、环境伪装）且需补浏览器对象时，先基于 RuyiTrace NDJSON 产出 `notes/entry-chain.md`（入口函数 → 请求链 → 关键 `stack.file:line:col`，TRACE_ANALYZE 已定位的 builder/writer 即 IMPLEMENT 第一实现目标）与 `notes/missing-env-priority.md`（用 `scripts/analyze_trace.js --summary` 从 NDJSON 抽取的 SDK 实际读取环境清单，含 `api`、`stack.file`、`line`、`col`、环境模块、补齐优先级和「RuyiTrace 证据 / Node trace 补充 / 推断」标记；黑盒执行无法逐项精确复现时至少列出已观测的环境读取/挂载点并标注「黑盒执行，不逐项精确复现」）。**格式要求（check_env_prerequisites.js 硬校验）**：每行环境项必须带显式优先级标记（`P0`/`P1`/`P2` 或列头「优先级」），并写明分优先级的依据；纯叙述性"是否进实现"表格而无优先级列会被判 BLOCK。两文件缺一不得开始补环境。
-2. **门禁脚本复核**：`node scripts/check_env_prerequisites.js --case-dir <project-root> --markdown` 退出码非 0 不得开始补环境（详见 `references/env/env-debug-loop.md` 的「RuyiTrace 优先诊断门禁」）。
-3. **Step 2 前置**：`node scripts/check_trace_gate.js` 退出码 0（Step 2 已具备且目标 writer 覆盖满足）；缺失判定与例外见下方「Step 2 缺失」段。
+**IMPLEMENT 准入三件套（R1）**：进 IMPLEMENT 前按序完成，任一缺失停在 TRACE_ANALYZE。**禁止先根据 Node.js 报错盲补**——盲补会陷入十几轮「加载→崩→猜」空转：
+1. **证据前置**：走路径 B/C/D 且需补浏览器对象时，基于 RuyiTrace NDJSON 产出 `notes/entry-chain.md`（入口函数 → 请求链 → 关键 `stack.file:line:col`，即第一实现目标）与 `notes/missing-env-priority.md`（`analyze_trace.js --summary` 抽取的 SDK 实际读取环境清单 + 补齐优先级 + 「证据 / Node trace 补充 / 推断」标记；黑盒执行无法逐项复现时标注「黑盒执行，不逐项精确复现」）。环境项须带显式优先级（`P0`/`P1`/`P2`）与依据。两文件缺一不得开始补环境。
+2. **门禁复核**：`node scripts/check_env_prerequisites.js --case-dir <project-root> --markdown` 退出码非 0 不得开始补环境（见 `references/env/env-debug-loop.md`「RuyiTrace 优先诊断门禁」）。
+3. **Step 2 前置**：`node scripts/check_trace_gate.js` 退出码 0；缺失判定与例外见下段。
 
-**上下文防耗尽检查点（硬约束）**：按硬计数触发，不得以「预防性落盘」「提前对齐用户」为由提前触发。触发条件（TRACE_ANALYZE / IMPLEMENT / REAL_VERIFY 任一阶段满足其一即视为已触发）：① 同一节点 20+ 步未推进或上下文接近耗尽（已机器强制：`state_machine.js` 记入 `state.json.stepCount`，12 步起 WARN、20 步起 `--guard` 直接拒绝；只有 `--set <同节点> --note "<阶段报告路径>"` 且文件真实存在才归零）；② 「想问用户 vs 再试一轮」摇摆超 2 轮；③ 同一决策重新权衡 ≥2 次、重复查询已查过的索引；④ 脚本 WARN：`search_js.js` / `search_trace.js` 对同一（文件、关键词）第 2 次检索即 WARN，收到必须换检索词/方法。
+**上下文防耗尽检查点（R1）**：按硬计数触发，不以「预防性落盘」「提前对齐用户」为由提前触发。TRACE_ANALYZE / IMPLEMENT / REAL_VERIFY 满足其一即已触发：① 同一节点 20+ 步未推进或上下文接近耗尽（`state_machine.js` 记入 `state.json.stepCount`，12 步 WARN、20 步起 `--guard` 拒绝；只有 `--set <同节点> --note "<阶段报告路径>"` 且文件真实存在才归零）；② 「想问用户 vs 再试一轮」摇摆超 2 轮；③ 同一决策重新权衡 ≥2 次或重复查询已查过的索引；④ 脚本 WARN：`search_js.js` / `search_trace.js` 对同一（文件、关键词）第 2 次检索即 WARN，收到换检索词/方法。
 
-触发后按固定动作序列执行：① 回看准入三件套的两份文件是否覆盖当前崩溃点，未覆盖先补全；② 已覆盖仍打转 → 落阶段报告（当前状态、已证实事实、缺失证据、下一步输入），落盘后立即按报告继续，不等用户；③ 仍无进展 → 输出卡点与默认方向（继续攻坚；仅当证据已证伪当前方向才换路径）后按默认方向继续，用户打断才改道。
+触发后按序：① 回看准入三件套两份文件是否覆盖当前崩溃点，未覆盖先补全；② 已覆盖仍打转 → 落阶段报告并立即按报告继续；③ 仍无进展 → 输出卡点与默认方向（继续攻坚；仅证据已证伪当前方向才换路径）并继续，用户打断才改道。
 
-**收尾保底**：无论预算消耗到什么程度，进入 Phase 5 收尾时交付物清单不得缩水——`最终项目总结.md`、`经验沉淀-<站点>.md`、`验证记录.json` 与 `check_final_artifact.js` 门禁一项不可省；只写总结就收场 = 任务未完成。
+**收尾保底（R1）**：无论预算消耗到什么程度，进入收尾时交付物清单不得缩水——`最终项目总结.md`、`经验沉淀-<站点>.md`、`验证记录.json` 与 `check_final_artifact.js` 门禁一项不可省；只写总结就收场 = 任务未完成。
 
-**IMPLEMENT 硬前置条件**：必须满足「trace 质量达标（含目标信号命中）」或「用户明确确认轻量路径」。两条均不满足时停在 TRACE_ANALYZE，不得以 mock、猜测或实验性实现替代证据。EXTERNAL_LOOKUP 的假设若与本次 trace 定位的 builder/writer 冲突，以 trace 为准，禁止先去测未被 trace 证明的 SDK 导出接口。
+**IMPLEMENT 前置条件（R1）**：满足「trace 质量达标（含目标信号命中）」或「用户明确确认轻量路径」之一；都不满足就停在 TRACE_ANALYZE，不得以 mock、猜测或实验性实现替代证据。EXTERNAL_LOOKUP 的假设与本次 trace 定位的 builder/writer 冲突时，以 trace 为准。
 
-**Step 2 缺失（check_trace_gate.js 退出码 1）时不得进入 IMPLEMENT**：不得以 EXTERNAL_LOOKUP 网络方案、边界声明、同族算法替代或 mock 填补 Step 2 证据缺口；轻量路径豁免的前提是 Step 1 + Step 2 齐备（见 4.3），Step 2 未产出不构成豁免条件。**AI 自行判定「trace 采集不到/太难」不构成降级理由**——没有用户确认的 Step 2 缺失一律停在状态机对应节点。例外共三个：
+**Step 2 缺失（check_trace_gate.js 退出码 1）时不得进入 IMPLEMENT**：不得以 EXTERNAL_LOOKUP 网络方案、边界声明、同族算法替代或 mock 填补缺口（轻量路径豁免的前提是 Step 1 + Step 2 齐备，见 4.3）。例外三个（**AI 自行判定「trace 采集不到/太难」不构成降级理由**；例外 1、2 的 REAL_VERIFY 不可豁免；三个例外都须在经验沉淀与最终总结写明取证偏差或判定依据，例外 3 另写请求侧明文参数清单 + 响应自包含证据）：
 
-1. **MATERIALS_FALLBACK**（需用户显式确认，材料校验与降级义务细则见 decision-tree.md 阻塞点#5）：RuyiTrace 工具不可用且自动安装失败 + 用户材料经 check_evidence.js 校验通过，以「Node 直连真实接口、服务端响应反证」替代 Step 2。
-2. **BLOCKED_FORENSIC**（需用户显式确认，检测证据要求见 env-detect-bypass.md）：内核级检测使 RuyiTrace 无法触发目标路径，以 Step 1 网络证据 + 落盘 JS 源码分析替代 Step 2。
-3. **内容还原型豁免（无需用户确认）**：请求侧参数全明文（判定材料同 IMPLEMENT 路径 E「无签名三条判据」：①target-hits.json 无动态字段 ②可疑参数名 capture.json 反查 0 次 ③无 JS cookie/WASM/JSVMP）且难点在响应解密/内容还原（字体映射、图片拼装等）、Step 1 已捕获完整响应证据——在 EVIDENCE_GATE 判定「只有 Step 1」时声明「Step 2 豁免：内容还原型，无运行时签名链路」后跳过 TRACE_CAPTURE 直接 CASE_LOOKUP。请求侧存在任何待还原参数的 case 不得使用本豁免。
-
-例外 1、2 的 REAL_VERIFY 不可豁免；三个例外都必须在经验沉淀与最终总结写明取证偏差或判定依据（例外 3 写请求侧明文参数清单 + 响应自包含证据）。
+1. **MATERIALS_FALLBACK**（需用户显式确认，细则见 decision-tree.md 阻塞点#5）：RuyiTrace 不可用且自动安装失败 + 用户材料过 check_evidence.js 校验，以「Node 直连真实接口、服务端响应反证」替代 Step 2。
+2. **BLOCKED_FORENSIC**（需用户显式确认，检测证据要求见 env-detect-bypass.md）：内核级检测使 RuyiTrace 无法触发目标路径，以 Step 1 网络证据 + 落盘 JS 源码分析替代。
+3. **内容还原型豁免（无需用户确认）**：请求侧参数全明文（三条判据见路径 E，无 trace 时用①网络层+③Cookie/存储层）且难点在响应解密/内容还原（字体映射、图片拼装等）、Step 1 已捕获完整响应证据——EVIDENCE_GATE 判定「只有 Step 1」时声明「Step 2 豁免：内容还原型，无运行时签名链路」后跳过 TRACE_CAPTURE 直接 CASE_LOOKUP。请求侧存在任何待还原参数即不适用本豁免。
 
 ## 5. CASE_LOOKUP
 
-不要扫描全部案例。按域名、参数名、SDK 名称、状态码和网络特征组合关键词：
+不扫描全部案例，按域名、参数名、SDK 名称、状态码和网络特征组合关键词：
 
 ```powershell
 node scripts/search_cases.js <关键词...>
 node scripts/search_cases.js --domain <域名> --signal <信号>
 ```
 
-只读命中案例，提取可复用定位方法、已知坑点、验证日期。命中后做时效校验：JS URL/文件名/资源版本、sha256 或资源清单、参数名称/长度/写入位置/请求链均一致才复用算法；否则降级为方法论参考。未命中进入 EXTERNAL_LOOKUP。新经验写入本次 `result/`，不修改 skill 仓库的 `cases/`。
+只读命中案例，提取可复用定位方法、已知坑点、验证日期；做时效校验——JS URL/文件名/资源版本、sha256 或资源清单、参数名称/长度/写入位置/请求链均一致才复用算法，否则降级为方法论参考。未命中进 EXTERNAL_LOOKUP。新经验写入本次 `result/`，不改 skill 仓库的 `cases/`。
 
-目标为 match.yuanrenxue.cn（某教学靶场 match 题）时，先读平台共性基线 `cases/yuanrenxue-match-platform.md`（请求/提交链路、末页 UA、sessionid 数据绑定、风控底座、token failed 多义性等，match4~29 实证沉淀），再按 `cases/yuanrenxue-match-index.md` 题号速查定位该题案例；平台共性仍是假设，各题风控配置独立，须本次取证逐项验证。
+目标为 match.yuanrenxue.cn（教学靶场 match 题）时，先读平台共性基线 `cases/yuanrenxue-match-platform.md`（请求/提交链路、末页 UA、sessionid 数据绑定、风控底座、token failed 多义性等，match4~29 沉淀），再按 `cases/yuanrenxue-match-index.md` 题号速查定位该题案例；平台共性仍是假设，各题风控独立，须本次取证逐项验证。
 
 ## 6. 范围与环境复核
 
-案例证据显示目标接口、参数或运行环境与初始范围不一致时，回 INTENT_CONFIRM；工具环境变化时回 ENV_READY。未变化则直接进入 IDENTIFY。
+案例证据显示目标接口、参数或运行环境与初始范围不一致时回 INTENT_CONFIRM；工具环境变化时回 ENV_READY；未变化直接进 IDENTIFY。
 
 ## 7. IDENTIFY
 
-先比较至少两组请求（区分计数器递增与纯随机存疑时补第三组），把字段分为固定值、时间值、随机值、会话值、服务端下发值、加密值；随请求序号递增的字段单独标记为**请求序号计数器**——服务端可能校验其等于页码/请求序号（match14 的 `window.n`：page2 要求 n=2），签名生成器必须与浏览器生命周期对齐：SDK 加载一次、计数器随每次签名调用递增；每请求重建沙箱会使计数器恒 1，只有首个请求通过。对每个目标参数建立 `source → entry → builder → writer` 链。
+先比较至少两组请求（计数器递增与纯随机难分辨时补第三组），把字段分为固定值、时间值、随机值、会话值、服务端下发值、加密值；随请求序号递增的字段单独标记为**请求序号计数器**——服务端可能校验其等于页码/请求序号（match14 的 `window.n`：page2 要求 n=2），签名生成器必须与浏览器生命周期对齐（SDK 加载一次、计数器随每次签名调用递增；每请求重建沙箱会使计数器恒 1，只有首个请求通过）。对每个目标参数建立 `source → entry → builder → writer` 链。
 
-**参数名存在 ≠ 参数生效（比较前先核对真实请求）**：页面源码里出现的参数名可能是 hook 遗留、旧版残留或求值为 `undefined` 被请求库丢弃。分组比较字段前，先以 `case/forensic/target-hits.json` 的 `url` 或 trace `xhrNative` 的 `url` 为准确认参数**真实存在于请求中**，不要以 `document.html` 里的字面量为准。
+**参数名存在 ≠ 参数生效（比较前先核对真实请求）**：页面源码里的参数名可能是 hook 遗留、旧版残留或求值为 `undefined` 被请求库丢弃。分组比较前先以 `case/forensic/target-hits.json` 的 `url` 或 trace `xhrNative` 的 `url` 为准确认参数**真实存在于请求中**，不以 `document.html` 的字面量为准。
 
-下表为 T1 识别信号路由（识别指纹 → 初始路径；识别≠协议复现，协议细节以本 case 证据与厂商知识库为准）：
+**T1 识别信号路由表（信号 → 初始路径）见 `references/crypto/algorithm-families.md`**——识别信号属 T1 指纹，按第 3 节厂商知识分级不得驻留通用文档。
 
-| 信号 | 初始路径 |
-|---|---|
-| md5、sha、aes、hmac、SM2/SM4/SM3 | 定位入口后优先纯算法还原 |
-| 代码碎片含知名库路径/常量（crypto-js 的 ./cipher-core/./evpkdf 等） | **库家族优先**：原样执行原码 + diff 魔改点，标准件不重逆（match22） |
-| `_0x`、obfuscator.io、控制流平坦化 | AST 反混淆工具链处理（命令入口见下方），再判断是否可纯算 |
-| 200KB+、while-switch、dispatcher、字节码数组 | JSVMP 黑盒执行或最小环境复现，不反编译；**先查 RuyiTrace eval 分类日志落盘源码**（规则 39/反模式 37/match29），无落盘再扫字节码尾部大数字面量判断标准算法族（规则 35/match28） |
-| 128B（1024bit）密文 + 字节码尾部大数字面量 | JSBN/RSA 族：trace 拼接串逆明文、hex2b64 编码、确定性 padding 样本对拍（规则 35/match28） |
-| 128B 密文 + 162 字符 X.509 SPKI hex + 加载期 `getRandomValues(Uint32Array 256)` | **JSEncrypt 随机 RSA**：SPKI 即公钥 DER，`publicEncrypt` 直出，token 每次不同属预期（规则 38/match27） |
-| WebAssembly、wasm base64、webpack 内嵌 wasm | 先整包黑盒，不默认补完整浏览器、禁止先手撕字节码；wasm-bindgen（`__wbg_*` 导入）原样还原 glue（match20，陷阱见路径 C） |
-| 官方包 200 / 重建包必 500——同机同页同输入下唯一变量是 JS 包 | **自同构校验** → 停止环境层修补，转透明边界捕获 + 直接 wasm harness（规则 41~43/反模式 39/40） |
-| 412 循环、sdenv、挑战 Cookie | 先还原挑战链，再确认业务签名链 |
-| webmssdk、byted_acrawler、bdms、a_bogus、X-Bogus、_signature | trace 定位环境读取和签名写入；注意 `byted_acrawler.sign` 多返回老版 `_signature`，`a_bogus`/`X-Bogus` 由 `bdms` 生成，两者不可混淆 |
-| geetest、smcp、dx-captcha、TCaptcha、NECaptcha、AWSC | 按封装层、答案层、verify 链分别处理 |
-| h5st、js_security_v3、JA3/JA4 | 先确认会话绑定和 TLS 指纹，再实现请求链 |
-| 参数/状态输入在 trace 中无 writer，或依赖上一次会话、iframe/worker 上下文、渲染产物 | 浏览器隐蔽信道排查，见 `references/web/covert-channel.md` |
-| `Salted__` 魔数、keySize/iterations+盐常量碎片 | OpenSSL Salted 格式：EvpKDF-MD5 派生 key/iv 多块链（match22 案例） |
-| obfuscator **短名混淆**（无 `_0x`）+ 解码器 `charCodeAt(变量+常量)` | **toString 自引用解码**：AST 产物禁执行，原码执行 + 一行导出桩（反模式 31/match23） |
-| 多组输入签名/token **低雪崩**（不同输入仅个位变化甚至同输出） | 结构化魔改哈希或环境分支，优先原码执行 + 环境分支对齐（反模式 29/31、规则 29） |
-| 签名/token **成对或周期性相同**（如 page2/3 相同） | 先做字节级折叠分析（字符级掩码/取模折叠相邻字符，match26），真机与服务端一致时非沙箱 bug |
-| @font-face/FontFace、woff/woff2 动态字体、PUA 码点（U+E000–U+F8FF） | 字体映射反爬：取证字体资源判静态/动态映射再提取 cmap（`references/rendering/font-anti-crawl.md`） |
-
-识别结果必须引用落盘资源、NDJSON 或网络包具体字段，不以站点名称直接定类。
-
-特征驱动的两个识别入口（输出均为 T1 假设，不构成协议复现依据）：
+识别结果必须引用落盘资源、NDJSON 或网络包具体字段，不以站点名称直接定类。特征驱动的识别入口与配套工具（输出均为 T1 假设，不构成协议复现依据）：
 
 ```powershell
 # 密文/哈希特征 → 算法族假设（长度/字符集/结构/magic bytes）
 node scripts/identify_crypto.js --value <密文样本> --label <参数名> --markdown
 # Cookie 归因：capture.json Set-Cookie（服务端）× trace cookie 写入（JS）融合，判定每个 Cookie 生成方
 node scripts/analyze_cookie_attribution.js --case-dir <project-root> [--cookie <名称>] --markdown
-# 混淆 JS 反混淆（命中 _0x / obfuscator / 控制流平坦化时；babel 依赖安装见 assets/ast-patterns/README.md）：
-node assets/ast-patterns/scripts/detect-patterns.js <input.js> [hint]        # 1) 先检测混淆家族
-node assets/ast-patterns/scripts/run-pipeline.js <input.js> <output-dir> [hint]  # 2) 执行反混淆流水线（分层、可回退）
-# 需要运行混淆 JS 验证行为（解码字符串表、观察全局写入）时，一律用带超时保护的沙箱工具：
-node scripts/run_with_trace.js --target case/js/original/<资源名>.js --entry <入口函数> --timeout 5000
+# 混淆 JS 反混淆（命中 _0x / obfuscator / 控制流平坦化时；babel 依赖安装见 scripts/ast-patterns/README.md）：
+node scripts/ast-patterns/scripts/detect-patterns.js <input.js> [hint]        # 1) 先检测混淆家族
+node scripts/ast-patterns/scripts/run-pipeline.js <input.js> <output-dir> [hint]  # 2) 执行反混淆流水线（分层、可回退）
 ```
 
-**运行混淆 JS 禁止手写 vm runner（硬约束）**：`run_with_trace.js` 内置 vm 超时保护与环境访问日志，手写 `vm.runInContext` runner 无超时——混淆脚本普遍含反调试死循环（`while(!![])`、debuggerProtection、setInterval 干扰），卡死后无法区分"挂起"与"静默失败"，且重写解码器/runner 会反复踩转义与括号平衡坑。混淆 JS 的字符串数组解码优先走 ast-patterns 流水线（含 RC4/base64 变形的标准 obfuscator 处理），只在流水线不适配时才写最小提取脚本，且写前必须过 `node --check`。桩不足时用 `--env-module <文件>` 注入自定义环境模块（自动切 minimal bootstrap 防默认桩泄漏改变环境分支）+ `__overrideGlobal` 受控覆盖（写保护沙箱直接赋值会被静默拦截）；自引用解码器的执行纪律见反模式 31。
+**运行混淆 JS 禁止手写 vm runner（R2）**：用 `run_with_trace.js`（内置 vm 超时保护与环境访问日志；命令见第 8 节）。手写 runner 无超时保护，混淆脚本的反调试死循环（`while(!![])` 等）卡死后无法区分「挂起」与「静默失败」。字符串数组解码优先走 ast-patterns 流水线，只在不适配时才写最小提取脚本（写前过 `node --check`）；桩不足用 `--env-module <文件>` 注入（自动切 minimal bootstrap 防默认桩泄漏改变环境分支）+ `__overrideGlobal` 受控覆盖（写保护沙箱直接赋值会被静默拦截）；自引用解码器的执行纪律见反模式 31。
 
-`identify_crypto.js` 只做族级指纹（同长度的 SHA-256/SM3 无法仅凭密文区分），实现仍以 trace 定位的 builder/writer 为准。`analyze_cookie_attribution.js` 回答"这个 Cookie 是谁写的"：server → 复现请求链、禁止硬编码；js → 按写入点 stack 还原挑战/签名算法；both → 按请求顺序拆分串联链。
+`identify_crypto.js` 只做族级指纹（同长度的 SHA-256/SM3 无法仅凭密文区分），实现仍以 trace 定位的 builder/writer 为准。`analyze_cookie_attribution.js` 判定每个 Cookie 生成方：server → 复现请求链、禁止硬编码；js → 按写入点 stack 还原挑战/签名算法；both → 按请求顺序拆分串联链。
 
-验证码/JSONP 链路的最低证据要求：`callback 注册 → script.src/请求参数构造 → script 插入或等价网络写入 → load/verify 请求 → callback 执行 → 结果回调`。仅命中 `createElement`、`appendChild` 或页面初始化 API 不算 writer 覆盖；若 trace 只覆盖环境读取，必须在阶段报告和最终总结中明确未证明请求写入。
+验证码/JSONP 链路的最低证据：`callback 注册 → script.src/请求参数构造 → script 插入或等价网络写入 → load/verify 请求 → callback 执行 → 结果回调`。仅命中 `createElement`、`appendChild` 或页面初始化 API 不算 writer 覆盖；trace 只覆盖环境读取时，必须在阶段报告与最终总结中明确未证明请求写入。
 
-验证码链路的配套门禁（识别为验证码 case 后必用）：题型/厂商判定跑 `python scripts/classify_verify.py`；滑块先判缺口坐标来源（`references/captcha/gap-coordinate-source.md` 的 A/B/C 路线）；answer JSON 提交前过 `node scripts/check_captcha_answer.js` 门禁，FAIL 不得进入参数化实现。
+验证码配套门禁（识别为验证码 case 后必用）：题型/厂商判定跑 `python scripts/classify_verify.py`；滑块先判缺口坐标来源（`references/captcha/gap-coordinate-source.md` 的 A/B/C 路线）；answer JSON 提交前过 `node scripts/check_captcha_answer.js`，FAIL 不得进入参数化实现。
 
 ## 8. TRACE_ANALYZE
 
-**先 trace、后读源码（硬约束）**：进入本节后先跑 `import_ruyitrace_log` 生成摘要，再用 `search_trace --url <target-signal>` 直接定位请求链和 `stack.file:line:col`，最后才按行号/字符偏移切源码片段。**JSVMP 判定后先核对 eval 落盘**（规则 39/反模式 37，见第 7 节信号表）：有 `eval_*_eval-direct.js` 直接读（落盘即解混淆后的业务逻辑）；grep eval 源码里的 `token`/`case 64` 定位请求 data 构造点。禁止在拿到 trace 前先读 8MB 大 bundle 手工猜 webpack module id 或写 probe1~N 静态解析——那会耗尽上下文且命中率低。定位大文件 JS 关键词必须用 `search_js.js`；禁止 grep 单行超 64KB 的压缩 JS、禁止现场手搓 `node -e`（PowerShell 转义翻车）。**响应体非明文（`code` 非 0、`data` 二进制/乱码）时同理**：先查 trace 的 xhrNative 响应记录确认响应形态，再按响应方向四层（response→reader→decoder→parser，见 `references/crypto/crypto-entry.md`）追响应处理链；禁止先搜源码里的密钥串猜解密算法——密钥可能作用于别的字段。
+**先 trace、后读源码（R2 默认）**：先 `import_ruyitrace_log` 出摘要，再 `search_trace --url <target-signal>` 定位请求链与 `stack.file:line:col`，最后才按行号/偏移切源码片段。**JSVMP 判定后先核对 eval 落盘**（规则 39/反模式 37）：有 `eval_*_eval-direct.js` 直接读（落盘即解混淆后逻辑），并 grep 其源码 `token`/`case 64` 定位 data 构造点。禁止拿 trace 前读大 bundle 猜 webpack module id 或写 probe1~N 静态解析；定位大文件关键词必须用 `search_js.js`，禁止 grep 单行超 64KB 的压缩 JS、禁止手搓 `node -e`。**响应体非明文（`code` 非 0、`data` 二进制/乱码）同理**：先查 trace xhrNative 记录确认形态，再按响应方向四层（response→reader→decoder→parser，见 `references/crypto/crypto-entry.md`）追链，禁止先搜源码密钥串猜算法。
 
-**Windows 写临时脚本规范（探针/runner/补环境脚本一律遵守）**：优先用编辑工具直接写文件；必须用 PowerShell 时一律单引号 here-string `@'...'@`（内部 `$` 不插值）配合 `[IO.File]::WriteAllText($path, $content, [Text.UTF8Encoding]::new($false))` 落盘。禁止双引号 here-string（`$` 插值破坏 JS 语法）、禁止 base64 编码绕路（多一轮转译仍会翻车）、禁止 `node -e` / `python -c` 内联长脚本。写完先跑一次语法检查（`node --check` / `py -3 -m py_compile`）再执行，避免把转义错误误判成目标 JS 的行为。沙箱运行混淆 JS 一律走 `run_with_trace.js`（硬约束见第 7 节）。
+**Windows 写临时脚本规范（探针/runner/补环境脚本，R2）**：优先用编辑工具直接写文件；必须用 PowerShell 时用单引号 here-string `@'...'@`（不做 `$` 插值）+ `[IO.File]::WriteAllText($path, $content, [Text.UTF8Encoding]::new($false))` 落盘；禁止双引号 here-string、base64 绕路与 `node -e`/`python -c` 内联长脚本。写完先 `node --check` / `py -3 -m py_compile` 再执行，避免把转义错误误判成目标 JS 行为。沙箱跑混淆 JS 走 `run_with_trace.js`（见第 7 节）。
 
-**依赖 JS 版本校验（硬约束）**：被挑战代码引用的黑盒 SDK（如 udc.js 类"动态工具 JS"）可能**定期更新**（公钥/算法随版本变化），用旧副本实现会导致签名"格式全对但服务端全拒"且极难排查。进入实现前校验关键依赖 JS 与站点当前版本一致（`curl -s <url> | md5sum` 对比本地副本）；抓取 JS **一律二进制**（`urlopen(url).read()` + `wb` 写回），**禁止** `decode('utf-8', errors='ignore')` 后文本写回——会静默丢字节损坏文件（md5 变化、无报错）。交付脚本对关键依赖内置"启动自动抓取 + hash 对比"。详见 `references/network/dynamic-resource.md` 专节。
+**依赖 JS 版本校验（R2）**：黑盒 SDK 可能**定期更新**（公钥/算法随版本变化），旧副本会导致「格式全对但服务端全拒」且极难排查——进实现前用 `curl -s <url> | md5sum` 对比本地副本；抓取 JS **一律二进制**（禁 `decode('utf-8', errors='ignore')` 后文本写回，静默丢字节）。交付脚本对关键依赖内置「启动自动抓取 + hash 对比」（细节见 `references/network/dynamic-resource.md`）。
 
-读取 NDJSON 的 API、时间、stack、文件、行列号和参数摘要，按调用频率与网络写入时间定位热路径。分析时按定位顺序使用：
+读取 NDJSON 的 API、时间、stack、文件、行列号与参数摘要，按调用频率与网络写入时间定位热路径。按序使用：
 
 ```powershell
 # 1) 先导入生成摘要（高频 API、stack.file、目标信号命中）
@@ -450,81 +344,73 @@ node scripts/search_trace.js --trace <project-root>/case/ruyi-trace/logs/trace.n
 node scripts/search_js.js --file <project-root>/case/js/original/<资源名>.js --keyword <关键词> --context 200 --markdown
 node scripts/analyze_trace.js --trace <project-root>/case/tmp/env-trace.jsonl --summary <project-root>/case/tmp/missing-env.json --markdown
 node scripts/check_trace_api_coverage.js --case-dir <project-root> --markdown
-# 4) 需要运行混淆 JS 观察行为/补环境探测时（禁手写 vm runner，见第 7 节硬约束）
+# 4) 需要运行混淆 JS 观察行为/补环境探测时（禁手写 vm runner，见第 7 节）
 node scripts/run_with_trace.js --target <project-root>/case/js/original/<资源名>.js --entry <入口函数> --timeout 5000
 ```
 
-默认只观察不修改（内联脚本/引号嵌套禁令见第 8 节 Windows 规范）；仅当 NDJSON 缺失、截断或无法覆盖关键入口时，才使用 Hook 模板，并只注入 ruyipage 定制 Firefox。Hook 必须在目标 SDK 加载前安装，命中后及时移除。
+默认只观察不修改；仅当 NDJSON 缺失、截断或无法覆盖关键入口时才用 Hook 模板，且只注入 ruyipage 定制 Firefox；Hook 须在目标 SDK 加载前安装，命中后及时移除。
 
-环境补齐采用证据驱动的最小集合。只有 trace 显示参与参数或服务端校验的模块才实现；每轮补齐保存输入、中间值、输出和请求结果，禁止一次性伪造大量浏览器 API。环境检测代码不等于服务端约束，未进入关键链路的检测不纳入最终环境。
+环境补齐用证据驱动的最小集合：只有 trace 显示参与参数或服务端校验的模块才实现；每轮补齐保存输入、中间值、输出与请求结果，禁止一次性伪造大量浏览器 API。未进入关键链路的检测代码不等于服务端约束，不纳入最终环境。
 
-**签名输入含不可复算随机值 = 分支判定失败（硬约束）**：复现出签名后先自问「服务端能用请求里已有的信息复算出这个值吗」。若签名依赖服务端无法复算的量（RSA 随机 padding 产物、`Math.random`/`crypto.getRandomValues` 结果、只存在于客户端的本地状态），说明沙箱走进了错误分支，**不得继续枚举算法组合或拼接顺序**——转 DIAGNOSE，从随机量产生处回溯到最近的分支条件，逐个对照该条件依赖的环境值（单变量原则）。全局对象被目标 JS 覆盖是最常见诱因，见 `references/env/env-object-model.md` 与 `references/workflow/common-pitfalls.md` 反模式 23。
+**签名输入含不可复算随机值 = 分支判定失败（R2）**：复现出签名后先自问「服务端能用请求里已有信息复算出这个值吗」。若依赖服务端无法复算的量（RSA 随机 padding、`Math.random`/`getRandomValues` 结果、客户端本地状态），说明沙箱走进了错误分支，**不得继续枚举算法组合或拼接顺序**——转 DIAGNOSE，从随机量产生处回溯最近的分支条件，逐个对照其依赖的环境值（单变量）。全局对象被目标 JS 覆盖是最常见诱因，见 `references/env/env-object-model.md` 与反模式 23。
 
-**参数输入链可能经浏览器隐蔽信道（硬提醒）**：签名/状态的输入不一定来自同上下文 JS 计算——可能先写入 localStorage/cookie/IndexedDB/Cache、经 postMessage/BroadcastChannel 跨上下文传递、写进 DOM 属性，或藏进 CSS 动画终态/canvas 像素等渲染产物，再由业务 JS 读出拼参。trace 摘要里目标参数 writer 缺失、或输入含"上一次请求的产物"时，按 `references/web/covert-channel.md` 四类信道排查（`localStorage.setItem`/`postMessage`/`animationend`/`toDataURL` 等信号必须与参数名组合，避免泛化命中门禁拒绝）。隐写信道参与参数生成时属于"参与参数的模块"，按证据驱动最小集合原则必须实现。
+**参数输入链可能经隐蔽信道（提醒）**：签名/状态的输入不一定来自同上下文 JS——可能经 localStorage/cookie/IndexedDB/Cache、postMessage/BroadcastChannel 跨上下文、DOM 属性或 CSS 动画终态/canvas 像素等渲染产物传递，再由业务 JS 读出拼参。trace 摘要里目标参数 writer 缺失、或输入含「上一次请求的产物」时，按 `references/web/covert-channel.md` 四类信道排查（信号须与参数名组合，避免泛化命中被门禁拒绝）；隐写信道参与参数生成时属「参与参数的模块」，按证据驱动最小集合原则必须实现。
 
 ## 9. IMPLEMENT
 
-**交付语言（进入本节点即定；确需更换须凭证据）**：默认 Node.js，不按路径预判；用户显式指定其他语言（如 Python）时遵从并写入最终总结。两类合法的例外/更换，均须在最终总结声明依据：① 用户显式指定（任意阶段）；② **服务端封锁证据驱动的客户端栈/语言切换**——REAL_VERIFY/DIAGNOSE 按规则 27 三级客户端阶梯证明默认栈被服务端传输层指纹策略拦截（match19，判读矩阵与指纹客户端选型见规则 27）；换的是被拉黑的客户端栈，语言以哪个生态指纹客户端可用且满足 Session 门禁为准。补环境题型（B/C/D）核心为执行目标 JS 算法，选 Python 入口时须在总结声明 JS 执行桥接方式，禁止静默包 Node 子进程充当"Python 交付"。
+**交付语言（进本节点即定；更换须凭证据）**：默认 Node.js，不按路径预判；用户显式指定其他语言时遵从并写入最终总结。两类例外/更换须在总结声明依据：① 用户显式指定（任意阶段）② **服务端封锁证据驱动的栈切换**——按规则 27 三级客户端阶梯证明默认栈被传输层指纹策略拦截（match19）后换被拉黑的客户端栈。补环境题型（B/C/D）选 Python 入口时须声明 JS 执行桥接方式，禁止静默包 Node 子进程充当「Python 交付」。
 
-实现路径按以下顺序降级：
+实现路径按序降级：
 
 A. 纯算法：Node `crypto`、Python `hashlib`/成熟密码库和原始序列化规则。**明文含运行时未知常量且公钥/模数有多个候选时，用「候选 X × 候选公钥」扫描实证定案**（match27，规则 38）。
-B. 最小 JS 沙箱：提取算法闭包，在隔离上下文提供已证实需要的对象和函数。症状速查（一句话定位，机理与操作细节一律按指针读权威文档）：
+B. 最小 JS 沙箱：提取算法闭包，在隔离上下文提供已证实需要的对象和函数。症状 → 编号速查（机理用 `search_references.js --id` 按号提取）：
 
-- **webpack/rollup bundle 抠模块**：必须复刻打包器注入的宿主对象（`__webpack_require__` 桩等），缺失 → 兜底分支静默走错 → "格式全对但服务端全拒"（规则 26 / 反模式 26）。
-- **JSVMP 整体黑盒（值对 ≠ 对齐）**：宿主内建须为 sandbox 自有属性、探测属性挂原型、交互监听由桩捕获派发（反模式 28 / 规则 28 / env-debug-loop「静默退出诊断」）。
-- **黑盒输出自洽 ≠ 与真实浏览器一致**：SDK 按环境自检走「环境分支诱饵变体」（同输入异输出且服务端必拒）；分支指纹 + 真机同输入对拍判定，桩函数必须 nativize（反模式 29 / env-debug-loop「环境分支诱饵变体」专节）。
-- **自引用解码 + 环境分派（match23）**：解码器以自身 toString 源码为密钥表时禁用反混淆产物执行；环境分派逐分支以 trace 证据对齐（反模式 31 / env-debug-loop「自引用解码与原码执行纪律」）。
-- **页面自驱动翻页（match26/29，分页类优先）**：jq 桩让页面自身走翻页链产出全部页签名，天然复用页码计数器/状态，优于自写翻页循环；token 材料含服务器时间时每次翻页前注入新时间且沙箱跨页复用（反模式 24 同族）。操作细节见 match26/27/29 案例。
-- **环境桩三条纪律（match25/26）**：①桩必须在沙箱内执行（主 realm 定义致自检失败）；②拆独立模块由 signer 读入注入，禁止大段模板字符串内嵌（check_code_quality 红线）；③不用 IIFE 包裹，顶层代码 + 具名函数 + `Object.assign` 合并（规则 33 / 反模式 34）。
-C. WASM：复现加载、内存、导入和导出调用，固定输入输出契约，三形态判定：**无外部导入的确定性 wasm** 直接 Node `WebAssembly.instantiate` 执行导出函数（无需补环境，同实例跨请求复用）；**带导入的 wasm-bindgen 模块**原样还原 glue + `__wbg_*` 桩（get-global 初始化链陷阱见 env-debug-loop「WASM trap：unreachable」）；**自同构校验签名型 wasm**（官方包 200 / 重建包必 500）走「透明边界捕获 + 直接 wasm harness」，不做环境层修补。wasm 字节获取、落盘形态（独立文件/base64+md5）、边界捕获方法见规则 41~43 / 反模式 25/39/40 / env-wasm-advanced.md / 案例 `cases/wasm-harness-selfhash-fp-blackbox.md`。
-D. 环境伪装：仅补 trace 证明必要的 Web API、对象形状、Realm、时间、随机数和指纹行为。环境对齐的验收线是**服务端校验的自洽性**，不是与真实浏览器逐字节一致——先用最小沙箱 + 真实请求试探，按需对齐，不预先逐字节复刻（match14 实证：mz 指纹 53 字段中 4 处差异不影响通过）；服务端校验签名内嵌环境检测结果时用对齐探针法定位差异位（见 `references/env/env-detect-bypass.md`）。
-E. TLS/Session：对齐客户端指纹、连接复用、Cookie 顺序、重定向和动态资源预热。**不是每题都有签名**——请求侧参数全明文时走 A+E，不做补环境（match4/7/12/17 实证；取证侧对应豁免见 4.4 例外 3）。判定"无签名"必须过三条判据：① 网络层——`case/forensic/target-hits.json` 目标请求除业务参数外无动态字段，可疑参数名在 capture.json 全量反查 0 次；② trace writer 层——`XMLHttpRequest.open` / `fetch` / `Headers.set` 参数全文里没有该字段；③ Cookie/存储层——目标域无 JS 写入 cookie、无 WASM/JSVMP/混淆 SDK。三条全干净即收手，转查传输层与响应层。**参数名存在 ≠ 参数生效**：hook 遗留参数恒为 `undefined`、被 `$.param` / `URLSearchParams` 静默丢弃——生效性只看 trace writer 参数全文与 capture.json 真实 URL（反模式 27）。实现侧用 Node 原生 `node:http2`（一次 `connect()` 多次 `request()` 复用、`alpnProtocol` 自检、不发 `accept-encoding`），详见规则 27。
-F. **沙箱 [Unforgeable] 全局绑定对齐 + base64 字母表环境分支（match22，反模式 30）**：`window/self/top/parent/frames` 须定义为不可配置 accessor（vm data 属性会被 `delete window`/`window=0` 探针真删真换 → 诱饵分支）；同字节点但密文串不同 = 字母表环境分支，用已知 (明文↔密文串) 配对反推两侧字母表。
+- bundle 抠模块缺宿主对象（`__webpack_require__` 桩）→ 兜底分支静默走错、「格式全对但服务端全拒」（规则 26 / 反模式 26）。
+- JSVMP 整体黑盒：值对 ≠ 对齐（反模式 28 / 规则 28）。
+- 黑盒输出自洽 ≠ 与真实浏览器一致：SDK 自检走「环境分支诱饵变体」（分支指纹 + 真机同输入对拍判定，桩须 nativize；反模式 29）。
+- 自引用解码 + 环境分派：禁用反混淆产物执行，逐分支以 trace 证据对齐（反模式 31）。
+- 分页类优先「页面自驱动翻页」：jq 桩让页面自身走翻页链产出全部页签名（反模式 24 同族，case match26/27/29）。
+- 环境桩三纪律：沙箱内执行 / 独立模块注入（禁大段模板字符串，check_code_quality 红线）/ 不包 IIFE（规则 33 / 反模式 34）。
+C. WASM：复现加载、内存、导入与导出调用，固定输入输出契约，三形态判定——**无外部导入的确定性 wasm** 直接 Node `WebAssembly.instantiate` 执行导出（同实例跨请求复用）；**wasm-bindgen 模块**原样还原 glue + `__wbg_*` 桩（get-global 初始化链陷阱见 env-debug-loop.md）；**自同构校验签名型**（官方包 200/重建包 500）走透明边界捕获 + 直接 wasm harness，不做环境层修补。字节获取、落盘形态与边界捕获见规则 41~43 / 反模式 25/39/40 / `references/env/env-wasm-advanced.md` / 案例 `cases/wasm-harness-selfhash-fp-blackbox.md`。
+D. 环境伪装：仅补 trace 证明必要的 Web API、对象形状、Realm、时间、随机数与指纹行为。验收线是**服务端校验的自洽性**，不是与真实浏览器逐字节一致——先用最小沙箱 + 真实请求试探、按需对齐（match14：mz 指纹 53 字段中 4 处差异不影响通过）；服务端校验签名内嵌环境检测时用对齐探针法定位差异位（见 `references/env/env-detect-bypass.md`）。
+E. TLS/Session：对齐客户端指纹、连接复用、Cookie 顺序、重定向与动态资源预热。**不是每题都有签名**——请求侧参数全明文时走 A+E，不做补环境（match4/7/12/17 实证；取证侧豁免见 4.4 例外 3）。判定「无签名」须过三条判据：① 网络层——`target-hits.json` 目标请求除业务参数外无动态字段，可疑参数名在 capture.json 反查 0 次；② trace writer 层——`XMLHttpRequest.open`/`fetch`/`Headers.set` 参数全文无该字段；③ Cookie/存储层——目标域无 JS 写 cookie、无 WASM/JSVMP/混淆 SDK。三条全干净即收手，转查传输层与响应层。实现侧用 Node 原生 `node:http2`（一次 `connect()` 多次 `request()` 复用、`alpnProtocol` 自检、不发 `accept-encoding`，规则 27）。
+F. **沙箱 [Unforgeable] 全局绑定对齐 + base64 字母表分支（match22，反模式 30）**：`window/self/top/parent/frames` 须定义为不可配置 accessor（vm data 属性会被 `delete window`/`window=0` 探针真删真换 → 诱饵分支）；同字节点但密文串不同 = 字母表分支，用已知 (明文↔密文串) 配对反推两侧字母表。
 
-中间值必须可单独验证；时间、随机数、UA、指纹和会话状态必须有明确来源；静态配置外置，秘密从环境变量或用户运行时输入读取。验证码拆成 `load → solve → verify`，按 `templates/captcha-verify/`（Node）或 `templates/captcha-verify-py/`（Python）骨架 + 本 case `result/src/adapter` 实现，答案层接入（`result/src/solver`）是交付组成部分；成功样本先逐字段确认明文类型、长度和绑定关系，再编写生成器，不得把一次性 challenge、ticket 或答案固定到代码。
+中间值必须可单独验证；时间、随机数、UA、指纹与会话状态必须有明确来源；静态配置外置，秘密从环境变量或用户运行时输入读取。验证码拆成 `load → solve → verify`，按 `assets/templates/captcha-verify/`（Node）或 `captcha-verify-py/`（Python）骨架 + 本 case `result/src/adapter` 实现，`result/src/solver` 答案层是交付组成部分；成功样本先逐字段确认明文类型、长度与绑定关系，不得把一次性 challenge/ticket/答案固定到代码。
 
 ## 10. REAL_VERIFY
 
-默认验证是交付必要条件，不是可选演示。除非用户明确 sign-only，否则必须用最终纯协议入口向真实 API 发请求。只读/验签请求默认真实执行；有业务副作用的写请求执行前先宣布目标 URL、方法、次数和预期影响，随后继续。
+默认验证是交付必要条件：除非用户明确 sign-only，必须用最终纯协议入口向真实 API 发请求。只读/验签请求默认真实执行；有业务副作用的写请求执行前先宣布目标 URL、方法、次数与预期影响后继续。
 
-**写请求格式取证（硬约束）**：提交/写入接口的请求格式（Content-Type、body 编码方式、字段名）必须从页面源码（`case/forensic/document.html` 的 form/submit 逻辑）或 capture.json 的真实成功样本取证，**禁止猜测**。常见陷阱：①页面用 jQuery `$.ajax({data: {...}})` 默认表单编码（`application/x-www-form-urlencoded`），AI 误用 `application/json`；②CSRF token 字段名/位置因站点而异；③提交接口路径与数据接口不同域。写请求前必须列出「Content-Type + body 构造依据」并引用 capture/document.html 具体行号，不得凭"通常用 JSON"发起请求（实战：JSON 提交持续被服务端拒，改表单编码即通过）。
+**写请求格式取证（R2）**：提交/写入接口的请求格式（Content-Type、body 编码、字段名）必须从页面源码（`case/forensic/document.html` 的 form/submit 逻辑）或 capture.json 的真实成功样本取证，**禁止猜测**。常见陷阱是 jQuery `$.ajax({data:{...}})` 默认表单编码而非 JSON、CSRF 字段名/位置因站点而异、提交接口可能不在同域。写请求前列出「Content-Type + body 构造依据」并引用行号。
 
-进入真实请求前先完成离线回归：把取证阶段抓到的真实样本（同输入参数 + 浏览器侧期望输出）固化为 `case/fixtures/*.fixture.json`，用本地入口以同样输入生成实际输出，逐字段过门禁比对；任一字段不一致先回 IMPLEMENT 排查，不得带着已知偏差发起真实请求。**多请求 case（翻页/批量/序列调用）fixture 至少固化 2 个不同请求序号的样本**——计数器/会话状态类 bug 只在第 2+ 样本暴露（反模式 24；取证侧覆盖要求见 4.2）：
+进真实请求前先做离线回归：把取证样本（同输入参数 + 浏览器侧期望输出）固化为 `case/fixtures/*.fixture.json`，用本地入口以同样输入生成实际输出，**逐字段过门禁比对**；任一字段不一致先回 IMPLEMENT 排查，**不得带着已知偏差发起真实请求**。多请求 case（翻页/批量/序列调用）fixture 至少固化 2 个不同请求序号的样本——计数器/会话状态类 bug 只在第 2+ 样本暴露（反模式 24）：
 
 ```powershell
 node scripts/compare_fixture.js --fixture case/fixtures/<样本>.fixture.json --actual case/tmp/<实际输出>.json --field <目标参数> --markdown
 ```
 
-退出码 0（字段一致）才进入真实 API 验证；退出码 2 表示首个偏差点已定位，回 IMPLEMENT 修复后复跑。fixtures 属于可复核证据，**只放 `case/fixtures/`（随项目保留）**——`result/` 下任何文本文件不得包含样本加密参数值（含期望值）：`check_final_artifact.js` 对 result 全量文本扫描样本值命中即判「复用样本参数」。交付入口读取 fixture 做 selftest 时用 `../case/fixtures/<样本>.fixture.json` 相对路径并容忍缺失（缺失则警告跳过对拍，主流程不受影响，match20 实测返工点）。
+退出码 0（字段一致）才进真实 API 验证；退出码 2 = 首个偏差点已定位，回 IMPLEMENT 修复后复跑。fixtures **只放 `case/fixtures/`**（随项目保留）——`result/` 下任何文本文件不得含样本加密参数值（含期望值），`check_final_artifact.js` 命中即判「复用样本参数」。交付入口 selftest 用 `../case/fixtures/...` 相对路径并容忍缺失（缺失则警告跳过对拍，match20 返工点）。
 
-范围纪律：黑盒输出与取证样本结构一致后，直接用真实目标 URL 进入 REAL_VERIFY；内部参数映射等旁支问题记录到 `经验沉淀-<站点>.md`，不阻塞主交付、不横向展开。
+范围纪律：黑盒输出与取证样本结构一致后，直接用真实目标 URL 进 REAL_VERIFY；内部参数映射等旁支问题记入 `经验沉淀-<站点>.md`，不阻塞主交付、不横向展开。
 
-最低要求：连续完成不少于 5 次真实请求，并记录每次时间、HTTP 状态、目标参数摘要、会话阶段和响应判定。成功标准：
+交付检查要求至少 5 条有效真实请求记录（时间、HTTP 状态、目标参数摘要、会话阶段、响应判定）。用户限制或禁止请求时必须遵从，停止相应请求并标记验证未完成，不得为凑数继续请求或虚构记录。成功标准：
 
-- HTTP 状态符合目标接口成功语义，且响应结构和业务数据正确，不只检查状态码。
-- 动态参数在不同时间、输入或会话下按预期变化。
-- Cookie、Token、TLS、Header、Body 序列化和请求顺序不依赖浏览器状态。
-- 失败请求能区分签名错误、会话过期、资源过期、频率限制、IP 风控和业务参数错误。
-- **提交/写接口前先验活会话（match26 实证）**：会话过期时只读数据接口可能仍 200（不校验登录），容易把 401 误判成签名问题。涉及登录态依赖的写/提交请求，先 GET 一次会话状态接口（如 `/api/user`）确认 `isLogin:true` 再提交；会话过期后服务端还可能主动清 sessionid cookie，需用户重新提供。
+- HTTP 状态符合成功语义且响应结构与业务数据正确（不只查状态码）；动态参数在不同时间、输入或会话下按预期变化；Cookie/Token/TLS/Header/Body 序列化与请求顺序不依赖浏览器状态；失败请求能区分签名错误、会话过期、资源过期、频率限制、IP 风控与业务参数错误。
+- **提交/写接口前先验活会话（match26）**：数据接口不校验登录仍 200，容易把 401 误判成签名问题——登录态依赖的写/提交前先 GET 会话状态接口（如 `/api/user`）确认 `isLogin:true`；会话过期后服务端可能主动清 sessionid cookie，需用户重新提供。
 
-`REAL_VERIFY` 阶段就把联网入口写成**可复用的 Session + 显式关闭**，避免交付门禁返工：Python 用 `requests.Session()`（`session.get/post` + `session.close()`）；Node 用 `https.Agent({ keepAlive: true })`（复用 + `agent.destroy()`）或 `got/scraping` session。裸 `urllib.request`/每次独立连接会被 `check_final_artifact.js` 的 Session 门禁（创建/复用/清理三件套）判不合格。**门禁按调用形态字面识别（match18 实测返工）**：复用/清理须以 `client/session.<get|post|request>`、`agent: <keepAlive变量>`、`agent/httpsAgent.destroy()`、`client.close()` 等字面形态出现在 result 入口源码；封装在辅助模块或局部重命名不计入——最稳妥是入口文件直接创建、请求统一走 client、收尾 destroy。
+**Session 门禁（R1，match18 返工点）**：本阶段起联网入口即写成可复用 Session + 显式关闭，且**调用形态按字面识别**——复用/清理须以 `client/session.<get|post|request>`、`agent: <keepAlive变量>`、`agent.destroy()`、`client.close()` 等形态出现在 result 入口源码（Python 对应 `requests.Session()` + `session.close()`，Node 对应 `https.Agent({ keepAlive: true })` + `agent.destroy()`）；封装进辅助模块或局部重命名不计入，裸 `urllib.request`/每次独立连接判不合格——最稳妥是入口直接创建、请求统一走 client、收尾 destroy。
 
-至少保留一份脱敏验证摘要和可复现命令；不得输出完整 Authorization、Cookie、Token、密钥或验证码答案。401/403/412/429 先诊断，不得用浏览器自动化或硬编码成功样本绕过。验证码交付在此之上追加两项记录：手动成功样本基线（`node scripts/check_success_baseline.js`，要求与豁免条件见 `references/captcha/verification-workflow.md`）与逐次尝试 attempts 复盘（`node scripts/check_verification_attempts.js`）；成功标准以「verify 返回通过凭据且业务接口消费凭据返回正确业务数据」为准，视觉答案正确不算通过。
+至少保留一份脱敏验证摘要与可复现命令；不得输出完整 Authorization、Cookie、Token、密钥或验证码答案。401/403/412/429 先诊断，不得用浏览器自动化或硬编码成功样本绕过。验证码交付追加两项记录：手动成功样本基线（`node scripts/check_success_baseline.js`，要求与豁免见 `references/captcha/verification-workflow.md`）与逐次 attempts 复盘（`node scripts/check_verification_attempts.js`）；成功标准 = verify 返回通过凭据且业务接口消费凭据返回正确业务数据，视觉答案正确不算通过。
 
-**403/风控码分层定位协议（硬约束：下「连接层拦截 / 纯协议不可绕过」结论前必须完成）**：用「签名来源 × 连接来源」双对照定位拦截层，完整矩阵见 `references/network/ip-risk-control.md`：
-1a. **算法中间值断点采样（DIAGNOSE 双对照浏览器侧合法用途，match22 实证）**：沙箱与真机"同输入不同输出"且常规探针够不到闭包中间值时，用浏览器 MCP 调试器（set_breakpoint_on_text + get_paused_info + evaluateOnCallFrame）在真机断点 dump 中间值，与沙箱同断点 dump 逐字 diff——第一处分歧即环境分支点。须 `--guard mcp` 且用户知情；采样纪律（反调试死循环一次/会话、断点跨 reload 易丢、单次 pause 内完成取值、锚点定位与卡死处置）见反模式 30「采样纪律」。
-1. **正向对照**：浏览器**新鲜**签名 + 纯协议客户端（curl_cffi 等）重放 → 200 ⇒ 连接层无问题，问题在自己的签名内容；403 ⇒ 连接层嫌疑才成立。内嵌 serverTime 的签名有有效期，对照必须用采集后立即重放的新鲜样本并记录采集→重放延迟；**用过期样本得到的 403 不构成任何结论**。三个先量后动的子协议：
-   - **签名内时间戳先做 T 偏移矩阵**（match25，规则 34）——不要凭直觉加补偿。
-   - **对照客户端本身也可能是变量**（match19，规则 27 三级客户端阶梯）——普通栈全 400 须先用指纹客户端排除浏览器指纹白名单；交付遵循最低可用栈。
-   - **错误文案不指示病因层**（同是 `token failed`：match9 是 m-cookie 缺失、match19 是 Node 指纹被拉黑、match28 是站点限流）——限流判别与应对节奏见反模式 36 / 规则 37。
-2. **反向对照**：自己的签名 + 真实浏览器连接（取证阶段 ruyipage `add_preload_script` hook XHR.open 替换目标参数，hook 必须带执行标记并验证）→ 403 ⇒ 服务端校验签名内容，与连接无关。
-3. 定位为「签名内容被校验」后，用**对齐探针法**测量 SDK 实际内嵌的环境检测并逐位对齐（见 `references/env/env-detect-bypass.md`），不要先假设需要复现完整浏览器指纹。
-4. **对照必须在健康 session 下做，且一次只改一个变量**：连续失败会触发站点惩罚机制（惩罚期内连浏览器基线请求都被拒，对照数据全部作废）；每组对照前先复刻一次确定成功的基线请求，失败即冷却后重做。HTTP 200 + 业务层风控文案时先按 `references/network/ip-risk-control.md` 会话状态类风控专节排查。
+**403/风控码分层定位协议（R1：结论前必须完成，`check_risk_layer_diagnosis.js` 裁定）**：用「签名来源 × 连接来源」双对照隔离变量——① 正向：浏览器**新鲜**签名 + 纯协议客户端重放；② 反向：自己的签名 + 真实浏览器连接（ruyipage `add_preload_script` hook `XMLHttpRequest.prototype.open` 换参，hook 须带执行标记并验证）。**对照纪律**：过期样本的 403 不构成结论；每组对照前先复刻成功基线，健康 session 下一次只改一个变量（连续失败触发站点惩罚，惩罚期内数据作废）。结果解读矩阵、三个先量后动的子协议（时间戳 T 偏移矩阵 / 三级客户端阶梯 / 错误文案多义，规则 27/34/37、反模式 36）与操作步骤见 `references/network/ip-risk-control.md`。
+1. **签名内容层**（①200 + ②403）→ **对齐探针法**：测量 SDK 实际内嵌的环境检测并逐位对齐（见 `references/env/env-detect-bypass.md`），不要先假设需要复现完整浏览器指纹。
+2. **中间值断点采样**（DIAGNOSE 双对照的浏览器侧合法用途，match22 实证）：沙箱与真机同输入异输出且常规探针够不到闭包中间值时，用浏览器 MCP 调试器（`set_breakpoint_on_text` + `get_paused_info` + `evaluateOnCallFrame`）在真机断点 dump 中间值，与沙箱同断点 dump 逐字 diff，第一处分歧即环境分支点。须 `--guard mcp` 且用户知情；采样纪律见反模式 30。
+3. **会话状态类风控**（HTTP 200 + 业务层文案）→ 按 `references/network/ip-risk-control.md` 会话状态类专节排查，惩罚期内基线失败即冷却、不做实验。
 
-**引擎检测 case 的双对照浏览器侧**：取证浏览器被引擎级检测拒绝的 case（state 已过 BLOCKED_FORENSIC），双对照的浏览器侧经 `--guard mcp` 用浏览器 MCP 连接真实 Chrome 内核浏览器执行（站点只接受真实内核时 ruyipage 无法承担该角色）；hook 必须带执行标记并验证、样本新鲜度与 `captureToReplayMs` 记录要求不变，对照产物落盘 `case/` 供审计。未经 BLOCKED_FORENSIC 的 case 浏览器侧一律用 ruyipage，不得借双对照名义引入 MCP。取证浏览器毒化证据常在分析阶段才齐备（match21 实证见状态机 DIAGNOSE 节点）——落盘 `case/notes/` 后走 `DIAGNOSE → BLOCKED_FORENSIC`，补登记后回 DIAGNOSE 经 `--guard mcp` 用 MCP。
+**引擎检测 case 的双对照浏览器侧（R1）**：取证浏览器被引擎级检测拒绝的 case（已过 BLOCKED_FORENSIC），浏览器侧经 `--guard mcp` 用 MCP 连真实 Chrome 内核执行（站点只接受真实内核时 ruyipage 无法承担）；hook 须带执行标记并验证，样本新鲜度与 `captureToReplayMs` 记录要求不变，对照产物落盘 `case/` 供审计。未经 BLOCKED_FORENSIC 的 case 一律用 ruyipage，不得借双对照名义引入 MCP。取证浏览器毒化证据常在分析阶段才齐备（match21 实证）——落盘 `case/notes/` 后走 `DIAGNOSE → BLOCKED_FORENSIC` 补登记，再回 DIAGNOSE 走 `--guard mcp`。
 
-未完成上述对照，不得宣布连接层风控结论，不得转而交付浏览器内核取数方案（取证浏览器脚本放进 `case/` 也算交付违规）。双对照结果写入 `result/验证记录.json` 顶层 `riskLayerDiagnosis` 字段（`forwardControl`/`reverseControl`/`conclusion`，正向必须含 `captureToReplayMs` 采集→重放延迟，反向必须含 `hookVerified: true`），并过门禁：
+未完成上述对照，不得宣布连接层风控结论，不得转而交付浏览器内核取数方案（取证浏览器脚本放进 `case/` 也算交付违规）。双对照结果写入 `result/验证记录.json` 顶层 `riskLayerDiagnosis` 字段（`forwardControl`/`reverseControl`/`conclusion`，正向须含 `captureToReplayMs` 采集→重放延迟，反向须含 `hookVerified: true`），并过门禁：
 
 ```powershell
 node scripts/check_risk_layer_diagnosis.js --case-dir <project-root> --markdown
@@ -532,15 +418,11 @@ node scripts/check_risk_layer_diagnosis.js --case-dir <project-root> --markdown
 
 退出码非 0 = 对照缺失 / 样本过期 / hook 未验证 / 结论与对照矛盾，停在 DIAGNOSE 补对照，不得按未验证结论推进。
 
-真实验证失败时不得进入 `DELIVER`。可以交付“未完成/诊断中”的中间材料，但执行入口、最终总结和状态行必须标为 `REAL_VERIFY_FAILED`，不得使用“已完成还原”“服务端已接受”或等价成功措辞；只有 sign-only 明确豁免，且必须单独标注未做真实验证。
-
-sign-only 模式必须：标明未完成真实 API 验证；只验证本地输入输出、中间值和格式约束；不宣称签名已被服务端接受；入口提供显式 `--sign-only` 或等价模式且不默认联网。
+真实验证失败不得进入 `DELIVER`：可交付「未完成/诊断中」的中间材料，但入口、总结与状态行须标 `REAL_VERIFY_FAILED`，不得用「已完成还原」「服务端已接受」等成功措辞。sign-only 是唯一豁免，须标明未做真实 API 验证、只验本地输入输出/中间值/格式约束、不宣称签名被服务端接受，入口提供显式 `--sign-only` 或等价模式且不默认联网。
 
 ## 11. DELIVER、CLEANUP 与失败处理
 
-交付目录保持单入口和最小依赖（`result/` 布局见 4.1 节）。
-
-入口被 `require`/`import` 时只导出 API，命令行执行时才运行。**取证落盘的原始 JS 副本（字节码/混淆单行文件）放 `result/src/target/original/`**——这是 `check_code_quality.js` 的取证豁免路径（`src/target/{original,vendor,bundle,bundles}/` 不做压缩/单行长度检查），入口启动时对副本做 sha256 校验防站点改版（match18：直接放 `src/` 会被质量门禁按"压缩代码 + debugger 字面量"判失败）。**写交付文档前先读 `references/quality/final-summary.md`**——最终总结 8 章模板、`FINAL_ARTIFACT_NETWORK_MODE` / `FINAL_ARTIFACT_TLS_FINGERPRINT` 机器标记、`验证记录.json` 的 `mode`/`attempts` 结构契约都在那里逐条定义，不读必返工。
+交付目录保持单入口和最小依赖（`result/` 布局见 4.1 节）。入口被 `require`/`import` 时只导出 API，命令行执行时才运行。**取证落盘的原始 JS 副本（字节码/混淆单行文件）放 `result/src/target/original/`**——`check_code_quality.js` 对 `src/target/{original,vendor,bundle,bundles}/` 不做压缩/单行长度检查，入口启动时对副本做 sha256 校验防站点改版（match18：直接放 `src/` 会被质量门禁判失败）。**写交付文档前先读 `references/quality/final-summary.md`**（最终总结模板、`FINAL_ARTIFACT_*` 机器标记、`验证记录.json` 结构契约都在那里，不读必返工）。
 
 交付前必跑：
 
@@ -549,44 +431,33 @@ node scripts/check_final_artifact.js --case-dir <project-root> --markdown
 node scripts/check_code_quality.js --case-dir <project-root> --markdown
 ```
 
-验证记录含 401/403/412/429 失败尝试（触发过分层定位）的 case，交付前追加：
+验证记录含 401/403/412/429 失败尝试（触发过分层定位）的 case 追加 `node scripts/check_risk_layer_diagnosis.js --case-dir <project-root> --markdown`；用户要求“生产级交付”时改用 `node scripts/check_final_artifact.js --case-dir <project-root> --production --markdown`。
 
-```powershell
-node scripts/check_risk_layer_diagnosis.js --case-dir <project-root> --markdown
-```
+`最终项目总结.md` 与 `经验沉淀-<站点>.md` 是必需交付文档（模板与写入规则见 `references/quality/final-summary.md`、`references/workflow/phase-flow.md`）；仅用户明确要求不生成时才用对应 `--no-require-*` 豁免，并记录原因。
 
-`最终项目总结.md` 与 `经验沉淀-<站点>.md` 是必需交付文档；模板与写入规则见 `references/quality/final-summary.md`、`references/workflow/phase-flow.md`。仅用户明确要求不生成时才用对应 `--no-require-*` 豁免，并在输出中记录原因。
+清理 `case/tmp/` 中的调试脚本、临时下载和秘密材料，保留可复核的最小证据、脱敏样本和必要 fixture。轻量路径交付须在最终总结标注算法来源 URL、验证日期和未做 trace 取证声明。
 
-用户要求“生产级交付”时追加：
-
-```powershell
-node scripts/check_final_artifact.js --case-dir <project-root> --production --markdown
-```
-
-清理 `case/tmp/` 中的调试脚本、临时下载和秘密材料，保留可复核的最小证据、脱敏样本和必要 fixture。轻量路径交付必须在最终总结中标注算法来源 URL、验证日期和未做 trace 取证声明。
-
-卡住时按顺序：重看本次证据、运行 trace 覆盖检查、比较请求字段、定位中间值、缩小环境、再升级沙箱或 TLS 路径；最后输出卡点、已证实事实、缺失证据和下一步输入，不用浏览器自动化代替协议实现。
+卡住时按序：重看本次证据、跑 trace 覆盖检查、比较请求字段、定位中间值、缩小环境、再升级沙箱或 TLS 路径；最后输出卡点、已证实事实、缺失证据和下一步输入，不用浏览器自动化代替协议实现。
 
 ## 12. references 按需路由
 
-不要全量必读，按当前状态选最小集合；读完仍无法推进再追加。正文与 references 中出现的「反模式 N / 规则 N」编号，用 `node scripts/search_references.js --id "反模式 N"` 按号提取小节后再读，禁止为单个编号整读 `common-pitfalls.md` / `experience-rules.md` 全文。高频入口：
+不要全量必读，按当前状态选最小集合；读完仍无法推进再追加。正文与 references 中的「反模式 N / 规则 N」编号**按号提取小节**后再读；**R2 默认不要为单个编号整读** `common-pitfalls.md` / `experience-rules.md` 全文——不是错，只是浪费上下文预算。高频入口：
 
 | 当前需要 | 首选 reference |
 |---|---|
-| 反模式/规则编号提取小节（跟进「见反模式 N」类指针）、references 关键词检索 | `node scripts/search_references.js --id "反模式 28"`（`--keyword` 兜底，`--case-dir` 记入打转检测） |
-
-| 当前需要 | 首选 reference |
-|---|---|
-| 状态机细则、常见坑、经验法则 | `references/workflow/phase-flow.md`、`decision-tree.md`、`common-pitfalls.md`、`experience-rules.md` |
+| 反模式/规则编号提取（跟进「见反模式 N」类指针）、references 关键词检索 | `node scripts/search_references.js --id "反模式 28"`（`--keyword` 兜底，`--case-dir` 记入打转检测） |
+| 状态机细则、常见坑、经验法则 | `references/workflow/` 下 `phase-flow.md`、`decision-tree.md`、`common-pitfalls.md`、`experience-rules.md` |
 | 某教学靶场 match 题（match.yuanrenxue.cn） | `cases/yuanrenxue-match-platform.md`（平台共性基线）+ `cases/yuanrenxue-match-index.md`（题号速查） |
 | 取证、trace 质量与重试、工具安装 | `references/workflow/trace-flow.md`、`references/tooling/ruyi-tooling.md`、`browser-acquisition.md` |
-| 混淆 JS 反混淆（`_0x`/字符串表/控制流平坦化，AST 改写） | `assets/ast-patterns/README.md` 入口：`detect-patterns.js` 检测家族 → `run-pipeline.js` 执行流水线 |
-| 运行混淆 JS 验证行为（vm 沙箱 + 超时 + 环境访问日志 + 自定义环境模块） | `node scripts/run_with_trace.js --help`（禁止手写 vm runner；分支对齐桩用 `--env-module` + `--bootstrap-mode minimal`） |
+| 混淆 JS 反混淆（`_0x`/字符串表/控制流平坦化） | `scripts/ast-patterns/README.md`：`detect-patterns.js` 检测家族 → `run-pipeline.js` 执行流水线 |
+| 运行混淆 JS 验证行为（vm 沙箱 + 超时 + 环境访问日志） | `node scripts/run_with_trace.js --help`（禁止手写 vm runner；分支对齐桩用 `--env-module` + `--bootstrap-mode minimal`） |
 | 隐蔽信道（参数经 storage/postMessage/DOM/CSS 动画隐写传递） | `references/web/covert-channel.md` |
 | 补环境服务化（并发/OOM/vm2 选型）、TLS 已对齐仍被拦、纯 Web VMP 黑盒失败 | `references/env/env-concurrency.md`、`references/network/tls-handshake-gotchas.md`、`references/deobfuscation/vmp-decompile-optional.md` |
 | 加密、混淆、环境、WASM、网络、指纹、验证码、交付 | 按场景细分见 `references/workflow/reference-map.md` |
 
-完整目录和场景索引在 `references/workflow/reference-map.md`。目录、脚本和模板的具体参数以实际脚本 `--help` 输出为准。若 reference 与本文件冲突，以本文件的状态机、真实 API 验证规则和纯协议红线为准。
+完整目录与场景索引见 `references/workflow/reference-map.md`；脚本与模板参数以实际 `--help` 为准。reference 与本文件冲突时，以本文件的状态机、真实 API 验证规则和纯协议红线为准。
+
+新经验默认沉淀到 `references/` 与 `cases/`：只有「跨题通用」且「不写入正文就会犯错」两条同时满足，才允许加进本文件（本文件是常驻注入区，每加一句按激活次数付费）。
 
 ## 13. 完成判定
 

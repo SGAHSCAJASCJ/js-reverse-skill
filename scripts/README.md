@@ -1,6 +1,6 @@
 # 脚本索引
 
-本目录包含 66 个可执行脚本（57 个 JavaScript、9 个 Python），按功能分为 12 类。以下索引以 `scripts/` 当前实际文件为准，不包含 `README.md` 与 `lib/` 共享模块。
+本目录包含 67 个可执行脚本（58 个 JavaScript、9 个 Python），按功能分为 12 类。以下索引以 `scripts/` 当前实际文件为准，不包含 `README.md` 与 `lib/` 共享模块。
 
 本文中的 `<project-root>` 指项目根目录，其下包含平级的 `case/` 与 `result/` 目录。需要 case 目录的脚本使用 `<project-root>/case`，需要项目根目录的脚本直接使用 `<project-root>`。`forensic_ruyipage.py` 与 `capture_ruyitrace_log.js` 会在 `--case-dir` 下创建 `case/`，因此必须传入 `<project-root>`。`check_session_resume`/`check_fingerprint_fixture`/`check_trace_api_coverage` 已归一化，传 `<project-root>` 或 `<project-root>/case` 均可。
 
@@ -92,19 +92,20 @@
 | `check_environment_closure.js` | 汇总执行 Trace-runtime、WebAPI、对象形状与网络语义闭环检查 | `node scripts/check_environment_closure.js --case-dir <project-root> --before-real-request --markdown` |
 | `generate_fingerprint_hook.js` | 生成浏览器侧指纹终端 API 采样 Hook，仅用于取证 | `node scripts/generate_fingerprint_hook.js --types canvas,webgl,dom-geometry --out case/hooks/fingerprint-hook.js` |
 
-## 质量检查与交付门禁（11 个）
+## 质量检查与交付门禁（12 个）
 
 | 脚本 | 功能 | 典型用法 |
 |------|------|---------|
 | `check_code_quality.js` | 检查代码简洁性、模块化、编码与交付代码规则 | `node scripts/check_code_quality.js --case-dir <project-root> --markdown` |
 | `check_final_artifact.js` | 检查交付目录、单一入口、禁用浏览器自动化、总结与经验沉淀等规则 | `node scripts/check_final_artifact.js --case-dir <project-root> --markdown` |
 | `check_risk_layer_diagnosis.js` | 403/风控码分层定位门禁：验证记录含 401/403/412/429 失败尝试时，校验 `riskLayerDiagnosis` 双对照（正向新鲜签名重放 + 反向 hook 注入）齐备、新鲜、与结论自洽，拦截「无对照/过期样本下连接层结论」 | `node scripts/check_risk_layer_diagnosis.js --case-dir <project-root> --markdown` |
-| `check_skill_consistency.js` | 检查 SKILL.md 关键门禁锚点、引用路径、references 孤儿文件、scripts 索引同步，以及「反模式 N / 规则 N」编号引用真实存在（实条或合并指针） | `node scripts/check_skill_consistency.js --project-dir <project-root> --markdown` |
+| `check_skill_consistency.js` | 检查 SKILL.md frontmatter 规范（对齐官方 skill 校验器 quick_validate.py：允许键、name 形态、description 长度与尖括号、正文 TODO 占位）、description 质量（体积预算 / 禁 catchall / 必须有边界声明）、关键门禁锚点、引用路径、references 孤儿文件、scripts 索引同步，以及「反模式 N / 规则 N」编号引用真实存在（实条或合并指针） | `node scripts/check_skill_consistency.js --project-dir <project-root> --markdown` |
+| `eval_trigger.js` | 触发精度评估：按 `tests/trigger-eval/cases.json` 打分，衡量 description（选择阶段唯一判据）的 precision/recall/F1，逐条输出漏召与误召；`--list` 输出待判定请求、`--template` 输出 decisions 骨架。触发精度无法离线判定，需模型逐条判定后回填 | `node scripts/eval_trigger.js --list`；`node scripts/eval_trigger.js --score decisions.json` |
 | `check_vendor_leakage.js` | 检查通用文档（除 `cases/`、`references/captcha/`、识别参考与自带「知识分级」声明的文档）是否出现具体厂商名/目标平台名，防 SKILL.md §3 T1/T2 越界漂移 | `node scripts/check_vendor_leakage.js --project-dir <project-root> --markdown` |
 | `check_fingerprint_fixture.js` | 检查指纹 fixture 对 Canvas、WebGL、Audio、DOM 几何等的覆盖 | `node scripts/check_fingerprint_fixture.js --case-dir <project-root> --markdown` |
 | `check_dynamic_resources.js` | 检查动态资源是否仅作快照，并具备运行时刷新设计 | `node scripts/check_dynamic_resources.js --case-dir <project-root> --markdown` |
 | `check_change_memory.js` | 检查代码变更记忆中的修改原因、禁止回退与验证记录 | `node scripts/check_change_memory.js --case-dir <project-root> --markdown` |
-| `check_routing_benchmarks.js` | 状态机/门禁路由回归基准 runner：按 `tests/routing-benchmarks/cases.json` 还原证据现场、真实执行门禁脚本并断言退出码与输出；skillAnchors 与 SKILL.md 双向防漂移 | `node scripts/check_routing_benchmarks.js --markdown` |
+| `check_routing_benchmarks.js` | 状态机/门禁路由回归基准 runner：按 `tests/routing-benchmarks/cases.json` 还原证据现场、真实执行门禁脚本并断言退出码与输出。用例必须断言脚本行为，不接受纯文本锚点用例（skillAnchors 仅作防漂移补充） | `node scripts/check_routing_benchmarks.js --markdown` |
 | `check_env_prerequisites.js` | IMPLEMENT 补环境前置门禁：校验 `case/notes/entry-chain.md`（含 stack 定位）与 `missing-env-priority.md`（含优先级与证据来源标记或黑盒声明）两文件齐备达标，拦截 Node 报错盲补 | `node scripts/check_env_prerequisites.js --case-dir <project-root> --markdown` |
 | `compare_fixture.js` | 对比 fixture 样本与实际输出，定位首个偏差点（REAL_VERIFY 前置的标准离线回归步骤，退出码 0=一致 / 2=偏差 / 1=错误） | `node scripts/compare_fixture.js --fixture sample.fixture.json --actual node-output.json --field sign --markdown` |
 
@@ -132,7 +133,7 @@
 
 ### `generate_motion_track.py` profile 参数包
 
-`--profile <path.json>` 加载参数包基线（显式 CLI 旗标优先于 profile），键名与 CLI 目标名一致（`model` / `move_interval_ms` / `adjust_interval_ms` / `adjust_step_px` / `first_x` / `first_t_ms` / `pairs` / `duration_ms` / `jitter` 等）。**按 SKILL.md T1/T2 知识分级政策，厂商实测轨迹参数（T2）只能固化在 case 的 `result/src/`（带验证日期），本脚本与 `templates/` 不内置任何厂商预设**；profile 示例见 `cases/yidun-jigsaw.md`。staircase 模型参数推导流程：成功样本明文 → `analyze_track.py` 统计 → 写 profile → 生成 → `analyze_track.py --compare` 复核。
+`--profile <path.json>` 加载参数包基线（显式 CLI 旗标优先于 profile），键名与 CLI 目标名一致（`model` / `move_interval_ms` / `adjust_interval_ms` / `adjust_step_px` / `first_x` / `first_t_ms` / `pairs` / `duration_ms` / `jitter` 等）。**按 SKILL.md T1/T2 知识分级政策，厂商实测轨迹参数（T2）只能固化在 case 的 `result/src/`（带验证日期），本脚本与 `assets/templates/` 不内置任何厂商预设**；profile 示例见 `cases/yidun-jigsaw.md`。staircase 模型参数推导流程：成功样本明文 → `analyze_track.py` 统计 → 写 profile → 生成 → `analyze_track.py --compare` 复核。
 
 ## 验证码验证门禁（3 个）
 
@@ -153,10 +154,10 @@
 | 识别与归因辅助 | 2 |
 | Trace 分析与运行时闭环 | 9 |
 | 补环境与网络语义检查 | 7 |
-| 质量检查与交付门禁 | 11 |
+| 质量检查与交付门禁 | 12 |
 | 安装与下载 | 4 |
 | 验证码识别与求解辅助 | 8 |
 | 验证码验证门禁 | 3 |
-| **合计** | **64** |
+| **合计** | **65** |
 
 > 滑块缺口坐标来源判定（A 接口参数 / B 图片像素 / C 纯图像三路线）见 `references/captcha/gap-coordinate-source.md`。本目录中的验证码辅助脚本负责 C 类坐标换算、轨迹生成、答案校验与打码模板，A / B 类走封装层逆向。

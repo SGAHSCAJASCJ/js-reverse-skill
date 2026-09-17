@@ -6,8 +6,10 @@
 //   - files：在临时 caseDir 里还原的证据现场（相对路径 → 内容）；
 //   - script + args：要执行的门禁/工具脚本（{caseDir} 占位符替换）；
 //   - expectExit + stdoutIncludes/stdoutExcludes/outputIncludes：断言退出码与输出关键词；
-//   - skillAnchors：必须在 skill 语料（SKILL.md + references/**/*.md）中存在的文本锚点
-//     （基准与文档双向防漂移；锚点句可随文本外迁到 references，不要求留在 SKILL.md）。
+//   - skillAnchors（可选）：必须在 skill 语料（SKILL.md + references/**/*.md）中存在的文本锚点，
+//     只作行为断言之外的防漂移补充（锚点句可随文本外迁到 references）。
+// 用例必须断言脚本行为：逐字匹配措辞的测试会在每次改写文案时失效且不证明任何行为
+// （skill 规范：Avoid tests that merely match generated wording, headings, or regex patterns）。
 // 任何用例失败退出 1；全部通过退出 0。CI 全量运行，改 SKILL.md 门禁语义必须同步改基准。
 
 const fs = require('fs');
@@ -46,6 +48,8 @@ function usage() {
 - 每条用例在独立临时目录还原证据现场，真实执行门禁脚本并断言退出码与输出关键词；
   skillAnchors 同步断言 skill 语料（SKILL.md + references）文本锚点存在，防止「改文档不改基准」或「改门禁不改文档」；
   script=null 的纯锚点用例只检查锚点不执行脚本（新增需有充分理由，行为断言优先）。
+- expectFiles / rejectFiles：脚本执行后断言临时目录内相对路径必须存在 / 必须不存在，
+  用于「两种 --case-dir 入参等价」「不得二次拼接出 case/case 幻影目录」这类路径契约用例。
 - 新增 SKILL.md 硬规则时同步加用例；新增用例必须先本地跑通再提交。`;
 }
 
@@ -63,8 +67,9 @@ function loadCases(casesPath) {
     if (c.script != null && !/^scripts\/[A-Za-z0-9_-]+\.(js|py)$/.test(`scripts/${String(c.script).replace(/^scripts\//, '')}`)) {
       throw new Error(`${c.id}：script 必须是 scripts/ 下的脚本文件名`);
     }
-    if (c.script == null && c.skillAnchors.length === 0) {
-      throw new Error(`${c.id}：script=null 的纯锚点用例必须提供 skillAnchors`);
+    if (c.script == null) {
+      throw new Error(`${c.id}：基准用例必须断言脚本行为（script），不接受纯文本锚点用例——`
+        + '逐字匹配措辞的测试不证明任何行为，且每次改写文案都会失效');
     }
   }
   return doc.cases;
@@ -118,6 +123,12 @@ function runCase(acase, skillText, options = {}) {
     for (const needle of acase.outputIncludes || []) {
       if (!output.includes(needle)) problems.push(`输出应包含「${needle}」`);
     }
+    for (const rel of acase.expectFiles || []) {
+      if (!fs.existsSync(path.join(root, rel))) problems.push(`执行后应生成 ${rel}`);
+    }
+    for (const rel of acase.rejectFiles || []) {
+      if (fs.existsSync(path.join(root, rel))) problems.push(`执行后不应生成 ${rel}（--case-dir 被二次拼接）`);
+    }
     if (options.verbose && problems.length) {
       problems.push(`--- stdout 片段 ---\n${stdout.slice(0, 800)}\n--- stderr 片段 ---\n${stderr.slice(0, 400)}`);
     }
@@ -146,7 +157,10 @@ function runAll(casesPath, filter, skillPath) {
   const cases = loadCases(casesPath);
   const skillText = fs.readFileSync(skillPath, 'utf8').replace(/^\uFEFF/, '');
   const refTexts = collectRefTexts(SKILL_ROOT);
-  const selected = filter ? cases.filter((c) => c.id.toLowerCase().includes(filter.toLowerCase()) || String(c).title.includes(filter)) : cases;
+  const needle = String(filter || '').toLowerCase();
+  const selected = filter
+    ? cases.filter((c) => c.id.toLowerCase().includes(needle) || String(c.title || '').toLowerCase().includes(needle))
+    : cases;
   const results = selected.map((c) => runCase(c, skillText, { verbose: true, refTexts }));
   return { total: selected.length, passed: results.filter((r) => r.ok).length, results };
 }

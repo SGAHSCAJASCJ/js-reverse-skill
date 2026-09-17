@@ -175,6 +175,15 @@ function resolveCaseDir(input) {
   return p;
 }
 
+// 严格归一化到「case 目录」：项目根 → <project-root>/case；已是 case 目录（目录名即 case）→ 自身。
+// 与 resolveCaseDir 的差异：不依赖目标是否已存在（新建 case 时也能拿到标准路径），且结果幂等——
+// 对 case/case 这类历史误建目录免疫（resolveCaseDir 会因 case/case 存在而错误下钻一层）。
+// 读/写 case 子路径的脚本统一用它，保证「传 <project-root> 或 <project-root>/case」两种入参等价。
+function resolveCaseSubdir(input) {
+  const p = path.resolve(input || '.');
+  return path.basename(p).toLowerCase() === 'case' ? p : path.join(p, 'case');
+}
+
 // 归一化 result 目录：标准布局下 result/ 与 case/ 平级（<project-root>/{case,result}）。
 // 输入可为项目根或 case 目录，统一返回同一个 result 目录，消除各脚本 `caseDir/result` 与
 // `caseDir/../result` 两套写法并存导致的定位分歧；两处候选都不存在时按标准布局返回应有路径，
@@ -205,6 +214,7 @@ module.exports = {
   resolveProjectDirFromCaseDir,
   normalizeProjectDir,
   resolveCaseDir,
+  resolveCaseSubdir,
   resolveResultDir,
   resolveNotesDir,
   CASE_EVIDENCE_SUBDIRS,

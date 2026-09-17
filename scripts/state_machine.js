@@ -145,11 +145,74 @@ const NODE_GUIDES = {
   DIAGNOSE: 'references/network/ip-risk-control.md（双对照矩阵 / 会话状态类风控）',
   DELIVER: 'references/quality/final-summary.md（总结模板 / 机器标记）',
   SIGN_ONLY_DELIVER: 'references/quality/final-summary.md（总结模板 / 机器标记）',
+  CLEANUP: 'references/workflow/phase-flow.md（REAL_VERIFY、DELIVER 与 CLEANUP 收尾清单）',
+};
+
+// 节点硬规则：换节点时随 [GUIDE] 一起即时投递（SKILL.md 正文只留跨题通用硬规则，节点级硬规则在此处按需给）。
+// 级别口径与 SKILL.md 第 2 节一致：未标注的规则按 R1 门禁（脚本/产物裁定）；确属流程约定的标 R2（可偏离，说明理由即可）。
+const NODE_RULES = {
+  ENV_READY: [
+    '环境检查与快照写入按 GATE-1 执行，不得因已有阶段报告或 result/ 跳过；重装 Node / 替换 Firefox / 迁移 tools / 升级 ruyipage 后必须重跑完整环境检查。',
+  ],
+  EVIDENCE_GATE: [
+    'URL 不是证据：文件真实存在且可归类才算；退出码非 0 或输出含「缺失证据」即停在 EVIDENCE_GATE 补证，禁止进入 IDENTIFY/TRACE_ANALYZE/IMPLEMENT。',
+    'Step 1 信号用 --require-network-signal，Step 2 用 --require-trace-signal，两类信号不可混用。',
+  ],
+  FORENSIC_CAPTURE: [
+    '取证只允许四源（ruyipage / RuyiTrace / 用户材料 / 经确认的 MCP 兜底）；手写 fetch/curl 抓目标页、系统浏览器与 Playwright/Puppeteer/Selenium 一律禁止。',
+    '先 --set 本节点再发起取证（取证完成再补设会被拒绝）；--targets 只写唯一标识终态接口的完整路径子串，禁用宽正则。',
+  ],
+  TRACE_CAPTURE: [
+    '--evidence-signal 只选参数写入点/参数名；目标接口 URL、裸泛化 API（createElement 等）、密钥/常量名一律不传。',
+    '采集完成 ≠ 达标：进 CASE_LOOKUP 前必须复跑 check_trace_gate.js 出口复检（退出码 0）。',
+  ],
+  TRACE_RETRY: [
+    '重度不足必须先重采一次才允许降级做静态分析（禁止跳过重采）；多进程 domtrace 必须合并所有 tab/content 进程文件（排除 parent 内核进程）。',
+  ],
+  MATERIALS_FALLBACK: [
+    '需用户显式确认；材料必须过 check_evidence.js 内容校验；经验沉淀与最终总结写明未走 ruyipage/RuyiTrace、证据为手动材料 + 真实请求反证。',
+  ],
+  STEP2_ONLY: [
+    '不重复采集 trace；出口门禁直接通过（Step 2 本就具备），也不因缺少 Step 1 强制网络取证。',
+  ],
+  BLOCKED_FORENSIC: [
+    '未定位到检测证据不得进入本节点；UA 覆盖无效的引擎级检测经用户确认并过 --guard mcp 后才可走 MCP，产物必须落盘 case/ 供审计；只取证不交付，纯协议红线不变。',
+  ],
+  IDENTIFY: [
+    '识别结果必须引用落盘资源/NDJSON/网络包字段，不以站点名称直接定类；参数名存在 ≠ 参数生效（以 target-hits.json 或 trace xhrNative 的 url 为准）。',
+  ],
+  TRACE_ANALYZE: [
+    '先 trace 后读源码：先 import 摘要 + search_trace 定位 stack.file:line:col，再切源码片段；禁止先读大 bundle 猜 webpack module id（R2 默认，偏离需说明理由）。',
+    '签名输入含不可复算随机值 = 分支判定失败：不得枚举算法组合或拼接顺序，转 DIAGNOSE 从随机量产生处回溯分支条件（单变量）。',
+  ],
+  IMPLEMENT: [
+    '准入三件套：notes/entry-chain.md + notes/missing-env-priority.md 齐备、check_env_prerequisites.js 退出码 0、check_trace_gate.js 退出码 0；两文件缺一不得开始补环境。',
+    '禁止手写 vm runner（R2 默认，偏离需说明理由；一律 run_with_trace.js）；禁止先根据 Node.js 报错盲补环境。',
+  ],
+  REAL_VERIFY: [
+    '先离线回归：fixture 逐字段比对通过（compare_fixture.js 退出码 0）才发真实请求，不得带着已知偏差发起。',
+    '写请求格式（Content-Type / body 编码 / 字段名）必须从页面源码或 capture 成功样本取证，禁止猜测（R2 默认，偏离需说明理由）。',
+  ],
+  DIAGNOSE: [
+    '下「连接层拦截 / 纯协议不可绕过」结论前必须完成正向 + 反向双对照（新鲜样本、健康 session、单变量），结果过 check_risk_layer_diagnosis.js；未完成停在 DIAGNOSE，不得下结论、不得转投浏览器内核方案。',
+  ],
+  DELIVER: [
+    '必跑 check_final_artifact.js 与 check_code_quality.js；写交付文档前先读 references/quality/final-summary.md（模板与机器标记契约）。',
+  ],
+  SIGN_ONLY_DELIVER: [
+    '必须标明未完成真实 API 验证，不得使用「服务端已接受」或等价成功措辞。',
+  ],
+  CLEANUP: [
+    '清理 case/tmp/ 中调试脚本、临时下载与秘密材料，保留最小可复核证据；交付检查与代码质量检查必须通过。',
+  ],
 };
 
 function nodeGuide(node) {
+  const lines = [];
   const guide = NODE_GUIDES[node];
-  return guide ? `[GUIDE] ${node} 节点细则：${guide}` : '';
+  if (guide) lines.push(`[GUIDE] ${node} 节点细则：${guide}`);
+  for (const rule of NODE_RULES[node] || []) lines.push(`[RULE] ${node}: ${rule}`);
+  return lines.join('\n');
 }
 
 function todoHint(node, mode) {
@@ -485,7 +548,16 @@ function main() {
       if (!(node in EDGES)) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error(`self-test: TODO 映射含未知节点 ${node}`); }
     }
     if (!todoHint('FORENSIC_CAPTURE', 'enter').includes('第 4 项')) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error('self-test: todoHint 输出异常'); }
-    if (!nodeGuide('DIAGNOSE') || nodeGuide('CLEANUP')) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error('self-test: nodeGuide 映射异常'); }
+    if (!nodeGuide('DIAGNOSE') || nodeGuide('DONE')) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error('self-test: nodeGuide 映射异常'); }
+    if (!nodeGuide('IMPLEMENT').includes('[RULE]') || !nodeGuide('DIAGNOSE').includes('[RULE]')) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error('self-test: 节点硬规则未随 [RULE] 投递'); }
+    // 节点硬规则结构护栏：键必须是真实节点，单条规则不得为空或膨胀（超长即等于把正文搬进脚本）
+    for (const [ruleNode, ruleList] of Object.entries(NODE_RULES)) {
+      if (!(ruleNode in EDGES)) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error(`self-test: NODE_RULES 含未知节点 ${ruleNode}`); }
+      if (!ruleList.length || ruleList.some((r) => typeof r !== 'string' || r.length < 20 || r.length > 160)) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error(`self-test: NODE_RULES.${ruleNode} 规则缺失或长度越界（20~160 字符）`); }
+    }
+    for (const guideNode of Object.keys(NODE_GUIDES)) {
+      if (!NODE_RULES[guideNode]) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error(`self-test: 节点 ${guideNode} 只有 [GUIDE] 没有 [RULE]`); }
+    }
     // TODO 清单必须落盘并可渲染：init 后 state.json 带 todo 字段，且 markdown 输出含勾选框
     const inited = readState(tmp);
     if (!inited.todo || inited.todo.length !== 11) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error('self-test: state.json 未落盘 11 项 todo'); }

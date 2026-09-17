@@ -243,7 +243,7 @@
       "id": "RB-014",
       "title": "Cookie 归因：capture Set-Cookie × trace cookie 写入双源融合可用",
       "skillAnchors": [
-        "analyze_cookie_attribution.js"
+        "判定每个 Cookie 生成方"
       ],
       "script": "analyze_cookie_attribution.js",
       "args": [
@@ -265,7 +265,7 @@
       "id": "RB-015",
       "title": "REAL_VERIFY 前置离线回归：fixture 与实际输出一致时 compare_fixture 放行",
       "skillAnchors": [
-        "compare_fixture.js"
+        "逐字段过门禁比对"
       ],
       "script": "compare_fixture.js",
       "args": [
@@ -315,7 +315,6 @@
       "id": "RB-017",
       "title": "IMPLEMENT 补环境前置：entry-chain + missing-env-priority 两文件达标才放行",
       "skillAnchors": [
-        "check_env_prerequisites.js",
         "两文件缺一不得开始补环境"
       ],
       "script": "check_env_prerequisites.js",
@@ -383,7 +382,7 @@
       "id": "RB-020",
       "title": "验证码题型分类器自测可用（classify_verify 是验证码链路识别的门禁入口）",
       "skillAnchors": [
-        "classify_verify.py"
+        "题型/厂商判定"
       ],
       "script": "classify_verify.py",
       "args": [
@@ -399,7 +398,7 @@
       "id": "RB-021",
       "title": "验证码答案层门禁：缺 captcha_type 的 answer JSON 必须 FAIL",
       "skillAnchors": [
-        "check_captcha_answer.js"
+        "answer JSON 提交前过"
       ],
       "script": "check_captcha_answer.js",
       "args": [
@@ -520,7 +519,7 @@
       "id": "RB-030",
       "title": "search_references：--id 反模式 28 按号提取小节（跟进指针不整读巨头文件）",
       "skillAnchors": [
-        "search_references.js"
+        "按号提取小节"
       ],
       "script": "search_references.js",
       "args": [
@@ -550,7 +549,218 @@
         "现有编号"
       ],
       "skillAnchors": [
-        "禁止为单个编号整读"
+        "不要为单个编号整读"
+      ]
+    },
+    {
+      "id": "RB-032",
+      "title": "路径契约：--case-dir 传 <project-root>/case 与传 <project-root> 等价（check_evidence）",
+      "skillAnchors": [
+        "URL 不是证据"
+      ],
+      "script": "check_evidence.js",
+      "args": [
+        "--case-dir",
+        "{caseDir}/case",
+        "--url",
+        "https://api.example.com/v1/data",
+        "--markdown"
+      ],
+      "files": {
+        "case/forensic/capture.json": "[{\"url\": \"https://api.example.com/v1/data\", \"method\": \"POST\", \"request_body\": \"x=1\", \"response_status\": 200}]",
+        "case/ruyi-trace/logs/trace.ndjson": "{\"api\": \"Headers.set\", \"t\": \"call\", \"args\": [\"x-sign\", \"abc\"], \"url\": \"https://api.example.com/v1/data\", \"stack\": [{\"file\": \"https://static.example.com/app.js\", \"line\": 10, \"col\": 5}]}\n"
+      },
+      "expectExit": 0,
+      "stdoutIncludes": [
+        "存在取证证据"
+      ]
+    },
+    {
+      "id": "RB-033",
+      "title": "路径契约：--case-dir 传 <project-root>/case 时出口门禁仍读到同一份证据",
+      "skillAnchors": [
+        "才可进入 CASE_LOOKUP"
+      ],
+      "script": "check_trace_gate.js",
+      "args": [
+        "--case-dir",
+        "{caseDir}/case",
+        "--url",
+        "https://api.example.com/v1/data",
+        "--require-trace-signal",
+        "Headers.set",
+        "--markdown"
+      ],
+      "files": {
+        "case/forensic/capture.json": "[{\"url\": \"https://api.example.com/v1/data\", \"method\": \"POST\", \"request_body\": \"x=1\", \"response_status\": 200}]",
+        "case/ruyi-trace/logs/trace.ndjson": "{\"api\": \"Headers.set\", \"t\": \"call\", \"args\": [\"x-sign\", \"abc\"], \"url\": \"https://api.example.com/v1/data\", \"stack\": [{\"file\": \"https://static.example.com/app.js\", \"line\": 10, \"col\": 5}]}\n"
+      },
+      "expectExit": 0,
+      "stdoutIncludes": [
+        "可进入 CASE_LOOKUP"
+      ]
+    },
+    {
+      "id": "RB-034",
+      "title": "路径契约：import_ruyitrace_log --case-dir <project-root>/case 不得产生 case/case 幻影目录",
+      "skillAnchors": [
+        "按来源摘要命名"
+      ],
+      "script": "import_ruyitrace_log.js",
+      "args": [
+        "--input",
+        "{caseDir}/in.ndjson",
+        "--case-dir",
+        "{caseDir}/case",
+        "--markdown"
+      ],
+      "files": {
+        "in.ndjson": "{\"api\": \"Headers.set\", \"t\": \"call\", \"args\": [\"x-sign\", \"abc\"], \"url\": \"https://api.example.com/v1/data\", \"stack\": [{\"file\": \"https://static.example.com/app.js\", \"line\": 10, \"col\": 5}]}\n"
+      },
+      "expectExit": 0,
+      "expectFiles": [
+        "case/notes/ruyitrace-summary.md"
+      ],
+      "rejectFiles": [
+        "case/case"
+      ]
+    },
+    {
+      "id": "RB-035",
+      "title": "聚合门禁 gate.js：完整证据下 EVIDENCE_GATE 不得出现 FAIL（防二次拼接回归）",
+      "skillAnchors": [
+        "进入每个节点前聚合跑该节点必验门禁"
+      ],
+      "script": "gate.js",
+      "args": [
+        "--case-dir",
+        "{caseDir}",
+        "--at",
+        "EVIDENCE_GATE",
+        "--url",
+        "https://api.example.com/v1/data",
+        "--inputs",
+        "{caseDir}",
+        "--markdown"
+      ],
+      "files": {
+        "case/forensic/capture.json": "[{\"url\": \"https://api.example.com/v1/data\", \"method\": \"POST\", \"request_body\": \"x=1\", \"response_status\": 200}]",
+        "case/ruyi-trace/logs/trace.ndjson": "{\"api\": \"Headers.set\", \"t\": \"call\", \"args\": [\"x-sign\", \"abc\"], \"url\": \"https://api.example.com/v1/data\", \"stack\": [{\"file\": \"https://static.example.com/app.js\", \"line\": 10, \"col\": 5}]}\n"
+      },
+      "expectExit": 0,
+      "stdoutIncludes": [
+        "PASS `check_evidence.js`"
+      ],
+      "stdoutExcludes": [
+        "FAIL"
+      ]
+    },
+    {
+      "id": "RB-036",
+      "title": "节点规则投递：IMPLEMENT 必须同时下发准入三件套与「禁止手写 vm runner」",
+      "skillAnchors": [],
+      "script": "state_machine.js",
+      "args": [
+        "--case-dir",
+        "{caseDir}",
+        "--set",
+        "IMPLEMENT",
+        "--force",
+        "--markdown"
+      ],
+      "files": {
+        "case/state.json": "{\"version\":1,\"node\":\"INTENT_CONFIRM\",\"visited\":[\"INTENT_CONFIRM\"],\"history\":[],\"blocks\":[],\"stepCount\":0,\"stepNode\":\"INTENT_CONFIRM\",\"todo\":[]}"
+      },
+      "expectExit": 0,
+      "stdoutIncludes": [
+        "禁止手写 vm runner",
+        "两文件缺一不得开始补环境"
+      ]
+    },
+    {
+      "id": "RB-037",
+      "title": "节点规则投递：REAL_VERIFY 必须同时下发离线回归与写请求格式取证规则",
+      "skillAnchors": [],
+      "script": "state_machine.js",
+      "args": [
+        "--case-dir",
+        "{caseDir}",
+        "--set",
+        "REAL_VERIFY",
+        "--force",
+        "--markdown"
+      ],
+      "files": {
+        "case/state.json": "{\"version\":1,\"node\":\"INTENT_CONFIRM\",\"visited\":[\"INTENT_CONFIRM\"],\"history\":[],\"blocks\":[],\"stepCount\":0,\"stepNode\":\"INTENT_CONFIRM\",\"todo\":[]}"
+      },
+      "expectExit": 0,
+      "stdoutIncludes": [
+        "写请求格式",
+        "不得带着已知偏差发起。"
+      ]
+    },
+    {
+      "id": "RB-038",
+      "title": "动作守卫：--guard replay 在 INTENT_CONFIRM 必须拒绝（会话保护 / 禁前置重放）",
+      "skillAnchors": [
+        "阶段动作边界"
+      ],
+      "script": "state_machine.js",
+      "args": [
+        "--case-dir",
+        "{caseDir}",
+        "--guard",
+        "replay",
+        "--markdown"
+      ],
+      "files": {
+        "case/state.json": "{\n  \"version\": 1,\n  \"node\": \"INTENT_CONFIRM\",\n  \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n  \"visited\": [\n    \"INTENT_CONFIRM\"\n  ],\n  \"history\": [],\n  \"blocks\": [],\n  \"stepCount\": 0,\n  \"stepNode\": \"INTENT_CONFIRM\"\n}\n"
+      },
+      "expectExit": 2,
+      "stdoutIncludes": [
+        "禁止发起重放"
+      ]
+    },
+    {
+      "id": "RB-039",
+      "title": "节点规则投递：IDENTIFY 必须下发「参数名存在 ≠ 参数生效」判据",
+      "skillAnchors": [],
+      "script": "state_machine.js",
+      "args": [
+        "--case-dir",
+        "{caseDir}",
+        "--set",
+        "IDENTIFY",
+        "--force",
+        "--markdown"
+      ],
+      "files": {
+        "case/state.json": "{\"version\":1,\"node\":\"INTENT_CONFIRM\",\"visited\":[\"INTENT_CONFIRM\"],\"history\":[],\"blocks\":[],\"stepCount\":0,\"stepNode\":\"INTENT_CONFIRM\",\"todo\":[]}"
+      },
+      "expectExit": 0,
+      "stdoutIncludes": [
+        "参数名存在 ≠ 参数生效"
+      ]
+    },
+    {
+      "id": "RB-040",
+      "title": "节点规则投递：SIGN_ONLY_DELIVER 必须下发「不得宣称真实验证通过」约束",
+      "skillAnchors": [],
+      "script": "state_machine.js",
+      "args": [
+        "--case-dir",
+        "{caseDir}",
+        "--set",
+        "SIGN_ONLY_DELIVER",
+        "--force",
+        "--markdown"
+      ],
+      "files": {
+        "case/state.json": "{\"version\":1,\"node\":\"INTENT_CONFIRM\",\"visited\":[\"INTENT_CONFIRM\"],\"history\":[],\"blocks\":[],\"stepCount\":0,\"stepNode\":\"INTENT_CONFIRM\",\"todo\":[]}"
+      },
+      "expectExit": 0,
+      "stdoutIncludes": [
+        "必须标明未完成真实 API 验证"
       ]
     }
   ]

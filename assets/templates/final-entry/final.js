@@ -34,11 +34,11 @@ const { URL } = require('url');
 // ============================================================
 // 依赖（由用户从 templates 复制到 result/src/ 后填充）
 // ============================================================
-// 补环境：从 templates/vm-sandbox/install-env.js 复制到 result/src/env/install-env.js
+// 补环境：从 assets/templates/vm-sandbox/install-env.js 复制到 result/src/env/install-env.js
 const { installEnv } = require('./src/env/install-env');
 // 签名生成：用户自行实现（参考 cases/ 同类案例），需导出 generateSign + buildParams
 const signer = require('./src/signer');
-// 请求客户端：从 templates/node-request/client.js 复制到 result/src/request/client.js
+// 请求客户端：从 assets/templates/node-request/client.js 复制到 result/src/request/client.js
 const { createRequestSession, CookieJar } = require('./src/request/client');
 
 // 指纹 fixture：用户从浏览器采集真实值写入 result/src/env/fixtures/index.js（可选）

@@ -183,7 +183,7 @@ Object.defineProperty(Navigator.prototype, 'userAgent', {
 
 在目标 JS 所在运行上下文内使用 `NativeProtect` 保护。必须在加载目标 JS 之前执行。
 
-完整实现见 `assets/env-patch-snippets/native-protect.js`（可被 `templates/vm-sandbox/install-env.js` 直接 require）。覆盖通道：
+完整实现见 `assets/env-patch-snippets/native-protect.js`（可被 `assets/templates/vm-sandbox/install-env.js` 直接 require）。覆盖通道：
 
 - `fn.toString()` / `Function.prototype.toString.call(fn)` / `String(fn)` / `fn + ""`
 - `fn.toString.toString()`

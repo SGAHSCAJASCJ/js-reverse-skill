@@ -23,7 +23,7 @@ VMP 反编译的核心 = **理解 VM 如何运行，再按运行流程把指令�
 5. **异常表还原**：`C.push([catchPc, stackLen, slot])` 结构即 try/catch 元数据——出栈恢复 `g = o[0]; n.length = o[1]; n[o[2]][0] = K`。
 6. **重建 AST 生成源码**，与真机输出逐值对拍。
 
-工具偏好：重写指令时用**改写原 JS + 打印**的方式做对照（保留原语义），比凭空重建解释器快得多；AST 生成复用 `assets/ast-patterns` 的 babel 基建。
+工具偏好：重写指令时用**改写原 JS + 打印**的方式做对照（保留原语义），比凭空重建解释器快得多；AST 生成复用 `scripts/ast-patterns` 的 babel 基建。
 
 ## 纪律
 

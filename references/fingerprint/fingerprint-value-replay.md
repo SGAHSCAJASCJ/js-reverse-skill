@@ -203,7 +203,7 @@ Node.js 交付环境中匹配指纹样本时，按以下顺序：
 允许：
 
 - 前置取证阶段用用户确认的工具采集指纹 API 参数、返回值和调用栈。
-- Node.js 交付环境中按 fixture 回放采样值（参考 `templates/vm-sandbox/install-env.js` 模板和 `references/env/env-native-protection.md` 保护策略）。
+- Node.js 交付环境中按 fixture 回放采样值（参考 `assets/templates/vm-sandbox/install-env.js` 模板和 `references/env/env-native-protection.md` 保护策略）。
 - 对不影响目标参数的 API 做明确降级，但必须在 notes 中说明证据等级。
 - 对目标未访问的 API 不补。
 
@@ -235,7 +235,7 @@ Node.js 交付环境中匹配指纹样本时，按以下顺序：
    node scripts/check_fingerprint_fixture.js --fixture case/fixtures/fingerprint.fixture.json --require canvas,webgl --markdown
    ```
 
-7. 参照 `templates/vm-sandbox/install-env.js` 模板在最终项目 `result/src/env/` 中实现指纹回放，按 fixture 接入。
+7. 参照 `assets/templates/vm-sandbox/install-env.js` 模板在最终项目 `result/src/env/` 中实现指纹回放，按 fixture 接入。
 8. 对目标 JS 运行 fixtures，若缺样本，补采样而不是改用自动化。
 9. 交付前运行：
 

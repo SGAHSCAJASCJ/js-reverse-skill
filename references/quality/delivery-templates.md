@@ -64,7 +64,7 @@
 - `final.js` 是**唯一执行入口**，必须带 `require.main === module` 守卫（被 `require('./result')` 时只导出 `sign` / `buildSignedRequest` 等 API、不自动执行、不发请求）。
 - `result/final.js` 无外部依赖文件（有依赖需放 `result/src/` 下）。
 - `src/` 中模块不能直接启动浏览器、启动服务或发起额外批量请求。
-- `native-protect.js` 已内联进 `result/src/env/`（从 `templates/vm-sandbox/` 复制），交付物不依赖 skill 仓库目录。
+- `native-protect.js` 已内联进 `result/src/env/`（从 `assets/templates/vm-sandbox/` 复制），交付物不依赖 skill 仓库目录。
 - 不交付 `test/`、`tests/`、`__tests__/`、`tmp/`、`logs/`、`hooks/`、`screenshots/`、`ruyi-trace/`、`browser-profile/`。
 
 ```text
@@ -96,7 +96,7 @@ result/
 ├── 最终项目总结.md       # 必选：项目总结报告
 ├── 经验沉淀-<站点>.md    # 必选：经验沉淀文档（按 cases/_template.md 的 Part 2 格式）
 └── src/
-    ├── request/client.py  # 从 templates/python-request/client.py 复制，含 create_request_session
+    ├── request/client.py  # 从 assets/templates/python-request/client.py 复制，含 create_request_session
     ├── signer.py         # generate_sign(params, env) + build_params(config)，用户实现
     └── normalize.py
 ```
@@ -106,7 +106,7 @@ result/
 
 ## `final.js` 入口职责
 
-验证码入口例外：`templates/captcha-verify/` 和 `templates/captcha-verify-py/` 是 provider-neutral 骨架。真实验证码协议必须由当前 case 的 adapter 实现，不能把某个厂商的接口、字段、请求方法或凭据形态写入通用模板。
+验证码入口例外：`assets/templates/captcha-verify/` 和 `assets/templates/captcha-verify-py/` 是 provider-neutral 骨架。真实验证码协议必须由当前 case 的 adapter 实现，不能把某个厂商的接口、字段、请求方法或凭据形态写入通用模板。
 
 成功语义（所有入口统一）：HTTP 200 ≠ 成功。自验必须在 config.json 配置 `responseValidation`（`jsonPath` / `minLength` / `contains`，从本 case 真实成功样本提取，风控接口常以 200 + 错误码返回）；未配置时所有 200 响应记「未判定」并以退出码 3 结束，交付不得宣称通过。退出码约定：0=全部通过、1=入口异常、2=存在失败、3=存在未判定。自验结束必须写 `验证记录.json`（`mode` / `responseValidation` / `summary{pass,fail,unverified}` / `attempts[]{judgment: pass|fail|unverified|error}`）。
 
@@ -124,7 +124,7 @@ try {
   // 无动态资源时可以不提供刷新模块；存在动态资源时必须提供并通过检查。
 }
 
-const { installEnv } = require('./src/env/install-env');   // 用户从 templates/vm-sandbox/ 复制
+const { installEnv } = require('./src/env/install-env');   // 用户从 assets/templates/vm-sandbox/ 复制
 const { generateSign, buildParams } = require('./src/signer'); // 用户实现 generateSign + buildParams
 const { createRequestSession } = require('./src/request/client');
 

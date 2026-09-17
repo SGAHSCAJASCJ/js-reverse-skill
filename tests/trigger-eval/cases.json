@@ -1,0 +1,32 @@
+{
+  "protocol": "把每条 request 连同 SKILL.md frontmatter 的 description 交给模型，只问「该请求是否应由本 skill 接管」。不得提供 SKILL.md 正文、用例标注或答案。判定结果写成 [{ \"id\": \"...\", \"decision\": \"trigger|no-trigger\" }] 后用 node scripts/eval_trigger.js --score <file> 打分。",
+  "cases": [
+    { "id": "T01", "request": "这个网站登录接口有个 sign 参数，帮我逆向一下怎么生成的，要能离线算出来", "expect": "trigger", "why": "网页端请求签名还原 + 纯协议复现，正是本 skill 的主场景" },
+    { "id": "T02", "request": "帮我分析这个页面请求里的 cookie m 是怎么算的，写个 Node 脚本复现", "expect": "trigger", "why": "cookie 生成逻辑逆向（网页端）" },
+    { "id": "T03", "request": "这段 JS 被 obfuscator 混淆了，帮我反混淆看清加密逻辑", "expect": "trigger", "why": "网页端混淆 JS 还原，正文明确覆盖" },
+    { "id": "T04", "request": "目标参数在 JSVMP 虚拟化里，帮忙黑盒执行还原出来", "expect": "trigger", "why": "JSVMP 黑盒执行属覆盖范围内" },
+    { "id": "T05", "request": "这个请求参数的加密逻辑编译进 wasm 了，怎么用 Node 复现", "expect": "trigger", "why": "WASM 加密参数还原" },
+    { "id": "T06", "request": "我的纯协议请求一直被 403，怀疑是 TLS 指纹（JA3/JA4）问题，怎么对齐", "expect": "trigger", "why": "TLS 指纹模拟 + 风控对抗，属覆盖范围" },
+    { "id": "T07", "request": "滑块验证码的缺口坐标怎么从图片里算出来，要做成纯协议提交", "expect": "trigger", "why": "验证码 verify 链路还原" },
+    { "id": "T08", "request": "这个页面每次请求前先调一个接口拿 challenge，然后用它算签名，帮我还原整条会话链", "expect": "trigger", "why": "Session 请求链还原" },
+    { "id": "T09", "request": "设备指纹参数 deviceId 是怎么生成的？页面上刷新会变，帮我找出算法", "expect": "trigger", "why": "设备指纹生成逻辑逆向（网页端）" },
+    { "id": "T10", "request": "帮我抓一下这个站点的接口，然后用 Python requests 复现请求（含加密参数）", "expect": "trigger", "why": "网页端加密参数 + 纯协议复现，交付 Python 实现" },
+    { "id": "T11", "request": "这个 H5 页面在手机浏览器里的签名参数跟 PC 不一样，帮我看看差异", "expect": "trigger", "why": "移动 H5 属明确覆盖范围" },
+    { "id": "T12", "request": "站点把参数藏在 localStorage 里再拼进请求，帮我追一下传递链路", "expect": "trigger", "why": "隐蔽信道参数传递，属覆盖范围" },
+
+    { "id": "T13", "request": "帮我用 frida hook 这个安卓 App 的 so 库，还原它的加密参数", "expect": "no-trigger", "why": "App 与 Native 逆向被 description 边界明确排除" },
+    { "id": "T14", "request": "这个 iOS 应用的网络请求加了壳，怎么脱壳分析", "expect": "no-trigger", "why": "iOS/App 逆向超纲" },
+    { "id": "T15", "request": "帮我反编译这个 Electron 桌面程序的 asar，找出它的接口加密逻辑", "expect": "no-trigger", "why": "桌面程序逆向超纲" },
+    { "id": "T16", "request": "这个小程序原生插件里是 .so 加壳的，帮我还原它的签名", "expect": "no-trigger", "why": "小程序仅限纯 JS 参数还原，Native/加壳部分除外" },
+    { "id": "T17", "request": "帮我写个 Playwright 脚本自动登录这个网站并抓数据，交付可跑的自动化程序", "expect": "no-trigger", "why": "交付浏览器自动化违反纯协议交付边界；本 skill 交付纯协议实现" },
+    { "id": "T18", "request": "介绍一下 RSA 和 SHA-256 的区别，以及常见签名方案", "expect": "no-trigger", "why": "通用密码学概念问答，不是逆向任务" },
+    { "id": "T19", "request": "帮我把这个 React 登录表单做出来，要带表单校验", "expect": "no-trigger", "why": "普通前端业务开发" },
+    { "id": "T20", "request": "这段 Python 报 UnicodeDecodeError，帮我看看怎么改", "expect": "no-trigger", "why": "通用编程求助，与网页端参数逆无关" },
+    { "id": "T21", "request": "帮我用 Burp 抓包分析这个 App 的登录流程", "expect": "no-trigger", "why": "App 抓包分析超纲" },
+    { "id": "T22", "request": "服务器上 nginx 一直 403，帮我排查一下配置", "expect": "no-trigger", "why": "运维排障，与 JS 参数逆无关" },
+    { "id": "T23", "request": "帮我给这个网站写一个爬虫，只要能拿到列表数据就行，页面是静态的没有加密", "expect": "no-trigger", "why": "无参数还原需求的普通爬虫，不属本 skill 的触发条件" },
+    { "id": "T24", "request": "解释一下 TLS 握手过程，越详细越好", "expect": "no-trigger", "why": "通用网络原理问答，不是指纹模拟任务" },
+    { "id": "T25", "request": "帮我看看这个前端 bundle 的打包配置为什么体积这么大", "expect": "no-trigger", "why": "前端工程优化，非逆向" },
+    { "id": "T26", "request": "这段 JS 是别人给我的，帮我解释一下它每行做什么（普通业务代码，没有加密）", "expect": "no-trigger", "why": "普通代码讲解，无动态参数还原需求" }
+  ]
+}

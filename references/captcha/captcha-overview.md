@@ -6,7 +6,7 @@
 
 ## 四层分工模型
 
-> **模板边界**：`templates/captcha-verify/` 与 `templates/captcha-verify-py/` 只提供 provider-neutral 的入口和 adapter 契约，不代表任何真实厂商协议。平台接口顺序、HTTP 方法、JSONP、字段、加密和成功凭据必须由当前 case 的抓包/RuyiTrace/成功样本确定，写入 `result/src/adapter.*`；不得把历史案例字段复制回通用模板。
+> **模板边界**：`assets/templates/captcha-verify/` 与 `assets/templates/captcha-verify-py/` 只提供 provider-neutral 的入口和 adapter 契约，不代表任何真实厂商协议。平台接口顺序、HTTP 方法、JSONP、字段、加密和成功凭据必须由当前 case 的抓包/RuyiTrace/成功样本确定，写入 `result/src/adapter.*`；不得把历史案例字段复制回通用模板。
 
 | 层 | 内容 | 归属 |
 |---|---|---|

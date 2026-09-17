@@ -163,6 +163,17 @@ def find_project_root() -> str:
     return os.getcwd()
 
 
+def resolve_case_subdir(case_dir: str) -> str:
+    """严格归一化到 case 目录：项目根 → <project-root>/case；已是 case 目录（目录名即 case）→ 自身。
+
+    与 scripts/lib/paths.js 的 resolveCaseSubdir 同语义：不依赖目录是否已存在，
+    保证 `--case-dir <project-root>` 与 `--case-dir <project-root>/case` 两种入参等价，
+    避免历史误建的 `case/case` 目录被当作目标。
+    """
+    p = os.path.abspath(case_dir)
+    return p if os.path.basename(p).lower() == "case" else os.path.join(p, "case")
+
+
 def _resolve_exe_from_install_json(runtime_dir: str) -> Optional[str]:
     """读 managed runtime 根目录 install.json 的 executable 字段，解析出 Firefox 可执行文件路径。"""
     marker = os.path.join(runtime_dir, "install.json")
@@ -1997,7 +2008,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     if not a.json and not a.markdown:
         a.markdown = True
     a.case_dir = os.path.abspath(a.case_dir)
-    a.case_subdir = os.path.join(a.case_dir, "case")
+    a.case_subdir = resolve_case_subdir(a.case_dir)
     a.out_dir = os.path.abspath(a.out_dir) if a.out_dir else os.path.join(a.case_subdir, "forensic")
     a.profile_dir = os.path.abspath(a.profile_dir) if a.profile_dir else os.path.join(a.case_subdir, "tmp", "ruyipage-profile")
     a.fp_dir = os.path.abspath(a.fp_dir) if a.fp_dir else os.path.join(a.case_subdir, "tmp", "fingerprint")

@@ -24,7 +24,7 @@ let NativeProtect = null;
 try {
   NativeProtect = require('./native-protect.js');
 } catch (_) {
-  try { NativeProtect = require('../../assets/env-patch-snippets/native-protect.js'); } catch (_) { NativeProtect = null; }
+  try { NativeProtect = require('../../env-patch-snippets/native-protect.js'); } catch (_) { NativeProtect = null; }
 }
 
 // 必须在 vm 上下文中删除 / 置 undefined 的宿主全局（阻断 Node 能力泄露）。

@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const crypto = require('crypto');
+const paths = require('./lib/paths');
 const { assertTraceSignals, matchesTraceSignal } = require('./lib/trace-signal-policy');
 
 function parseArgs(argv) {
@@ -381,8 +382,7 @@ async function main() {
   if (!args.inputs.length) throw new Error('必须提供 --input');
   if (!args.caseDir) throw new Error('必须提供 --case-dir');
   const inputs = args.inputs.map((p) => path.resolve(p));
-  const caseDir = path.resolve(args.caseDir);
-  const caseSubdir = path.join(caseDir, 'case');
+  const caseSubdir = paths.resolveCaseSubdir(args.caseDir);
   for (const input of inputs) if (!exists(input)) throw new Error(`日志文件不存在：${input}`);
   fs.mkdirSync(caseSubdir, { recursive: true });
   const logDir = path.join(caseSubdir, 'ruyi-trace', 'logs');

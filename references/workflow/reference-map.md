@@ -11,12 +11,12 @@
 | 任务分流、阶段安排、常见坑、经验法则、场景速查、信息收集 | `references/workflow/decision-tree.md`、`phase-flow.md`、`scenario-quickref.md`、`common-pitfalls.md`、`experience-rules.md`、`references/quality/intake-template.md` |
 | 案例搜索与版本复用、SDK 升级适配 | `cases/index.json`、`scripts/search_cases.js`，命中后才读对应 case；`references/workflow/version-adaptation.md` |
 | 加密入口和算法识别 | `references/crypto/crypto-entry.md`、`crypto-patterns.md`、`algorithm-families.md`；密文特征入口 `scripts/identify_crypto.js`，Cookie 生成方归因 `scripts/analyze_cookie_attribution.js` |
-| 混淆与 AST | `references/deobfuscation/obfuscation-identify.md`、`assets/ast-patterns/` |
+| 混淆与 AST | `references/deobfuscation/obfuscation-identify.md`、`scripts/ast-patterns/` |
 | 字体映射/CSS 渲染层反爬（woff/woff2、PUA 码点） | `references/rendering/font-anti-crawl.md` |
 | 图片型内容反爬（base64/像素判定、雪碧图数字拼装、DOM ground truth 验证） | `references/rendering/image-content-reversal.md` |
 | 浏览器环境、对象模型、真实性保护与 native 缺口 | `references/env/env-object-model.md`、`env-debug-loop.md`、`env-detect-bypass.md`、`env-native-protection.md`、`native-capability-gap.md`、`object-shape-private-state.md`、`runtime-frameworks.md`、`webapi-env-detection-matrix.md` |
 | iframe、Worker 或移动 H5 | `references/env/env-iframe.md`、`mobile-h5-env.md`、`references/workflow/worker-signing.md` |
-| WASM | `references/env/env-wasm.md`，遇到 import、memory、streaming 或整包 Emscripten/webpack bundle 黑盒执行再读 `env-wasm-advanced.md`，harness 用 `templates/wasm-loader/emscripten-bundle-blackbox.js` |
+| WASM | `references/env/env-wasm.md`，遇到 import、memory、streaming 或整包 Emscripten/webpack bundle 黑盒执行再读 `env-wasm-advanced.md`，harness 用 `assets/templates/wasm-loader/emscripten-bundle-blackbox.js` |
 | TLS、Cookie、Session、动态资源、协议分析、WebSocket | `references/network/tls-validation.md`、`session-chain.md`、`cookie-generation.md`、`dynamic-resource.md`、`protocol-analysis.md`、`websocket-signing.md` |
 | XHR/fetch 语义或会话桥接 | `references/network/xhr-fetch-semantics-audit.md`、`xhr-fetch-session-bridge.md` |
 | IP 风控与静默失败诊断 | `references/network/ip-risk-control.md`（含签名内容层/连接层分层定位矩阵）、`node-leakage.md` |

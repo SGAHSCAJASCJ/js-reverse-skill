@@ -376,7 +376,7 @@ function timestamp() {
 
 function buildPlan(args, trace) {
   const caseDir = path.resolve(args.caseDir || '.');
-  const caseSubdir = path.join(caseDir, 'case');
+  const caseSubdir = paths.resolveCaseSubdir(caseDir);
   const outDir = path.resolve(args.outDir || path.join(caseSubdir, 'ruyi-trace', 'logs'));
   const profileDir = path.resolve(args.profileDir || path.join(caseSubdir, 'tmp', 'ruyitrace-profile'));
   const traceFile = path.join(outDir, `trace-${timestamp()}.ndjson`);

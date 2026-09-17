@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const paths = require('./lib/paths');
 const { assertTraceSignals, matchesTraceSignal } = require('./lib/trace-signal-policy');
 
 function parseArgs(argv) {
@@ -570,7 +571,7 @@ function classifyUserInput(p, warnings, target, networkSignals, traceSignals) {
 
 function check(args) {
   const caseDir = path.resolve(args.caseDir);
-  const caseSubdir = path.join(caseDir, 'case');
+  const caseSubdir = paths.resolveCaseSubdir(caseDir);
   const warnings = [];
   const missing = [];
   const target = getTarget(args.url || '');

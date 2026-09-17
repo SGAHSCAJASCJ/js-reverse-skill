@@ -23,12 +23,12 @@
 
 1. IMPLEMENT 编码时复制到 `result/`：
    ```
-   cp templates/captcha-verify-py/final.py result/
-   cp templates/captcha-verify-py/config.json result/
-   cp templates/captcha-verify-py/adapter_example.py result/src/adapter.py
-   cp templates/captcha-verify-py/requirements.txt result/
+   cp assets/templates/captcha-verify-py/final.py result/
+   cp assets/templates/captcha-verify-py/config.json result/
+   cp assets/templates/captcha-verify-py/adapter_example.py result/src/adapter.py
+   cp assets/templates/captcha-verify-py/requirements.txt result/
    ```
-2. 从 `templates/python-request/client.py` 复制 TLS 客户端到 `result/src/request/client.py`
+2. 从 `assets/templates/python-request/client.py` 复制 TLS 客户端到 `result/src/request/client.py`
 3. 实现 `result/src/adapter.py`，至少提供 `load_challenge`、`resolve_assets`、`prepare_answer`、`build_verify_request`、`parse_verify_response`、`consume_credential`
 4. 实现 `result/src/solver.py`（答案求解：`solve(image_bytes, captcha_type, options)` → answer dict，参考 `references/captcha/captcha-solving-handoff.md`）
 5. 轨迹生成或行为构造由 adapter / solver 按本 case 证据决定，不使用默认通用轨迹冒充真实协议

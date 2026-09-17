@@ -1,6 +1,6 @@
 # WASM 环境补全指南
 
-加密逻辑在 WebAssembly 中实现时的环境补全方案。模板参考 `templates/wasm-loader/`。
+加密逻辑在 WebAssembly 中实现时的环境补全方案。模板参考 `assets/templates/wasm-loader/`。
 
 ## 触发条件
 

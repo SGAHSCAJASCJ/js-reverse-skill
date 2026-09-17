@@ -21,7 +21,7 @@
 
 ## 场景 4：JS 混淆/OB 混淆
 - **特征**：`_0x` 前缀 / 十六进制字符串数组 / 控制流平坦化
-- **还原**：走 `assets/ast-patterns/` AST 反混淆流水线
+- **还原**：走 `scripts/ast-patterns/` AST 反混淆流水线
 
 ## 场景 5：WASM 加密
 - **特征**：加密函数调用 WebAssembly 导出函数；或 webpack bundle 内嵌 wasm base64 + Emscripten glue（异步 glue + 内部 fetch，如 handshake 类风控 SDK）

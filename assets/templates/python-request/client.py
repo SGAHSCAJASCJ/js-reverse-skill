@@ -66,7 +66,7 @@ def detect_available_client() -> str:
 # ============================================================
 class CookieJar:
     """
-    Cookie Jar，与 templates/node-request/client.js 的 CookieJar 接口对齐。
+    Cookie Jar，与 assets/templates/node-request/client.js 的 CookieJar 接口对齐。
 
     提供：
         - set(name, value, domain='', path='/', expires=None)  添加/覆盖单条 cookie（已过期则删除）

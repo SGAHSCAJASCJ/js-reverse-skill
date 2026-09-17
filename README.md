@@ -1,6 +1,6 @@
 # js-reverse-skill
 
-网页端 JavaScript 请求参数逆向与纯协议还原。分析网页签名、Cookie/Token、设备指纹、混淆、WASM、JSVMP、验证码 verify 或 Session/TLS 请求链时触发，覆盖桌面网页、移动 H5 与内置浏览器，交付 Node.js/Python 实现。不用于 App、小程序、桌面程序及 Native 逆向；JSVMP 默认黑盒执行或最小环境复现。
+网页端 JavaScript 请求参数逆向与纯协议还原。分析网页签名、Cookie/Token、设备指纹、混淆、WASM、JSVMP、验证码 verify 或 Session/TLS 请求链时触发，覆盖桌面网页、移动 H5 与内置浏览器，交付 Node.js/Python 实现。不用于 App、桌面程序及 Native 逆向；小程序限纯 JS 参数还原（Native/加壳部分除外）；JSVMP 默认黑盒执行或最小环境复现。
 
 ## 来源
 
@@ -23,7 +23,7 @@
 - JSVMP 黑盒执行或最小环境复现、WASM 加载、混淆还原、TLS 指纹模拟
 - 验证码封装层的 verify 接口参数、轨迹加密和 challenge 绑定
 
-**不触发**：App 内 JS、小程序容器、Windows 桌面程序、EXE、DLL、Native、Frida 或 IDA 逆向。
+**不触发**：App 内 JS、Windows 桌面程序、EXE、DLL、Native、Frida 或 IDA 逆向；小程序仅限纯 JS 参数还原（Native/加壳部分除外）。
 
 **JSVMP 边界**：默认黑盒执行或最小环境复现，不反编译字节码源码。
 
@@ -35,12 +35,12 @@ js-reverse-skill/
 ├── README.md             本文件
 ├── CHANGELOG.md          版本变更记录（每次 bump 同步更新；仅保留最近版本）
 ├── CHANGELOG.archive.md  历史版本归档（2.3.87 及更早）
-├── assets/               可复用资产（AST 反混淆 + 补环境片段 + fixture 模板）
-├── templates/            7 类交付入口模板（Node/Python、请求客户端、vm 沙箱、WASM、验证码）
-├── references/           知识参考（12 个专题目录，按需读取；含验证码封装层与答案层资产、字体映射反爬）
-├── cases/                22 个实证案例 + `index.json` 机器索引
-├── tests/                路由/门禁回归基准（状态机硬规则的可执行断言，CI 双平台运行）
-└── scripts/              工具脚本（ruyipage+RuyiTrace 采集/导入/检查 + 密文特征识别/Cookie 归因 + 验证码题型分类/坐标/轨迹/答案校验 + 供应链 pin）
+├── assets/               进入交付产物的可复用资源（补环境片段 + fixture 模板）
+│   └── templates/        7 类交付入口模板（Node/Python、请求客户端、vm 沙箱、WASM、验证码）
+├── references/           知识参考（13 个专题目录，按需读取；含验证码封装层与答案层资产、字体映射反爬）
+├── cases/                51 个实证案例 + `index.json` 机器索引
+├── tests/                路由/门禁回归基准（硬规则的可执行断言）+ 触发精度评估语料；CI 双平台运行
+└── scripts/              工具脚本（ruyipage+RuyiTrace 采集/导入/检查 + 密文特征识别/Cookie 归因 + 验证码题型分类/坐标/轨迹/答案校验 + 供应链 pin + AST 反混淆工具链 ast-patterns/）
 ```
 
 ## 安装到 AI 编程助手
@@ -48,7 +48,7 @@ js-reverse-skill/
 本 Skill 是纯目录 + `SKILL.md`，不绑定特定客户端。任选一种方式接入：
 
 - **Agent Skills 机制**（Claude Code / ZCode / TRAE 等）：把整个仓库克隆到对应 skills 目录即可被自动发现，常见位置：用户级 `~/.agents/skills/js-reverse-skill/`、`~/.claude/skills/js-reverse-skill/`，或项目级 `<project>/.claude/skills/`、`<project>/.codex/skills/`。
-- **自定义指令 / 系统提示注入**（Cursor / Copilot 等）：把 `SKILL.md` 内容作为项目规范注入（如 `.cursorrules`、copilot-instructions.md 引用），并保证 `scripts/`、`references/`、`templates/`、`cases/` 随仓库可访问——脚本按 skill 根相对路径调用。
+- **自定义指令 / 系统提示注入**（Cursor / Copilot 等）：把 `SKILL.md` 内容作为项目规范注入（如 `.cursorrules`、copilot-instructions.md 引用），并保证 `scripts/`（含 `scripts/ast-patterns/`）、`references/`、`assets/`、`cases/` 随仓库可访问——脚本按 skill 根相对路径调用。
 
 运行要求：Node.js ≥ 18（门禁/检查脚本离线可用）；Python ≥ 3.9 仅取证（`forensic_ruyipage.py`）与验证码辅助脚本需要；ruyipage/RuyiTrace 由 `install_all.js` 按需安装到用户工程 `tools/`，首次安装后建议用 `check_tool_pins.js --record` 固化哈希锁定；浏览器 MCP 为可选兜底依赖（仅引擎检测降级场景使用，见「执行门禁」），不在 `install_all.js` 管理范围，由用户在宿主侧自行安装。
 

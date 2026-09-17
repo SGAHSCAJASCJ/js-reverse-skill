@@ -34,8 +34,8 @@
 diff <(js-beautify old-webmssdk.js) <(js-beautify new-webmssdk.js) > sdk-diff.txt
 
 # 或用 AST diff（更准确）
-node assets/ast-patterns/scripts/run-pipeline.js new-webmssdk.js ./diff-output
-node assets/ast-patterns/scripts/compare-with-reference.js --reference ./old-decoded.js --current ./new-decoded.js
+node scripts/ast-patterns/scripts/run-pipeline.js new-webmssdk.js ./diff-output
+node scripts/ast-patterns/scripts/compare-with-reference.js --reference ./old-decoded.js --current ./new-decoded.js
 ```
 
 **重点关注**：
@@ -168,4 +168,4 @@ trace_property_access(mode="summary", collect_values=True)
 | `references/network/dynamic-resource.md` | 动态资源清单（sha256 追踪） |
 | `references/fingerprint/fingerprint-baseline-consistency.md` | 指纹基线对比（版本间 diff） |
 | `cases/_template.md` | case 模板（变体说明段） |
-| `assets/ast-patterns/scripts/compare-with-reference.js` | AST diff 工具 |
+| `scripts/ast-patterns/scripts/compare-with-reference.js` | AST diff 工具 |

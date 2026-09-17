@@ -14,13 +14,13 @@
 | 通用 JSVMP | - | JSVMP 源码插桩 | 路径 A 算法追踪 | `cases/universal-vmp-source-instrumentation.md` |
 | Aliyun WAF 站点 | acw_sc__v2 | acw_sc 系列签名 | 纯算还原 | 通用流程 |
 | Akamai 站点 | sensor_data / _abck | acmescripts | 源码级插桩 + 补环境 | 通用流程 |
-| obfuscator.io 站点 | _0x 前缀 | OB 混淆 | AST 反混淆 + 通用流程 | `assets/ast-patterns/` |
-| reese84 站点 | reese84 | Reese84 challenge | AST 反混淆 + 补环境 | `assets/ast-patterns/patterns.md` |
-| 极验 geetest4 | w / challenge | geetest4 | AST 反混淆 + 验证码交接 | `assets/ast-patterns/patterns.md` |
-| 顶象 dingxiang | dx | dingxiang | AST 反混淆 | `assets/ast-patterns/patterns.md` |
-| 网易 yidun | 易盾验证参数 | yidun | AST 反混淆 | `assets/ast-patterns/patterns.md` |
-| 同花顺 | token | tonghuashun | AST 反混淆 | `assets/ast-patterns/patterns.md` |
-| 小红书 | x-s / x-t | xhs | AST 反混淆 | `assets/ast-patterns/patterns.md` |
+| obfuscator.io 站点 | _0x 前缀 | OB 混淆 | AST 反混淆 + 通用流程 | `scripts/ast-patterns/` |
+| reese84 站点 | reese84 | Reese84 challenge | AST 反混淆 + 补环境 | `scripts/ast-patterns/patterns.md` |
+| 极验 geetest4 | w / challenge | geetest4 | AST 反混淆 + 验证码交接 | `scripts/ast-patterns/patterns.md` |
+| 顶象 dingxiang | dx | dingxiang | AST 反混淆 | `scripts/ast-patterns/patterns.md` |
+| 网易 yidun | 易盾验证参数 | yidun | AST 反混淆 | `scripts/ast-patterns/patterns.md` |
+| 同花顺 | token | tonghuashun | AST 反混淆 | `scripts/ast-patterns/patterns.md` |
+| 小红书 | x-s / x-t | xhs | AST 反混淆 | `scripts/ast-patterns/patterns.md` |
 | 百度指数 | ascToken token | window.aes_encrypt / gtk 哈希族 | 纯算还原（自研哈希 + AES-CBC） | 通用流程 |
 | youdao.com | sign / mysticTime | URI 伪装常量派生 + key-getter | 纯算还原（md5 + AES-128-CBC） | 通用流程 |
 
@@ -126,3 +126,27 @@ Node crypto.publicEncrypt(RSA_PKCS1_PADDING) 纯算；明文含未知常量用�
 | reCAPTCHA | g-recaptcha | 同上 |
 
 验证码场景分层处理：封装层逆向（verify 接口加密参数/轨迹加密）走本 skill `references/captcha/` 子域；题型识别与图像求解参考 `web-verify-patcher`（源自 xbsReverseSkill）。
+
+## T1 识别信号路由表（自 SKILL.md 迁入）
+
+> 识别指纹 → 初始路径；识别≠协议复现，协议细节以本次 case 证据与厂商知识库为准。
+> 识别结果必须引用落盘资源、NDJSON 或网络包具体字段，不以站点名称直接定类。
+
+| 信号 | 初始路径 |
+|---|---|
+| md5、sha、aes、hmac、SM2/SM4/SM3 | 定位入口后优先纯算法还原 |
+| 代码碎片含知名库路径/常量（crypto-js 的 ./cipher-core/./evpkdf 等） | **库家族优先**：原样执行原码 + diff 魔改点，标准件不重逆（match22） |
+| `_0x`、obfuscator.io、控制流平坦化 | AST 反混淆工具链处理（命令入口见下方），再判断是否可纯算 |
+| 200KB+、while-switch、dispatcher、字节码数组 | JSVMP 黑盒执行或最小环境复现，不反编译；**先查 RuyiTrace eval 分类日志落盘源码**（规则 39/反模式 37/match29），无落盘再扫字节码尾部大数字面量判断标准算法族（规则 35/match28） |
+| 128B 密文 + 字节码尾部大数字面量 / X.509 SPKI hex + `getRandomValues` | RSA 族：JSBN 确定性（trace 拼接串逆明文、hex2b64）或 JSEncrypt 随机（SPKI 即公钥 DER，`publicEncrypt` 直出，token 每次不同属预期）——两形态细节见 `references/crypto/algorithm-families.md`（规则 35/38，match27/28） |
+| WebAssembly、wasm base64、webpack 内嵌 wasm | 先整包黑盒，不默认补完整浏览器、禁止先手撕字节码；wasm-bindgen（`__wbg_*` 导入）原样还原 glue（match20，陷阱见路径 C） |
+| 官方包 200 / 重建包必 500——同机同页同输入下唯一变量是 JS 包 | **自同构校验** → 停止环境层修补，转透明边界捕获 + 直接 wasm harness（规则 41~43/反模式 39/40） |
+| 厂商/站点特征（webmssdk/byted_acrawler/bdms、geetest/smcp/dx-captcha/TCaptcha/NECaptcha、h5st/js_security_v3/JA3-JA4、sdenv 等） | 先查 `references/crypto/algorithm-families.md` 站点速查表与识别关键词，按厂商先例导航初始路径；验证码按封装层/答案层/verify 链分层（注意 `byted_acrawler.sign` 多返回老版 `_signature`，`a_bogus`/`X-Bogus` 由 `bdms` 生成，不可混淆） |
+| 参数/状态输入在 trace 中无 writer，或依赖上一次会话、iframe/worker 上下文、渲染产物 | 浏览器隐蔽信道排查，见 `references/web/covert-channel.md` |
+| `Salted__` 魔数、keySize/iterations+盐常量碎片 | OpenSSL Salted 格式：EvpKDF-MD5 派生 key/iv 多块链（match22 案例） |
+| obfuscator **短名混淆**（无 `_0x`）+ 解码器 `charCodeAt(变量+常量)` | **toString 自引用解码**：AST 产物禁执行，原码执行 + 一行导出桩（反模式 31/match23） |
+| 多组输入签名/token **低雪崩**（不同输入仅个位变化甚至同输出） | 结构化魔改哈希或环境分支，优先原码执行 + 环境分支对齐（反模式 29/31、规则 29） |
+| 签名/token **成对或周期性相同**（如 page2/3 相同） | 先做字节级折叠分析（字符级掩码/取模折叠相邻字符，match26），真机与服务端一致时非沙箱 bug |
+| @font-face/FontFace、woff/woff2 动态字体、PUA 码点（U+E000–U+F8FF） | 字体映射反爬：取证字体资源判静态/动态映射再提取 cmap（`references/rendering/font-anti-crawl.md`） |
+
+> 与上文「识别关键词」配合使用；厂商精确名只在本文件出现，通用 workflow 文档只写指针（SKILL.md 第 3 节厂商知识分级）。

@@ -539,7 +539,7 @@ async function loadWasmCached(wasmPath, importObject) {
 | bundle 依赖 `document.currentScript` / 动态 `import()` | 加载报错或找不到 chunk | mock `document.currentScript`；把内嵌 chunk 的 base64 解出后手动注册；`import` 注入同步返回 Promise 的 mock |
 | glue 内部 `fetch` 未走通 | body 一直为空 | 确认 sandbox 的 `fetch` 是 glue 闭包捕获的那个引用，必要时用 `runInContext` 改写全局 |
 
-> 完整 harness 模板见 `templates/wasm-loader/emscripten-bundle-blackbox.js`。
+> 完整 harness 模板见 `assets/templates/wasm-loader/emscripten-bundle-blackbox.js`。
 
 ## wasm 边界透明捕获 → 直接 harness（黑盒签名 wasm 的低成本通 路，2026-09 实证）
 
@@ -600,6 +600,6 @@ async function loadWasmCached(wasmPath, importObject) {
 | `references/env/env-object-model.md` | WebAssembly 对象的原型链 / descriptor / native-like 保护 |
 | `references/env/env-native-protection.md` | WASM 调用的 navigator / document / crypto 等 env 对象保护 |
 | `references/workflow/worker-signing.md` | Worker / Service Worker 中加载 WASM 生成签名的分析路径 |
-| `templates/wasm-loader/loader.js` | WASM 加载器交付模板（干净 `.wasm` + 导出函数） |
-| `templates/wasm-loader/emscripten-bundle-blackbox.js` | 整包 Emscripten bundle 黑盒执行 harness（webpack 内嵌 wasm base64 + glue） |
+| `assets/templates/wasm-loader/loader.js` | WASM 加载器交付模板（干净 `.wasm` + 导出函数） |
+| `assets/templates/wasm-loader/emscripten-bundle-blackbox.js` | 整包 Emscripten bundle 黑盒执行 harness（webpack 内嵌 wasm base64 + glue） |
 | `cases/wasm-harness-selfhash-fp-blackbox.md` | 本节方法论实证：自同构校验 wasm 的透明捕获 + 直接 harness 全流程 |

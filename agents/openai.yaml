@@ -1,0 +1,4 @@
+interface:
+  display_name: "JS 逆向（纯协议还原）"
+  short_description: "网页端 JS 加密参数逆向与纯协议还原，交付 Node/Python 实现"
+  default_prompt: "Use $js-reverse-skill to reverse-engineer the encrypted request parameters of this page and deliver a pure-protocol Node.js implementation."

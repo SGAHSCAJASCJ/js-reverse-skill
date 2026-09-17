@@ -43,6 +43,13 @@ jobs:
           node --check scripts/check_tool_pins.js
           node --check scripts/check_routing_benchmarks.js
           node --check scripts/check_env_prerequisites.js
+          node --check scripts/state_machine.js
+          node --check scripts/check_skill_consistency.js
+          node --check scripts/eval_trigger.js
+          node --check scripts/init_env_case.js
+          node --check scripts/check_risk_layer_diagnosis.js
+          node --check scripts/check_vendor_leakage.js
+          node --check scripts/lib/paths.js
 
       - name: Run deterministic self-tests (Node)
         run: |
@@ -55,7 +62,12 @@ jobs:
           node scripts/check_env_prerequisites.js --self-test
           node scripts/capture_ruyitrace_log.js --self-test
           node scripts/check_final_artifact.js --self-test
+          node scripts/check_risk_layer_diagnosis.js --self-test
+          node scripts/check_vendor_leakage.js --self-test
+          node scripts/state_machine.js --self-test
+          node scripts/check_skill_consistency.js --self-test
           node scripts/check_skill_consistency.js
+          node scripts/eval_trigger.js --self-test
 
       - name: Run deterministic self-tests (Python)
         run: |
@@ -65,8 +77,29 @@ jobs:
           python scripts/analyze_track.py --self-test
           python scripts/detect_gap.py --self-test
 
+      - name: Check vendor/platform knowledge leakage
+        run: node scripts/check_vendor_leakage.js --project-dir . --markdown
+
       - name: Run routing/gate regression benchmarks
         run: node scripts/check_routing_benchmarks.js --markdown
 
       - name: Check patch whitespace
-        run: git diff --check
+        shell: bash
+        run: |
+          # 基线对比：工作区干净时 git diff --check 是空操作，必须显式给 rev 区间。
+          base="${{ github.event.pull_request.base.sha }}"
+          [ -n "$base" ] || base="${{ github.event.before }}"
+          case "$base" in
+            ""|0000000000000000000000000000000000000000)
+              echo "无可用基线（首次推送），改为校验工作区"
+              git diff --check
+              ;;
+            *)
+              if git fetch --no-tags --depth=1 origin "$base" 2>/dev/null; then
+                git diff --check "$base" HEAD
+              else
+                echo "基线 $base 获取失败，回退为校验工作区"
+                git diff --check
+              fi
+              ;;
+          esac

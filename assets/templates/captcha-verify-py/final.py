@@ -35,7 +35,7 @@ import random
 # ============================================================
 # 依赖（由用户从 templates 复制到 result/src/ 后填充）
 # ============================================================
-# 请求客户端：从 templates/python-request/client.py 复制到 result/src/request/client.py
+# 请求客户端：从 assets/templates/python-request/client.py 复制到 result/src/request/client.py
 try:
     from src.request.client import create_request_session
 except ImportError:

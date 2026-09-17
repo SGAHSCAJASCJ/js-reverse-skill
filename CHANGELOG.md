@@ -3,6 +3,38 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.123 - 2026-09-16
+
+### 规范对齐重构：SKILL.md 77.4KB → 60.7KB（达成 2.3.118 规划的 60-70KB 目标）
+
+按 skill 规范逐条复核全仓后的结构性优化。目标是「发现要便宜且精确」：description 在每个请求上都要付一次成本，正文只在真正需要时才被读取——所以描述要短而准，正文只留跨题通用硬规则与路由。
+
+**① description 重写（293 → 179 字）**：删掉能力枚举清单（catchall 措辞稀释触发精度，违反规范「避免穷举能力」），行为规定（JSVMP 默认黑盒等）移入正文。保留「做什么 + 覆盖场景 + 不适用边界」三段。
+
+**② 官方校验器对齐（`check_skill_consistency.js` 新增两组检查）**
+- `checkFrontmatterSpec()`：逐条对齐官方 `skill-creator/scripts/quick_validate.py`——frontmatter 允许键、name 小写连字符 ≤64、description 无尖括号 ≤1024、正文无 `[TODO:]` 占位行。
+- `checkDescriptionQuality()`：三条红线——体积预算 200 字、禁 catchall 措辞（各类/各种/所有/任何/等场景/等等/任意）、必须有边界声明（不用于/不适用）。
+- 官方脚本在 Windows GBK 下会 `UnicodeDecodeError`（需 `PYTHONUTF8=1`），故 CI 不直连 Python，改以 Node 等价实现覆盖；本地另跑官方脚本确认「Skill is valid!」。
+
+**③ 路由基准去「文本镜像」化（25 → 34 用例）**：删除 2 个 `script=null` 纯锚点用例——它们只断言「SKILL.md 里存在某句话」，属规范明令避免的 tests that merely match generated wording。改为行为断言：调 `state_machine.js --set <NODE> --force` 断言 `[RULE]` 投递文本，新增 IDENTIFY（参数名存在 ≠ 参数生效）与 SIGN_ONLY_DELIVER（不得宣称真实验证通过）两例。`check_routing_benchmarks.js` 现将 `script=null` 直接判错并说明理由。锚点保留在语料中作防漂移守卫，但不再有只验文本的用例。
+
+**④ 触发精度评估（新增 `scripts/eval_trigger.js` + `tests/trigger-eval/cases.json`）**：26 条语料（12 应触发 / 14 不应触发，含 App、桌面程序、小程序 Native、Playwright 交付、通用问答等边界）。`--score` 输出 precision/recall/F1 与逐条漏召/误召归因，门槛 0.95——26 条下单条误判必然暴露。触发与否需模型逐条裁定后回填，离线不可判，故 CI 只跑 `--self-test`。
+
+**⑤ 目录性质归位**：`assets/ast-patterns/`（可执行反混淆工具链）→ `scripts/ast-patterns/`；`templates/`（交付骨架）→ `assets/templates/`。前者是工具不是素材、后者是素材不是代码，同放 `assets/` 顶层会让人误判哪个该被调用。全仓引用同步（ast-patterns 19 处、templates 26 文件），`vm-context.js` 跨目录 require 已修正并实测可加载。
+
+**⑥ `agents/openai.yaml` 补齐**：`display_name` / `short_description` / 含 `$js-reverse-skill` 的 `default_prompt`。
+
+**⑦ CI 门禁补漏**：`check_risk_layer_diagnosis.js` 与 `check_vendor_leakage.js` 早已实现 `--self-test` 却从未进 CI；厂商知识越界（§3 T1/T2 分级）是 R0 级不变量，此前只靠发版手动跑。两者现入 CI 常规步骤，厂商越界另提为独立步骤。另修正 `git diff --check` 步骤——干净检出下它是空操作，现改为显式 rev 区间（PR 取 `base.sha`、push 取 `before`，按需浅取基线，失败回退工作区）。
+
+**⑧ 正文去重与收尾**：`run_with_trace.js` 命令在 §7/§8 重复出现（保留 §8 全路径形态）；§12 路由表与正文重复的 `--id` 命令归一到表格；修正 §7「两个识别入口」实际列了 4 项；§4 越权代价、trace 出口门禁前向指针、§4.2 取证前速查命令形态等重复表述压缩。经验规则未变，只删冗余。
+
+**⑨ 表述精炼（结构不动，纯语义压缩）**：9 处零语义损失精炼——删 §4 尾第三遍初始化指令（速查卡与 0.0 双覆盖）；§4.1 推进规则与 GATE-0 重复句改指针；§8「环境检测代码不等于服务端约束」两句同义合并；§1 连续执行总则、§7 手写 runner 句、§10 验证必要条件句的强调性冗词（「不是可选演示」「不等用户回应」等）删减；§4.4 阶段报告触发条件紧凑化；规则 8「第五种通道」悬空编号改为自释表述「联网取证通道」。
+
+**效果**：SKILL.md 43123 → 34096 字（79209 → 61934 字节，77.4 → 60.5 KB，-21.0%），598 → 470 行；强制词密度 4.15 → 3.04 每千字（179 → 104 处）。正文体积预算 35000 字，现余量 904 字；超预算时错误信息会带出超出量。
+
+**未完成/待定**：`eval_trigger.js --score` 的实际跑分需模型逐条判定后回填（打分器已就绪，答案键自校通过）；`cases/` 目录改名会破坏 SKILL.md 与历次 CHANGELOG 的多处引用，属破坏性变更，待单独确认。
+
+校验：check_routing_benchmarks 34/34、check_skill_consistency 0 问题（143 引用）、check_vendor_leakage 0 命中、eval_trigger --self-test PASS、官方 quick_validate.py「Skill is valid!」、`git diff --check` 零输出。
 ## 2.3.122 - 2026-09-14
 
 ### 缺口识别可目视确认：detect_gap.py 新增 --annotate 标注对比图

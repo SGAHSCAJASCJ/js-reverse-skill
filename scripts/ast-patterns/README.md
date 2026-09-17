@@ -5,7 +5,7 @@ description: 使用 Babel AST 对 JavaScript 做分层、可回退的定向反�
 
 # AST 反混淆
 
-本模块是 js-reverse-skill 的内嵌 AST 反混淆资产，不再作为独立 skill 引用。所有路径相对于本目录（`assets/ast-patterns/`）。
+本模块是 js-reverse-skill 的内嵌 AST 反混淆资产，不再作为独立 skill 引用。所有路径相对于本目录（`scripts/ast-patterns/`）。
 
 优先使用分层入口，而不是继续把站点特有逻辑堆进通用脚本。
 

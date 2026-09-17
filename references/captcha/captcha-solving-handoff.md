@@ -22,7 +22,7 @@
 ③ 打码平台（兜底）：云码 / 超级鹰 / 2Captcha / CapSolver —— 需自动化/规模化且人工不适用时
 ```
 
-**交付语言选择**：ddddocr / OpenCV / Whisper 均为 Python 生态，答案层用这些工具时**优先选 `templates/captcha-verify-py/`（Python 版）**——solver 直接 `import ddddocr`，无需跨语言桥接。仅当封装层加密逻辑只在 Node 侧还原（vm 沙箱/JS 执行）时才用 `templates/captcha-verify/`（Node 版），此时 solver 需通过 `child_process` 或 HTTP 微服务调 Python ddddocr。
+**交付语言选择**：ddddocr / OpenCV / Whisper 均为 Python 生态，答案层用这些工具时**优先选 `assets/templates/captcha-verify-py/`（Python 版）**——solver 直接 `import ddddocr`，无需跨语言桥接。仅当封装层加密逻辑只在 Node 侧还原（vm 沙箱/JS 执行）时才用 `assets/templates/captcha-verify/`（Node 版），此时 solver 需通过 `child_process` 或 HTTP 微服务调 Python ddddocr。
 
 切换条件（自动判断）：同一 challenge 素材本地求解置信度低，或连续失败复盘确认"视觉答案正确但验证失败"非轨迹/环境问题 → 升级路径。
 

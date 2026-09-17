@@ -17,7 +17,7 @@
 
 | 类型 | 识别特征 | 还原策略 | 工具 |
 |---|---|---|---|
-| OB (obfuscator.io) | `_0x` 前缀变量、十六进制字符串数组、旋转函数 | 定位数组→执行旋转→全局替换→AST 美化 | `assets/ast-patterns/scripts/run-pipeline.js`（含 OB 变种 pass） |
+| OB (obfuscator.io) | `_0x` 前缀变量、十六进制字符串数组、旋转函数 | 定位数组→执行旋转→全局替换→AST 美化 | `scripts/ast-patterns/scripts/run-pipeline.js`（含 OB 变种 pass） |
 | 控制流平坦化 (CFF) | `while(true) switch(state)` 状态机 | 按状态转移顺序还原顺序代码 | ruyiPage `trace_function` 追踪状态转移 |
 | eval/Function 打包 | `eval(function(p,a,c,k,e,d){...})` | Hook eval/Function 拦截实际代码 | `references/hooks/hook-templates.md` 的 eval/Function Hook |
 | AAEncode | 日文颜文字字符 `ﾟωﾟﾉ` | 直接执行或替换执行为输出 | 浏览器 console |
@@ -81,7 +81,7 @@ function deobfuscate(code) {
 }
 ```
 
-完整 AST 模式见 `assets/ast-patterns/` 目录。
+完整 AST 模式见 `scripts/ast-patterns/` 目录。
 
 ## 2. 控制流平坦化 (CFF) 还原
 
@@ -217,7 +217,7 @@ JSVMP 场景必须使用 RuyiTrace 模式，参见 `references/workflow/trace-fl
 
 ## AST 反混淆工具链
 
-`assets/ast-patterns/` 目录提供分层 AST 还原流水线，所有脚本位于 `assets/ast-patterns/scripts/`：
+`scripts/ast-patterns/` 目录提供分层 AST 还原流水线，所有脚本位于 `scripts/ast-patterns/scripts/`：
 
 | 脚本 | 用途 |
 |---|---|
@@ -239,16 +239,16 @@ JSVMP 场景必须使用 RuyiTrace 模式，参见 `references/workflow/trace-fl
 
 ```bash
 # 1. 检测模式
-node assets/ast-patterns/scripts/detect-patterns.js input.js [hint]
+node scripts/ast-patterns/scripts/detect-patterns.js input.js [hint]
 
 # 2. 执行流水线（自动选择命中家族的专用 pass）
-node assets/ast-patterns/scripts/run-pipeline.js input.js output-dir [hint]
+node scripts/ast-patterns/scripts/run-pipeline.js input.js output-dir [hint]
 
 # 3. 查看残留症状
-node assets/ast-patterns/scripts/collect-residue-metrics.js output-dir/decoded.js
+node scripts/ast-patterns/scripts/collect-residue-metrics.js output-dir/decoded.js
 ```
 
-详细规则文档见 `assets/ast-patterns/` 下的 `pattern-layering.md`、`safe-rewrite-rules.md`、`string-array-and-minimal-eval.md`、`control-flow-and-opcode-patterns.md`、`sequence-normalization.md`。
+详细规则文档见 `scripts/ast-patterns/` 下的 `pattern-layering.md`、`safe-rewrite-rules.md`、`string-array-and-minimal-eval.md`、`control-flow-and-opcode-patterns.md`、`sequence-normalization.md`。
 
 ### 残留症状 → 通用还原原语（类型级流水线跑完后仍不可读时）
 

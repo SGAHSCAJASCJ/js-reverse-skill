@@ -5,7 +5,7 @@
 
 本目录只提供接口骨架，不内置任何真实平台协议。厂商、版本、接口顺序、HTTP 方法、JSONP、字段名、加密和成功凭据都必须从本 case 的抓包与 RuyiTrace 证据实现到 `result/src/adapter.js`。
 
-> **模板选择**：答案层用 ddddocr/OpenCV/Whisper（Python 生态）时，优先选 Python 版 `templates/captcha-verify-py/`（solver 直接 `import ddddocr`，免跨语言桥接）。本模板适用于封装层加密只在 Node 侧还原（vm 沙箱/JS 执行）的场景。
+> **模板选择**：答案层用 ddddocr/OpenCV/Whisper（Python 生态）时，优先选 Python 版 `assets/templates/captcha-verify-py/`（solver 直接 `import ddddocr`，免跨语言桥接）。本模板适用于封装层加密只在 Node 侧还原（vm 沙箱/JS 执行）的场景。
 
 ## 文件清单
 
@@ -19,12 +19,12 @@
 
 1. IMPLEMENT 编码时复制到 `result/`：
    ```
-   cp templates/captcha-verify/final.js result/
-   cp templates/captcha-verify/config.json result/
-   cp templates/captcha-verify/adapter.example.js result/src/adapter.js
-   cp templates/captcha-verify/package.json result/
+   cp assets/templates/captcha-verify/final.js result/
+   cp assets/templates/captcha-verify/config.json result/
+   cp assets/templates/captcha-verify/adapter.example.js result/src/adapter.js
+   cp assets/templates/captcha-verify/package.json result/
    ```
-2. 从 `templates/node-request/client.js` 复制 TLS 客户端到 `result/src/request/client.js`
+2. 从 `assets/templates/node-request/client.js` 复制 TLS 客户端到 `result/src/request/client.js`
 3. 实现 `result/src/adapter.js`，至少提供：
    `loadChallenge`、`resolveAssets`、`prepareAnswer`、`buildVerifyRequest`、`parseVerifyResponse`、`consumeCredential`
 4. 实现 `result/src/solver.js`（答案求解：`solve(imageBytes, type, options)`，参考 `references/captcha/captcha-solving-handoff.md`）

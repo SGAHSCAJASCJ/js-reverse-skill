@@ -105,9 +105,9 @@
 
 | 模式 | 适用场景 | 模板 |
 |---|---|---|
-| A 纯算法还原 | 算法可完整提取（不管几个参数） | `templates/node-request/` 或 `templates/python-request/` |
-| B vm 沙箱执行 | 算法不可直接提取，但 JS 可 vm 执行 | `templates/vm-sandbox/` |
-| C WASM 加载 | 加密逻辑在 WebAssembly 中（不需补环境） | `templates/wasm-loader/` |
+| A 纯算法还原 | 算法可完整提取（不管几个参数） | `assets/templates/node-request/` 或 `assets/templates/python-request/` |
+| B vm 沙箱执行 | 算法不可直接提取，但 JS 可 vm 执行 | `assets/templates/vm-sandbox/` |
+| C WASM 加载 | 加密逻辑在 WebAssembly 中（不需补环境） | `assets/templates/wasm-loader/` |
 | D 环境伪装 | JS 需完整浏览器环境才能执行（JSVMP） | 见 `references/env/` |
 
 ## 语言选择策略

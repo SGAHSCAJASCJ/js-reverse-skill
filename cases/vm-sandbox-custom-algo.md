@@ -250,4 +250,4 @@ const sign = sandbox.document.cookie;  // 或 sandbox.someGlobalVar
 | `references/env/env-debug-loop.md` | 静默吞错诊断 + setInterval 退出陷阱 |
 | `references/workflow/common-pitfalls.md` | 反模式 8（try-catch 静默吞错） |
 | `cases/vm-sandbox-chameleon-iwencai.md` | 中等量 sandbox 实战案例（同花顺 chameleon.js） |
-| `templates/vm-sandbox/` | vm 沙箱交付模板 |
+| `assets/templates/vm-sandbox/` | vm 沙箱交付模板 |
