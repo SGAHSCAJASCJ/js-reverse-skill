@@ -1079,6 +1079,24 @@
       "strategy": "C WASM 加载：透明边界捕获官方包真实页全量导入值固化为成对设备画像（fp数组+fm.js源+wasm自身，各sha256），Node fresh 实例化 wasm 按契约装配后调导出 E 纯协议生成；无浏览器无 jsdom 无凭据注入",
       "file": "wasm-harness-selfhash-fp-blackbox.md",
       "verifiedAt": "2026-09-13"
+    },
+    {
+      "title": "百度财经 ParisSDK 请求头 acs-token（bdjsvmp 黑盒）+ 装饰头四态鉴别",
+      "domains": [
+        "finance.baidu.com",
+        "finance.pae.baidu.com"
+      ],
+      "signals": [
+        "acs-token",
+        "paris_2108",
+        "abclite",
+        "bdjsvmp",
+        "decorative header",
+        "RSA-2048"
+      ],
+      "strategy": "P0 最小 vm 沙箱黑盒执行真实 acs-2108.js：只补 trace 证明的基础环境，.gs() 取 token；真校验判定用 probe_endpoints 四态对照",
+      "file": "jsvmp-vm-blackbox-acs-token-baidu-finance.md",
+      "verifiedAt": "2026-09-17"
     }
   ]
 }

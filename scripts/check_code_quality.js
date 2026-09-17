@@ -15,6 +15,7 @@ function parseArgs(argv) {
     maxFunctionLines: 90,
     json: false,
     markdown: false,
+    explain: false,
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
@@ -25,6 +26,7 @@ function parseArgs(argv) {
     else if (a === '--max-line-length') args.maxLineLength = Number(nextVal(undefined) || args.maxLineLength);
     else if (a === '--max-file-lines') args.maxFileLines = Number(nextVal(undefined) || args.maxFileLines);
     else if (a === '--max-function-lines') args.maxFunctionLines = Number(nextVal(undefined) || args.maxFunctionLines);
+    else if (a === '--explain') args.explain = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
@@ -34,13 +36,34 @@ function parseArgs(argv) {
   return args;
 }
 
+// --explain 输出的代码质量硬性要求清单（2.3.125 新增）：AI 在 IMPLEMENT/DELIVER 前读一次即可对齐，
+// 无需预防性读校验源码；改动校验规则时须同步维护此处。
+const REQUIREMENTS_TEXT = `# 补环境代码质量规范（check_code_quality 硬性要求）
+
+## 结构（默认阈值，可用参数调整）
+1. 单行 ≤180 字符（>320 或分号密集视为压缩/堆叠）。
+2. 单文件 ≤500 行；单函数 ≤90 行；嵌套层级 ≤8。
+3. 补环境不得以大段 String.raw / *_SCRIPT 字符串作为主要交付形态，必须拆成真实文件模块并用 runFile/runFiles 注入。
+4. signer / probe / runtime 入口不得承载 navigator、document、canvas、webgl、performance 等多域 WebAPI 补环境主体（补环境须收敛到独立 env/ 模块）。
+5. 每个属性定义（defineProperty 等）独立成行并附描述；禁止单行堆叠多个 define 调用、Object.assign 堆对象、单行控制流/单行函数体。
+6. 原始 SDK / 第三方 vendor 代码放 src/target/original/（检查器跳过目录），不得作为待交付主干代码。
+
+## 可读性
+7. 文件带 UTF-8 BOM、替换字符（\uFFFD）、连续问号或注释疑似乱码一律失败。
+8. 文件头建议中文职责注释；代码超 20 行建议补中文注释按密度 ≥ 1/120 行；中文注释不得含连续问号。
+9. 禁止 debugger；无 TODO/FIXME/临时/测试残留标记；避免过短变量名与过多匿名函数（>8 建议具名化）。
+
+## 红线
+10. 交付代码与依赖清单不得包含 Puppeteer / Playwright / Selenium；jsdom / happy-dom / domino 仅允许离线用法，出现 JSDOM.fromURL、resources:usable 或指向目标站的 url 即违规。`;
+
 function usage() {
   return `用法：
   node scripts/check_code_quality.js --case-dir <project-root> --markdown
   node scripts/check_code_quality.js --dir result --json
   node scripts/check_code_quality.js --file result/src/env/install-env.js --markdown
 
-说明：--case-dir 指项目根目录（其下应有 case/ 和 result/ 两个平级子目录），检查 result/ 下最终补环境代码是否简洁、可读、模块化，并验证中文注释为 UTF-8、无乱码、无连续问号、中文注释不含问号。`;
+说明：--case-dir 指项目根目录（其下应有 case/ 和 result/ 两个平级子目录），检查 result/ 下最终补环境代码是否简洁、可读、模块化，并验证中文注释为 UTF-8、无乱码、无连续问号、中文注释不含问号。
+--explain：输出代码质量硬性要求完整清单（编写补环境代码前先读一次对齐，无需读本校验源码）。`;
 }
 
 function exists(p) { try { fs.accessSync(p); return true; } catch { return false; } }
@@ -723,6 +746,7 @@ if (require.main === module) {
   try {
     const args = parseArgs(process.argv);
     if (args.help) { console.log(usage()); process.exit(0); }
+    if (args.explain) { process.stdout.write(REQUIREMENTS_TEXT + '\n'); process.exit(0); }
     const result = check(args);
     if (args.json) console.log(JSON.stringify(result, null, 2));
     if (args.markdown) process.stdout.write(renderMarkdown(result));

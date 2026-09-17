@@ -1,6 +1,6 @@
 # 脚本索引
 
-本目录包含 67 个可执行脚本（58 个 JavaScript、9 个 Python），按功能分为 12 类。以下索引以 `scripts/` 当前实际文件为准，不包含 `README.md` 与 `lib/` 共享模块。
+本目录包含 69 个可执行脚本（60 个 JavaScript、9 个 Python），按功能分为 12 类。以下索引以 `scripts/` 当前实际文件为准，不包含 `README.md` 与 `lib/` 共享模块。
 
 本文中的 `<project-root>` 指项目根目录，其下包含平级的 `case/` 与 `result/` 目录。需要 case 目录的脚本使用 `<project-root>/case`，需要项目根目录的脚本直接使用 `<project-root>`。`forensic_ruyipage.py` 与 `capture_ruyitrace_log.js` 会在 `--case-dir` 下创建 `case/`，因此必须传入 `<project-root>`。`check_session_resume`/`check_fingerprint_fixture`/`check_trace_api_coverage` 已归一化，传 `<project-root>` 或 `<project-root>/case` 均可。
 
@@ -41,7 +41,7 @@
 | `state_machine.js` | 执行状态强制跟踪：状态持久化到 case/state.json，`--set` 校验 SKILL.md §4 状态机转换合法性（跳过必经节点被拒）、`--guard replay` 拦截前置阶段重放/写请求、`--guard external` 拦截取证前的外部题解检索（越权退出码 2 并留审计）；`--init`/`--set`/`--guard` 输出均渲染单行 11 项「执行 TODO 清单」勾选表并落盘 `state.json.todo`；`--init`/`--set` 换节点时输出一行 `[GUIDE]` 指向该节点细则的权威 references（NODE_GUIDES 映射） | `node scripts/state_machine.js --case-dir <project-root> --set IMPLEMENT --markdown`；`node scripts/state_machine.js --case-dir <project-root> --guard replay`；`node scripts/state_machine.js --case-dir <project-root> --guard external` |
 | `gate.js` | 节点聚合门禁：进入节点前一次跑完该节点必验门禁并汇总 PASS/FAIL/SKIP；无 `--at` 时从 state.json 读当前节点；含 FAIL 或需参数缺失退出码非 0 | `node scripts/gate.js --case-dir <project-root> --at IMPLEMENT --url <target> --markdown` |
 
-## 网络取证与日志采集（5 个）
+## 网络取证与日志采集（6 个）
 
 | 脚本 | 功能 | 典型用法 |
 |------|------|---------|
@@ -50,6 +50,7 @@
 | `forensic_ruyipage.py` | ruyiPage 通用取证：以最终业务接口为终态，抓全会话元数据并完整落盘大 body/WASM、JS 与指纹基线 | `python scripts/forensic_ruyipage.py --url <目标URL> --case-dir <project-root> --targets "login/submit" --browser-path <定制Firefox> --markdown` |
 | `capture_ruyitrace_log.js` | 自动采集或手动导入 RuyiTrace NDJSON；默认采集窗口 120 秒，`--evidence-signal` 只做证据门禁，只有明确的 `--end-signal` 才提前收尾，等待末行完整刷盘，记录 `endReason` 并校验 Firefox 进程已退出；关闭与导入会使命令总耗时略长于窗口。`--cookie`/`--cookie-domain` 可在启动前向 trace profile 的 cookies.sqlite 预写登录态（仅自动 trace 生效）。`--trace-env KEY=VALUE`（可多次，仅 `MOZ_DOM_` 前缀）透传 RuyiTrace 定向 trace 开关（jscall 收窄 / detail 真值 / opcode / vm_step / WS 帧），先判题型再选最小开关组合从源头避免日志过大，组合表见 `references/workflow/trace-flow.md`「定向 trace 策略」，完整开关手册见 `references/tooling/ruyitrace-cheatsheet.md` | `node scripts/capture_ruyitrace_log.js --url <目标URL> --case-dir <project-root> --evidence-signal handshake --trace-env MOZ_DOM_JSCALL_TRACE=1 --trace-env "MOZ_DOM_JSCALL_SCRIPT_URL=challenge.js" --ruyitrace-home <RuyiTrace目录> --import-after --markdown` |
 | `import_ruyitrace_log.js` | 导入 RuyiTrace NDJSON，生成摘要并标记截断字段；`--signal-policy advisory` 可在人工结束/信号不确定时只报告覆盖不足而不误报日志缺失；支持 `--trace-signal`，旧 `--target-signal` 兼容 | `node scripts/import_ruyitrace_log.js --input <trace.ndjson> --case-dir <project-root> --trace-signal handshake --signal-policy advisory --markdown` |
+| `search_capture.js` | 抓包检索：从取证产物 capture.json 盘点「哪些接口携带某请求头/状态码分布 / Set-Cookie」，替代手工 PowerShell 解析（杜绝 header 大小写与拼接漏匹配）；只回答「携带」，判定服务端是否真校验需配合 probe_endpoints.js 对照 | `node scripts/search_capture.js --capture <project-root>/case/forensic/capture.json --by-header acs-token` |
 
 ## 识别与归因辅助（2 个）
 
@@ -92,7 +93,7 @@
 | `check_environment_closure.js` | 汇总执行 Trace-runtime、WebAPI、对象形状与网络语义闭环检查 | `node scripts/check_environment_closure.js --case-dir <project-root> --before-real-request --markdown` |
 | `generate_fingerprint_hook.js` | 生成浏览器侧指纹终端 API 采样 Hook，仅用于取证 | `node scripts/generate_fingerprint_hook.js --types canvas,webgl,dom-geometry --out case/hooks/fingerprint-hook.js` |
 
-## 质量检查与交付门禁（12 个）
+## 质量检查与交付门禁（13 个）
 
 | 脚本 | 功能 | 典型用法 |
 |------|------|---------|
@@ -108,6 +109,7 @@
 | `check_routing_benchmarks.js` | 状态机/门禁路由回归基准 runner：按 `tests/routing-benchmarks/cases.json` 还原证据现场、真实执行门禁脚本并断言退出码与输出。用例必须断言脚本行为，不接受纯文本锚点用例（skillAnchors 仅作防漂移补充） | `node scripts/check_routing_benchmarks.js --markdown` |
 | `check_env_prerequisites.js` | IMPLEMENT 补环境前置门禁：校验 `case/notes/entry-chain.md`（含 stack 定位）与 `missing-env-priority.md`（含优先级与证据来源标记或黑盒声明）两文件齐备达标，拦截 Node 报错盲补 | `node scripts/check_env_prerequisites.js --case-dir <project-root> --markdown` |
 | `compare_fixture.js` | 对比 fixture 样本与实际输出，定位首个偏差点（REAL_VERIFY 前置的标准离线回归步骤，退出码 0=一致 / 2=偏差 / 1=错误） | `node scripts/compare_fixture.js --fixture sample.fixture.json --actual node-output.json --field sign --markdown` |
+| `probe_endpoints.js` | 多接口 × 多变体对照探针：对同一会话按 有效/垃圾/篡改末位/无 token 四态请求，输出状态矩阵与「疑似校验」启发式标记，回答「服务端是否真的校验该头」（baidu-finance 沉淀；纯 Node https，TLS 指纹被拒站点不适用） | `node scripts/probe_endpoints.js --session "<cookies>" --header acs-token --tokens '{"valid":"..."}' --endpoints '["<url>"]' --markdown` |
 
 ## 安装与下载（4 个）
 
@@ -150,14 +152,15 @@
 | 环境与会话检测 | 7 |
 | 案例与项目管理 | 7 |
 | references 知识检索 | 1 |
-| 网络取证与日志采集 | 5 |
+| 状态机与聚合门禁 | 2 |
+| 网络取证与日志采集 | 6 |
 | 识别与归因辅助 | 2 |
 | Trace 分析与运行时闭环 | 9 |
 | 补环境与网络语义检查 | 7 |
-| 质量检查与交付门禁 | 12 |
+| 质量检查与交付门禁 | 13 |
 | 安装与下载 | 4 |
 | 验证码识别与求解辅助 | 8 |
 | 验证码验证门禁 | 3 |
-| **合计** | **65** |
+| **合计** | **69** |
 
 > 滑块缺口坐标来源判定（A 接口参数 / B 图片像素 / C 纯图像三路线）见 `references/captcha/gap-coordinate-source.md`。本目录中的验证码辅助脚本负责 C 类坐标换算、轨迹生成、答案校验与打码模板，A / B 类走封装层逆向。

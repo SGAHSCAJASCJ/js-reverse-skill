@@ -16,6 +16,7 @@ function parseArgs(argv) {
     experienceOptOut: false,
     production: false,
     selfTest: false,
+    explain: false,
     json: false,
     markdown: false,
   };
@@ -34,6 +35,7 @@ function parseArgs(argv) {
     }
     else if (a === '--production' || a === '--prod') args.production = true;
     else if (a === '--self-test') args.selfTest = true;
+    else if (a === '--explain') args.explain = true;
     else if (a === '--json') args.json = true;
     else if (a === '--markdown') args.markdown = true;
     else if (a === '--help' || a === '-h') args.help = true;
@@ -42,6 +44,32 @@ function parseArgs(argv) {
   if (!args.json && !args.markdown) args.markdown = true;
   return args;
 }
+
+// --explain 输出的交付物硬性要求清单（2.3.125 新增）：AI 在 DELIVER 前读一次即可对齐规范，
+// 无需预防性读校验源码。改动校验规则时须同步维护此处，避免清单与判定逻辑脱节。
+const REQUIREMENTS_TEXT = `# 最终交付物规范（check_final_artifact 硬性要求）
+
+## 目录与入口
+1. result/ 与 case/ 平级（<project-root>/{case,result}）。
+2. 唯一执行入口 result/final.js 或 result/final.py，二者只能有一个；result/ 根部不得再出现其它疑似入口文件；case/ 阶段报告文件名必须含中文，不得乱码/连续问号。
+
+## 联网模式与会话生命周期
+3. 显式声明联网模式：FINAL_ARTIFACT_NETWORK_MODE=online|sign-only（或兼容自然语言「真实请求/纯协议签名」等）；未声明报错。
+4. online 模式代码必须包含可复用的 Session（create + reuse）与关闭清理；sign-only 需在 验证记录.json 明确标记豁免及原因。
+5. 显式声明 TLS 指纹需求：FINAL_ARTIFACT_TLS_FINGERPRINT=required|not-required；required 时代码必须含 TLS 指纹兼容请求客户端（如 curl_cffi impersonate）；文档表述冲突时保守按 required 判定。
+
+## 红线（禁止项）
+6. 禁止浏览器自动化：Puppeteer / Playwright / Selenium / ruyipage；jsdom / happy-dom / domino 仅允许离线用法，出现 JSDOM.fromURL、resources: usable 或指向目标站的 url 即违规。
+7. 禁止指纹采样 Hook 与 Node.js 渲染库。
+8. 禁止复用样本加密参数值：cURL / fixture / 抓包中的加密参数值不得直接复用或硬编码进最终代码，必须由补环境/signer 生成。
+
+## 验证与产物
+9. 联网模式 result/验证记录.json 至少 5 条 attempt 且全部有效（timestamp / httpStatus / parameterSummary / sessionStage 结构完整）；sign-only 必须在该文件中标记豁免及原因。
+10. result/最终项目总结.md：UTF-8 可读、无乱码，默认 8 章齐全：目标与边界 / 用户提供材料 / 取证流程与证据来源 / 加密参数定位结论 / 算法还原或补环境概览 / 最终交付结构 / 测试结果 / 风险与后续建议。
+11. trace 未覆盖目标接口 URL 字面量时，最终总结必须显式声明「trace 未覆盖目标接口 URL 字面量；签名链定位依据为 <写入点/关键词>」，否则不得进入 IMPLEMENT。
+12. result/经验沉淀-<站点>.md 默认必须生成（按 cases/_template.md Part 2 格式）；豁免需 --no-require-experience 并记录原因。
+13. result 目录不得含临时/测试产物（tmp/、__pycache__、探针脚本、测试文件等）。
+14. --production 生产级交付追加 9 个总结章节：NativeProtect 使用情况 / 指纹基线一致性 / 环境与指纹 API 调用回放明细 / 高强度环境检测覆盖矩阵 / Session 请求链 / 加密参数生成与样本复用检查 / 代码质量与中文注释 / 清理结果 / 阶段报告索引。`;
 
 function usage() {
   return `用法：
@@ -57,7 +85,8 @@ function usage() {
 机器标记：在 result/ 或 case/ 的 Markdown / JSON / YAML / TXT 中声明 FINAL_ARTIFACT_NETWORK_MODE=online|sign-only 和 FINAL_ARTIFACT_TLS_FINGERPRINT=required|not-required。旧文档自然语言声明仍兼容；“目标无 TLS”只表示不强制 TLS 兼容客户端，不能豁免联网 Session 与清理。
 --production（生产级交付）：在默认检查基础上，追加校验最终总结的 9 个生产级附加章节（NativeProtect / 指纹基线 / API 调用回放 / 高强度检测矩阵 / Session 请求链 / 加密参数生成与样本复用检查 / 代码质量与中文注释 / 清理结果 / 阶段报告索引）。
 --no-require-final-summary：仅当用户明确要求不生成最终总结时传入，并在阶段输出中记录豁免原因。
---no-require-experience：仅当用户明确要求不沉淀经验时传入，并在阶段输出中记录豁免原因。`;
+--no-require-experience：仅当用户明确要求不沉淀经验时传入，并在阶段输出中记录豁免原因。
+--explain：输出交付物硬性要求完整清单（编写交付物前先读一次对齐，无需读本校验源码）。`;
 }
 
 function exists(p) {
@@ -1276,6 +1305,7 @@ if (require.main === module) {
   try {
     const args = parseArgs(process.argv);
     if (args.help) { console.log(usage()); process.exit(0); }
+    if (args.explain) { process.stdout.write(REQUIREMENTS_TEXT + '\n'); process.exit(0); }
     if (args.selfTest) {
       const result = runSelfTest();
       console.log(`self-test passed: ${result.cases} cases`);

@@ -32,8 +32,9 @@ function parseArgs(argv) {
 }
 
 function initPaths(args) {
-  // 多 case 项目共享 tools 时，--project-dir 可能被传成 case 目录：向上查找含 tools/ 的祖先，
-  // 避免把 RuyiTrace/ruyipage runtime 重复装到 <case>/tools/ 而漏用共享工程根 tools/ 里已装好的组件
+  // tools/ 装到 --project-dir 指定目录下（传哪装哪，2.3.125）；未指定用 cwd。
+  // 不再向上查找已含 tools/ 的祖先——否则首装会被吸到父/祖目录，本地 tools/ 为空，
+  // 后续取证（capture_ruyitrace_log 按项目目录检测）找不到已装组件，需手工传 --ruyitrace-home。
   PROJECT_ROOT = paths.normalizeProjectDir(args.projectDir || process.cwd());
   TOOLS_DIR = path.join(PROJECT_ROOT, 'tools');
   RUYIPAGE_BROWSERS_DIR = path.join(TOOLS_DIR, 'ruyipage-browsers');
@@ -52,7 +53,7 @@ function usage() {
 请先在项目根目录（tools/ 要安装到的用户工程目录）运行本脚本；在 skill 安装目录运行会装错位置。
 --python <cmd>：显式指定 Python 解释器，严格使用、失败不回退；未传时自动按 python → python3 → py -3 探测，安装与后验全程用同一解释器。
 --yes：跳过用户确认，直接安装缺失项。
---project-dir <dir>：用户工程目录（tools/ 安装目标）。安装模式下 skill 安装目录无 tools/，必须显式指定，避免装到 skill 根附近。未传时使用当前工作目录。多 case 项目共享 tools 时，传 case 目录会自动向上查找含 tools/ 的工程根。`;
+--project-dir <dir>：tools/ 安装目标目录，传哪装哪、不向上跳转父/祖目录（2.3.125 起；早期会上跳已含 tools/ 的祖先导致装错位置）。多 case 项目共享 tools 时请显式传共享工程根。未传时使用当前工作目录。`;
 }
 
 function run(cmd, args, timeout = 300000, env = null) {

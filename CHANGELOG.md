@@ -3,6 +3,23 @@
 
 > 历史版本（2.3.87 及更早）已归档至 CHANGELOG.archive.md。
 
+## 2.3.125 - 2026-09-17
+
+### baidu-finance 实测回归优化：安装路径归一 + 门禁 --explain + 两个新工具 + case 吸纳
+
+用真实 case（finance.pae.baidu.com acs-token）完整跑通主线后，按日志暴露的摩擦点收敛 8 项改动，全部为通用修复，不引入 case 专用代码。
+
+- **P0 安装路径「传哪装哪」**：`normalizeProjectDir` 不再向上查找已含 tools/ 的祖先——此前 `--project-dir D:\test\git\jsskilltt` 会被吸到祖父 `D:\test\git\tools`，首装后本地 tools/ 为空、`capture_ruyitrace_log` 检测不到需手工 `--ruyitrace-home`（实测 5 步返工）。现指定哪就装到哪（多 case 共享 tools 须显式传共享工程根）；检测侧 `normalizeTraceHome` 增加 caseDir 祖先链兜底，存量共享布局的复用不破坏。
+- **P1 门禁要求可读对齐**：`check_final_artifact.js` / `check_code_quality.js` 新增 `--explain` 输出完整硬性要求清单（交付结构/联网模式/Session 形态/TLS 声明/红线/验证记录/总结 8 章/经验沉淀/质量规则），SKILL.md §11 交付前先读 explain 再跑门禁，AI 无需预防性读校验源码（实测该行为合计约 21 步、是最大浪费源）。
+- **P1 新工具 `search_capture.js`**：从 capture.json 盘点「哪些接口携带某请求头 + 状态码分布 + Set-Cookie」，替代手工 PowerShell 解析（实测踩过 hashtable 拼串漏匹配）；配套 SKILL.md §7 命令入口。
+- **P1 实况修复 `run_with_trace.js`**：minimal 模式（含 env-module 自动切换）下跳过全部浏览器桩导致 vm 内 `new URL()` 等宿主构造器缺失挂起——新增 injectHostBuiltins 兜底注入（仅 undefined 时注入，bootstrap 桩 / env-module 自定义优先）。
+- **P1 新工具 `probe_endpoints.js`**：同会话 有效/垃圾/无/篡改末位 四态多接口对照，判定服务端是否真校验某头；默认间隔 + 变体顺序随机防频率风控混淆；实测定位 hotmetrics 为装饰头、hotrank/blocks/marketquote 真校验（有效 200 / 篡改 403 hit risk）。
+- **P2 命令纪律**：SKILL.md 速查卡明示「所有 scripts 命令必须在 skill 根目录执行」，杜绝 cwd 漂移后「找不到脚本 → 手改 state.json」；`identify_crypto.js` 补 `--file` 示例并注明长样本必须走文件防 shell 截断误判（实测 273/256 字节误判返工）。
+- **case 吸纳**：新增 `cases/jsvmp-vm-blackbox-acs-token-baidu-finance.md`（ParisSDK bdjsvmp 黑盒 + 装饰头四态鉴别方法论，关键坑：env-module 自动 minimal、vm 宿主 URL 挂起、密文长度随环境分支变化），`cases/index.json` 注册可被 search_cases 命中。
+- **门禁文案**：install_all/usage 与注释同步「传哪装哪」语义。
+
+**效果**：search_cases acs-token 命中 1（新 case）；不一致检查、self-test、routing benchmarks 全绿；改动未新增 references 文件、未增加经验库编号（复用反模式 36 装饰头对照）。
+
 ## 2.3.124 - 2026-09-17
 
 ### §4.2/§10 操作细则外迁：正文只留决策规则+指针（34.1K → 33.3K 字）

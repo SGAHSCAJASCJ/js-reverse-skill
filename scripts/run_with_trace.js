@@ -459,6 +459,24 @@ function summarize(events, errors, leakageCheck) {
   };
 }
 
+// 宿主纯工具类兜底：minimal 模式（含 env-module 自动切换）跳过全部浏览器桩，
+// vm 上下文内 URL/TextEncoder 等缺失会让 SDK 的 new URL() 等调用挂起/报错
+// （baidu-finance 实测 2.3.125：location getter 里 new URL() 挂起，只能靠手写注入排障）。
+// 纯解析/编解码工具类用宿主实现即语义正确，对「环境分支探测」几乎无影响；
+// 仅在该符号在上下文内为 undefined 时注入，bootstrap 桩（full）与 env-module 自定义版本优先。
+function injectHostBuiltins(context) {
+  const host = vm.runInThisContext('({ URL, URLSearchParams, TextEncoder, TextDecoder, atob, btoa, structuredClone, queueMicrotask })');
+  for (const name of Object.keys(host)) {
+    if (host[name] === undefined) continue;
+    try {
+      if (vm.runInContext(`typeof ${name} === 'undefined'`, context)) context[name] = host[name];
+    } catch { /* 符号名不合法则跳过 */ }
+  }
+  try {
+    if (vm.runInContext('typeof Buffer === \'undefined\'', context)) context.Buffer = Buffer;
+  } catch { /* 忽略 */ }
+}
+
 function run(args) {
   if (!args.target) throw new Error('必须提供 --target');
   const targetFiles = args.target.split(',').map(s => s.trim()).filter(Boolean).map(p => path.resolve(p));
@@ -467,6 +485,7 @@ function run(args) {
   for (const f of envModuleFiles) if (!fs.existsSync(f)) throw new Error(`环境模块文件不存在：${f}`);
   const fixture = readJson(args.fixture);
   const context = vm.createContext({}, { name: 'web-js-env-patcher' });
+  injectHostBuiltins(context);
   const errors = [];
   let entryResult;
   let entryFound = false;

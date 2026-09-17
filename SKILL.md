@@ -14,7 +14,7 @@ description: >
 - **续接判定**：`check_session_resume.js --case-dir <project-root> --project-dir <project-root> --markdown` 判 resume/fresh（GATE-1，见 0.0 节）。
 - **主线**：INTENT_CONFIRM → ENV_READY → EVIDENCE_GATE →（FORENSIC_CAPTURE → TRACE_CAPTURE）→ CASE_LOOKUP → IDENTIFY → TRACE_ANALYZE → IMPLEMENT → REAL_VERIFY → DELIVER → CLEANUP → DONE；打转信号：检索输出 `[WARN] 重复检索` 或 `[STATE]` 提示即执行 §4.4 防耗尽序列。
 - **约束分级（第 2 节）**：`R0` 红线（不可协商）/ `R1` 门禁（脚本裁定，未过=补齐后复检）/ `R2` 默认（可偏离，说明一句）。
-- **命令索引**：全量脚本见 `scripts/README.md`；各节点命令在对应节（取证/trace 4.2、检索与反混淆 7、分析 8、验证与交付 10）。
+- **命令索引**：全量脚本见 `scripts/README.md`；各节点命令在对应节（取证/trace 4.2、检索与反混淆 7、分析 8、验证与交付 10）。**所有 `node scripts/...` / `python scripts/...` 命令必须在 skill 根目录执行**（相对路径入口依赖 cwd=skill 根；在 case 目录执行会「找不到脚本」并诱使手改 state.json）。
 
 ## 0. 分析前硬门禁（GATE-0~GATE-2）
 
@@ -302,10 +302,14 @@ node scripts/search_cases.js --domain <域名> --signal <信号>
 识别结果必须引用落盘资源、NDJSON 或网络包具体字段，不以站点名称直接定类。特征驱动的识别入口与配套工具（输出均为 T1 假设，不构成协议复现依据）：
 
 ```powershell
-# 密文/哈希特征 → 算法族假设（长度/字符集/结构/magic bytes）
+# 密文/哈希特征 → 算法族假设（长度/字符集/结构/magic bytes）；长样本必须走 --file 防 shell 截断误判
 node scripts/identify_crypto.js --value <密文样本> --label <参数名> --markdown
+node scripts/identify_crypto.js --file <样本文件路径> --markdown
 # Cookie 归因：capture.json Set-Cookie（服务端）× trace cookie 写入（JS）融合，判定每个 Cookie 生成方
 node scripts/analyze_cookie_attribution.js --case-dir <project-root> [--cookie <名称>] --markdown
+# 用户追问「哪些接口携带该头/是否校验」：先 search_capture 盘点抓包接口谱，再上 probe_endpoints 四态对照
+node scripts/search_capture.js --capture <project-root>/case/forensic/capture.json --by-header <头名>
+node scripts/probe_endpoints.js --session <会话cookies> --endpoints '<JSON数组>' --tokens '<JSON对象：valid/garbage/tamper>'
 # 混淆 JS 反混淆（命中 _0x / obfuscator / 控制流平坦化时；babel 依赖安装见 scripts/ast-patterns/README.md）：
 node scripts/ast-patterns/scripts/detect-patterns.js <input.js> [hint]        # 1) 先检测混淆家族
 node scripts/ast-patterns/scripts/run-pipeline.js <input.js> <output-dir> [hint]  # 2) 执行反混淆流水线（分层、可回退）
@@ -422,6 +426,10 @@ node scripts/check_risk_layer_diagnosis.js --case-dir <project-root> --markdown
 交付前必跑：
 
 ```powershell
+# 先读要求清单对齐交付物（无需预防性读门禁源码）：编写交付物的规范项都在 --explain 里
+node scripts/check_final_artifact.js --explain
+node scripts/check_code_quality.js --explain
+# 再跑门禁
 node scripts/check_final_artifact.js --case-dir <project-root> --markdown
 node scripts/check_code_quality.js --case-dir <project-root> --markdown
 ```

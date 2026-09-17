@@ -90,25 +90,26 @@ function resolveProjectDirFromCaseDir(caseDir) {
   return findToolsRoot(cur) || path.resolve(caseDir);
 }
 
-// 归一化 --project-dir：从给定目录向上（含自身，最多 5 层）查找含 tools/ 的目录。
-// 多 case 项目共享 tools 时，tools/ 与各 <case-name>/ 平级，AI 可能把 case 目录当 project-root
-// 传入，导致已装在共享工程根 tools/ 的 RuyiTrace/ruyipage runtime 检测不到、重复下载安装。
-// 命中返回祖先（真正的 tools/ 工程根）；未命中返回原输入，保持向后兼容（独立 case 仍装到自身 tools/）。
+// 归一化 --project-dir：指定哪个目录就把 tools/ 装到哪个目录下（传哪装哪），不做向上跳转。
+// 早期版本会向上查找含 tools/ 的祖先并装到父/祖目录（如 <git根>/tools），导致 case 本地
+// tools/ 为空、后续取证检测不到（baidu-finance 实测 2.3.125）。多 case 共享 tools 时请
+// 显式传共享工程根，由用户决定而非隐式跳跃；检测复用共享 tools 走 resolveProjectDirFromCaseDir。
 function normalizeProjectDir(inputDir) {
-  if (!inputDir) return process.cwd();
-  return findToolsRoot(path.resolve(inputDir)) || path.resolve(inputDir);
+  return path.resolve(inputDir || process.cwd());
 }
 
 // 定位 RuyiTrace home 目录
-// args: { ruyitraceHome, ruyitraceExe, projectDir }
+// args: { ruyitraceHome, ruyitraceExe, projectDir, caseDir }
 function normalizeTraceHome(args) {
   if (args.ruyitraceHome) return path.resolve(args.ruyitraceHome);
   if (args.ruyitraceExe) return path.dirname(path.resolve(args.ruyitraceExe));
   if (process.env.RUYI_TRACE_HOME) return path.resolve(process.env.RUYI_TRACE_HOME);
   if (process.env.RUYITRACE_HOME) return path.resolve(process.env.RUYITRACE_HOME);
-  // 优先 --project-dir（安装模式下用户工程目录，tools/ 所在），其次 cwd，最后 skill 根兜底
+  // 优先 --project-dir（安装模式下用户工程目录，tools/ 所在），其次 case 目录祖先链上的共享
+  // tools/（旧多 case 共享布局兜底），再 cwd，最后 skill 根兜底
   const toolsDirs = [
     args.projectDir ? path.resolve(args.projectDir, 'tools') : null,
+    args.caseDir ? path.join(resolveProjectDirFromCaseDir(args.caseDir), 'tools') : null,
     path.join(process.cwd(), 'tools'),
     path.join(findProjectRoot(), 'tools'),
   ].filter(Boolean);

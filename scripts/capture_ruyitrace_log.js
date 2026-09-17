@@ -342,7 +342,7 @@ function run(cmd, args, timeout = 8000) {
 }
 
 function detectRuyiTrace(args) {
-  const home = paths.normalizeTraceHome({ ruyitraceHome: args.ruyitraceHome, ruyitraceExe: args.ruyitraceExe, projectDir: args.projectDir || paths.resolveProjectDirFromCaseDir(args.caseDir) });
+  const home = paths.normalizeTraceHome({ ruyitraceHome: args.ruyitraceHome, ruyitraceExe: args.ruyitraceExe, projectDir: args.projectDir || paths.resolveProjectDirFromCaseDir(args.caseDir), caseDir: args.caseDir });
   const exeName = process.platform === 'win32' ? 'RuyiTrace.exe' : 'RuyiTrace';
   const exe = args.ruyitraceExe ? path.resolve(args.ruyitraceExe) : (home ? path.join(home, exeName) : '');
   // 兼容两代 RuyiTrace 内核路径：
